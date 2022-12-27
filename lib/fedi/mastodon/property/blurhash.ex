@@ -33,4 +33,26 @@ defmodule Fedi.Mastodon.Property.Blurhash do
   def serialize(%__MODULE__{} = prop) do
     Fedi.Streams.BaseProperty.serialize(prop)
   end
+
+  # new creates a new type property.
+  def new() do
+    %__MODULE__{alias: ""}
+  end
+
+  # name returns the name of this property: "id".
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
+  end
+
+  # clear ensures no value of this property is set. Calling
+  # is_xml_schema_any_uri afterwards will return false.
+  def clear(%__MODULE__{} = prop) do
+    %__MODULE__{
+      prop
+      | xml_schema_string_member: nil,
+        has_string_member: false,
+        xml_schema_any_uri_member: nil,
+        unknown: nil
+    }
+  end
 end

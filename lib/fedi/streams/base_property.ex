@@ -344,7 +344,153 @@ defmodule Fedi.Streams.BaseProperty do
     {:ok, unknown}
   end
 
-  #### Other common functions
+  #### Getters
+
+  # get returns the value of this property
+  def get(%{member: value}) when is_struct(value), do: value
+  def get(_), do: nil
+
+  # get_iri returns the IRI of this property. When is_iri returns false,
+  # get_iri will return any arbitrary value.
+  def get_iri(%{iri: %URI{} = v}), do: v
+  def get_iri(_), do: nil
+
+  # get_xml_schema_any_uri returns the value of this property. When IsXMLSchemaAnyURI
+  # returns false, get_xml_schema_any_uri will return an arbitrary value.
+  def get_xml_schema_any_uri(%{xml_schema_any_uri_member: %URI{} = v}), do: v
+  def get_xml_schema_any_uri(_), do: nil
+
+  # get_xml_schema_string returns the value of this property. When is_xml_schema_string
+  # returns false, get_xml_schema_string will return an arbitrary value.
+  def get_xml_schema_string(%{xml_schema_string_member: v}) when is_binary(v), do: v
+  def get_xml_schema_string(_), do: nil
+
+  # json_ld_context returns the JSONLD URIs required in the context string
+  # for this property and the specific values that are set. The value
+  # in the map is the alias used to import the property's value or
+  # values.
+  # TODO
+  def json_ld_context(_prop) do
+    %{}
+  end
+
+  #### Queries
+
+  # is_iri returns true if this property is an IRI.
+  def is_iri(%{iri: %URI{}}), do: true
+  def is_iri(_), do: false
+
+  # is_xml_schema_any_uri returns true if this property is set and not an IRI.
+  def is_xml_schema_any_uri(%{xml_schema_any_uri_member: %URI{}}), do: true
+  def is_xml_schema_any_uri(_), do: false
+
+  # is_xml_schema_string returns true if this property has a type of "string". When
+  # true, use the get_xml_schema_string and set_xml_schema_string methods to access
+  # and set this property.
+  def is_xml_schema_string(%{xml_schema_string_member: v}) when is_binary(v), do: true
+  def is_xml_schema_string(_), do: false
+
+  #### Setters
+
+  # set sets the value of this property. Calling is_xml_schema_any_uri
+  # afterwards will return true.
+  def set(%{__struct__: module, member: _old_value} = prop, v) when is_struct(v) do
+    apply(module, :clear, [prop])
+    |> struct(member: v)
+  end
+
+  # set_iri sets the value of this property. Calling is_iri afterwards will
+  # return true.
+  def set_iri(%{__struct__: module, iri: _old_value} = prop, %URI{} = v) do
+    apply(module, :clear, [prop])
+    |> struct(iri: v)
+  end
+
+  # set_xml_schema_any_uri sets a new IRI value.
+  def set_xml_schema_any_uri(
+        %{__struct__: module, xml_schema_any_uri_member: _old_value} = prop,
+        %URI{} = v
+      ) do
+    apply(module, :clear, [prop])
+    |> struct(xml_schema_any_uri_member: v)
+  end
+
+  # set_xml_schema_string sets a new IRI value.
+  def set_xml_schema_string(
+        %{
+          __struct__: module,
+          xml_schema_string_member: _old_string,
+          has_string_member: _old_has
+        } = prop,
+        v
+      )
+      when is_binary(v) do
+    apply(module, :clear, [prop])
+    |> struct(xml_schema_string_member: v, has_string_member: true)
+  end
+
+  # kind_index computes an arbitrary value for indexing this kind of value.
+  # This is a leaky API detail only for folks looking to replace the
+  # go-fed implementation. Applications should not use this method.
+  def kind_index(prop, types \\ nil)
+
+  def kind_index(%{member: value} = prop, types) when is_struct(value) do
+    (types || Fedi.Streams.all_type_modules())
+    |> Enum.with_index()
+    |> Enum.find(fn {{_prop_name, prop_mod}, _idx} -> value == prop_mod end)
+    |> case do
+      {{_prop_name, _prop_mod}, idx} -> idx + 1
+      nil -> base_kind_index(prop)
+    end
+  end
+
+  def kind_index(prop, _), do: base_kind_index(prop)
+
+  def base_kind_index(%{xml_schema_any_uri_member: %URI{}}), do: 0
+  def base_kind_index(%{iri: %URI{}}), do: -2
+  def base_kind_index(_), do: -1
+
+  # less_than compares two instances of this property with an arbitrary but
+  # stable comparison. Applications should not use this because it is
+  # only meant to help alternative implementations to go-fed to be able
+  # to normalize nonfunctional properties.
+  def less_than(%{} = prop, %{} = o) do
+    idx1 = kind_index(prop)
+    idx2 = kind_index(o)
+
+    cond do
+      idx1 < idx2 ->
+        true
+
+      idx2 < idx1 ->
+        false
+
+      idx1 >= 0 ->
+        val1 = get(prop)
+        val2 = get(o)
+        apply(val1.__struct__, :less_than, [val1, val2])
+
+      true ->
+        nil
+    end
+    |> case do
+      is_less_than when is_boolean(is_less_than) ->
+        is_less_than
+
+      _ ->
+        iri1 = get_iri(prop)
+        iri2 = get_iri(o)
+
+        case {iri1, iri2} do
+          {nil, nil} -> false
+          {nil, _iri} -> true
+          {_iri, nil} -> false
+          _ -> to_string(iri1) < to_string(iri2)
+        end
+    end
+  end
+
+  #### Utility functions
 
   def get_prop(m, prop_names, alias_) when is_binary(alias_) do
     prop_names

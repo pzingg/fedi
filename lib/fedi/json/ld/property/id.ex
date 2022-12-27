@@ -36,98 +36,14 @@ defmodule Fedi.JSON.LD.Property.Id do
     %__MODULE__{alias: ""}
   end
 
-  # clear ensures no value of this property is set. Calling
-  # is_xml_schema_any_uri afterwards will return false.
-  def clear(%__MODULE__{} = prop) do
-    %__MODULE__{prop | unknown: nil, xml_schema_any_uri_member: nil}
-  end
-
-  # get returns the value of this property. When is_xml_schema_any_uri returns
-  # false, get will return any arbitrary value.
-  def get(%__MODULE__{} = prop) do
-    prop.xml_schema_any_uri_member
-  end
-
-  # get_iri returns the IRI of this property. When is_iri returns false,
-  # get_iri will return any arbitrary value.
-  def get_iri(%__MODULE__{} = prop) do
-    prop.xml_schema_any_uri_member
-  end
-
-  # has_any returns true if the value or IRI is set.
-  def has_any(%__MODULE__{} = prop) do
-    is_xml_schema_any_uri(prop)
-  end
-
-  # is_iri returns true if this property is an IRI.
-  def is_iri(%__MODULE__{} = prop) do
-    !is_nil(prop.xml_schema_any_uri_member)
-  end
-
-  # is_xml_schema_any_uri returns true if this property is set and not an IRI.
-  def is_xml_schema_any_uri(%__MODULE__{} = prop) do
-    !is_nil(prop.xml_schema_any_uri_member)
-  end
-
-  # json_ld_context returns the JSONLD URIs required in the context string
-  # for this property and the specific values that are set. The value
-  # in the map is the alias used to import the property's value or
-  # values.
-  def json_ld_context(%__MODULE__{} = _prop) do
-    %{}
-  end
-
-  # kind_index computes an arbitrary value for indexing this kind of value.
-  # This is a leaky API detail only for folks looking to replace the
-  # go-fed implementation. Applications should not use this method.
-  def kind_index(%__MODULE__{} = prop) do
-    cond do
-      is_xml_schema_any_uri(prop) -> 0
-      is_iri(prop) -> -2
-      true -> -1
-    end
-  end
-
-  # less_than compares two instances of this property with an arbitrary but
-  # stable comparison. Applications should not use this because it is
-  # only meant to help alternative implementations to go-fed to be able
-  # to normalize nonfunctional properties.
-
-  def less_than(%__MODULE__{} = prop, %__MODULE__{} = o) do
-    cond do
-      # IRIs are always less than other values, none, or unknowns
-      is_iri(prop) -> true
-      # This other, none, or unknown value is always greater than IRIs
-      is_iri(o) -> false
-      # less_than comparison for the single value or unknown value.
-      # Both are unknowns.
-      !is_xml_schema_any_uri(prop) && !is_xml_schema_any_uri(o) -> false
-      # Values are always greater than unknown values.
-      is_xml_schema_any_uri(prop) && !is_xml_schema_any_uri(o) -> false
-      # Unknowns are always less than known values.
-      !is_xml_schema_any_uri(prop) && is_xml_schema_any_uri(o) -> true
-      # Actual comparison.
-      true -> Fedi.Streams.Literal.AnyURI.less(get(prop), get(o))
-    end
-  end
-
   # name returns the name of this property: "id".
   def name(%__MODULE__{alias: alias_}) do
     Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
-  # set sets the value of this property. Calling is_xml_schema_any_uri
-  # afterwards will return true.
-  def set(%__MODULE__{} = prop, %URI{} = v) do
-    prop = clear(prop)
-    %__MODULE__{prop | xml_schema_any_uri_member: v}
-  end
-
-  # set_iri sets the value of this property. Calling is_iri afterwards will
-  # return true.
-  def set_iri(%__MODULE__{} = prop, %URI{} = v) do
-    prop
-    |> clear()
-    |> set(v)
+  # clear ensures no value of this property is set. Calling
+  # is_xml_schema_any_uri afterwards will return false.
+  def clear(%__MODULE__{} = prop) do
+    %__MODULE__{prop | unknown: nil, xml_schema_any_uri_member: nil}
   end
 end
