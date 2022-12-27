@@ -1,9 +1,9 @@
-defmodule Fedi.ActivityStreams.Property.FormerType do
+defmodule Fedi.Mastodon.Property.Discoverable do
   @moduledoc false
 
   require Logger
 
-  @prop_name "formerType"
+  @prop_name "discoverable"
 
   @enforce_keys :alias
   defstruct [
@@ -18,7 +18,7 @@ defmodule Fedi.ActivityStreams.Property.FormerType do
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize_properties(
-      :activity_streams,
+      :mastodon,
       __MODULE__,
       @prop_name,
       m,

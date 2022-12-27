@@ -52,4 +52,6 @@ defmodule Fedi.ActivityStreams.Property.MediaType do
         end
     end
   end
+
+  # SERIALIZE_TODO
 end

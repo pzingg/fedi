@@ -34,4 +34,8 @@ defmodule Fedi.ActivityStreams.Property.Followers do
       @member_types
     )
   end
+
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
 end

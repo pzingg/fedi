@@ -1,4 +1,4 @@
-defmodule Fedi.Mastodon.Property.DiscoverableIterator do
+defmodule SecurityV1.Property.PublicKeyIterator do
   @moduledoc false
 
   @enforce_keys [:alias]
@@ -17,7 +17,7 @@ defmodule Fedi.Mastodon.Property.DiscoverableIterator do
         }
 
   def deserialize(i, alias_map) when is_map(alias_map) do
-    Fedi.Streams.PropertyIterator.deserialize(:mastodon, __MODULE__, i, alias_map)
+    Fedi.Streams.PropertyIterator.deserialize(:security_v1, __MODULE__, i, alias_map)
   end
 
   def serialize(%__MODULE__{} = prop) do

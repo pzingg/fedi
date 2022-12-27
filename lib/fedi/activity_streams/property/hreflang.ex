@@ -48,4 +48,16 @@ defmodule Fedi.ActivityStreams.Property.Hreflang do
         end
     end
   end
+
+  def serialize(%__MODULE__{xml_schema_bcp_47_member: bcp_47}) when is_binary(bcp_47) do
+    Fedi.Streams.Literal.Bcp47.serialize(bcp_47)
+  end
+
+  def serialize(%__MODULE__{iri: %URI{} = iri}) do
+    {:ok, URI.to_string(iri)}
+  end
+
+  def serialize(%__MODULE__{unknown: unknown}) do
+    {:ok, unknown}
+  end
 end

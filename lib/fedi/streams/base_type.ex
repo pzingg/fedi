@@ -97,6 +97,48 @@ defmodule Fedi.Streams.BaseType do
     end
   end
 
+  def serialize(%{__struct__: module, alias: alias_, properties: properties, unknown: unknown}) do
+    type_name = Module.concat([module, Meta]) |> apply(:type_name, [])
+
+    type_name =
+      case alias_ do
+        "" -> type_name
+        _ -> alias_ <> ":" <> type_name
+      end
+
+    # Begin: Serialize known properties
+
+    m = %{"type" => type_name}
+
+    properties
+    |> Enum.reduce_while(
+      {:ok, m},
+      fn {prop_name, %{__struct__: prop_mod} = prop_value}, {_, acc} ->
+        case apply(prop_mod, :serialize, [prop_value]) do
+          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, nil} -> {:cont, {:ok, acc}}
+          {:ok, v} -> {:cont, {:ok, Map.put(acc, prop_name, v)}}
+        end
+      end
+    )
+    |> case do
+      # End: Serialize known properties
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, m} ->
+        # Begin: Serialize unknown properties
+        m =
+          Enum.reduce(unknown, m, fn {k, v}, acc ->
+            Map.put_new(acc, k, v)
+          end)
+
+        # End: Serialize unknown properties
+
+        {:ok, m}
+    end
+  end
+
   def find_type(%{"type" => type_value}, alias_prefix, type_name) do
     type_value
     |> List.wrap()

@@ -3,6 +3,8 @@ defmodule Fedi.Streams do
   Documentation for `Fedi.Streams`.
   """
 
+  def get_alias(_alias_map, :json_ld), do: ""
+
   def get_alias(alias_map, :activity_streams) do
     Map.get(alias_map, "https://www.w3.org/ns/activitystreams", "")
   end

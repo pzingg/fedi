@@ -56,4 +56,6 @@ defmodule Fedi.ActivityStreams.Property.PreferredUsername do
         end
     end
   end
+
+  # SERIALIZE TODO
 end

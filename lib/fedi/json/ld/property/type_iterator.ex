@@ -33,29 +33,6 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
     %__MODULE__{alias: ""}
   end
 
-  # name returns the name of this property: "id".
-  def name(%__MODULE__{alias: alias_}) do
-    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
-  end
-
-  # serialize converts this into an interface representation suitable for
-  # marshalling into a text or binary format. Applications should not
-  # need this function as most typical use cases serialize types
-  # instead of individual properties. It is exposed for alternatives to
-  # go-fed implementations to use.
-  def serialize(%__MODULE__{} = prop) do
-    cond do
-      is_xml_schema_any_uri(prop) ->
-        get_xml_schema_any_uri(prop) |> Fedi.Streams.Literal.AnyURI.serialize()
-
-      is_xml_schema_string(prop) ->
-        get_xml_schema_string(prop) |> Fedi.Streams.Literal.String.serialize()
-
-      true ->
-        {:ok, prop.unknown}
-    end
-  end
-
   # deserialize creates an iterator from an element that
   # has been unmarshalled from a text or binary format.
   def deserialize(i, alias_map) when is_map(alias_map) do
@@ -75,6 +52,20 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
             {:ok, %__MODULE__{alias: alias_, unknown: i}}
         end
     end
+  end
+
+  # serialize converts this into an interface representation suitable for
+  # marshalling into a text or binary format. Applications should not
+  # need this function as most typical use cases serialize types
+  # instead of individual properties. It is exposed for alternatives to
+  # go-fed implementations to use.
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
+
+  # name returns the name of this property: "id".
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
   # clear ensures no value of this property is set. Calling

@@ -23,59 +23,25 @@ defmodule Fedi.JSON.LD.Property.Type do
     %__MODULE__{alias: ""}
   end
 
-  # name returns the name of this property: "type".
-  def name(%__MODULE__{alias: alias_}) do
-    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
-  end
-
-  # serialize converts this into an interface representation suitable for
-  # marshalling into a text or binary format. Applications should not
-  # need this function as most typical use cases serialize types
-  # instead of individual properties. It is exposed for alternatives to
-  # go-fed implementations to use.
-  def serialize(%__MODULE__{} = prop) do
-    s =
-      Enum.reduce_while(prop.properties, [], fn it, acc ->
-        case TypeIterator.serialize(it) do
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:ok, b} -> {:cont, [b | acc]}
-        end
-      end)
-
-    case s do
-      {:error, reason} -> {:error, reason}
-      [] -> {:ok, []}
-      # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
-      [v] -> {:ok, v}
-      l -> {:ok, Enum.reverse(l)}
-    end
-  end
-
   # deserialize creates a "type" property from an interface representation
   # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias_ = ""
+    Fedi.Streams.BaseProperty.deserialize_properties(
+      :json_ld,
+      __MODULE__,
+      @prop_name,
+      m,
+      alias_map
+    )
+  end
 
-    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
-      nil ->
-        {:ok, nil}
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize_properties(prop)
+  end
 
-      i ->
-        properties =
-          List.wrap(i)
-          |> Enum.with_index()
-          |> Enum.reduce_while([], fn {prop, _idx}, acc ->
-            case TypeIterator.deserialize(prop, alias_map) do
-              {:ok, prop} -> {:cont, [prop | acc]}
-              {:error, reason} -> {:halt, {:error, reason}}
-            end
-          end)
-
-        case properties do
-          {:error, reason} -> {:error, reason}
-          l when is_list(l) -> {:ok, %__MODULE__{alias: alias_, properties: Enum.reverse(l)}}
-        end
-    end
+  # name returns the name of this property: "type".
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
   # append_iri appends an IRI value to the back of a list of the property "type"

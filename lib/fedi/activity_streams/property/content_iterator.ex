@@ -30,6 +30,10 @@ defmodule Fedi.ActivityStreams.Property.ContentIterator do
     Fedi.Streams.PropertyIterator.deserialize_name(:activity_streams, __MODULE__, i, alias_map)
   end
 
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
+
   def name(%{alias: alias_, rdf_lang_string_member: lang_string}) do
     Fedi.Streams.BaseProperty.name("content", alias_, is_map(lang_string))
   end

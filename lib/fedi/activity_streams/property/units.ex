@@ -44,4 +44,8 @@ defmodule Fedi.ActivityStreams.Property.Units do
         end
     end
   end
+
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
 end

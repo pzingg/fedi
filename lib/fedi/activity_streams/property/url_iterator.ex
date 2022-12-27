@@ -25,4 +25,8 @@ defmodule Fedi.ActivityStreams.Property.UrlIterator do
   def deserialize(i, alias_map) when is_map(alias_map) do
     Fedi.Streams.PropertyIterator.deserialize(:activity_streams, __MODULE__, i, alias_map)
   end
+
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
 end

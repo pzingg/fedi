@@ -43,7 +43,11 @@ defmodule Fedi.ActivityStreams.Type.Announce do
           unknown: term()
         }
 
-  def deserialize(m, alias_map) do
+  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)
+  end
+
+  def serialize(%__MODULE__{} = object) do
+    Fedi.Streams.BaseType.serialize(object)
   end
 end

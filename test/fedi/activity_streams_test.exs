@@ -4,7 +4,7 @@ defmodule Fedi.StreamsTest do
 
   require Logger
 
-  describe "examples" do
+  describe "resolve" do
     test "example 9" do
       source = """
       {
@@ -81,6 +81,37 @@ defmodule Fedi.StreamsTest do
       assert name_prop.unknown == nil
 
       assert Fedi.ActivityStreams.Property.NameIterator.name(name_prop) == "nameMap"
+    end
+  end
+
+  describe "serialize" do
+    test "example 9 with langString" do
+      source = """
+      {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "summary": "Sally accepted an invitation to a party",
+        "type": "Accept",
+        "actor": {
+          "type": "Person",
+          "name": "Sally"
+        },
+        "object": {
+          "type": "Invite",
+          "actor": "http://john.example.org",
+          "object": {
+            "type": "Event",
+            "nameMap": {
+              "en": "Going-Away Party for Jim",
+              "fr": "Fête de départ pour Jim"
+            }
+          }
+        }
+      }
+      """
+
+      assert {:ok, accept} = Fedi.Streams.JsonResolver.resolve(source)
+      assert {:ok, json} = Fedi.Streams.Serializer.serialize(accept)
+      assert json == ""
     end
   end
 end

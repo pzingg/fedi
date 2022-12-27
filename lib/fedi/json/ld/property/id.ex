@@ -17,32 +17,18 @@ defmodule Fedi.JSON.LD.Property.Id do
           alias: String.t()
         }
 
-  # deserialize creates an "id" property from an interface representation
-  # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias_ = ""
+    Fedi.Streams.BaseProperty.deserialize_uri(
+      :json_ld,
+      __MODULE__,
+      @prop_name,
+      m,
+      alias_map
+    )
+  end
 
-    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      i ->
-        case Fedi.Streams.Literal.AnyURI.deserialize(i) do
-          {:ok, v} ->
-            {:ok,
-             %__MODULE__{
-               alias: alias_,
-               xml_schema_any_uri_member: v
-             }}
-
-          {:error, _reason} ->
-            {:ok,
-             %__MODULE__{
-               alias: alias_,
-               unknown: i
-             }}
-        end
-    end
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
   end
 
   # new creates a new id property.
@@ -128,19 +114,6 @@ defmodule Fedi.JSON.LD.Property.Id do
   # name returns the name of this property: "id".
   def name(%__MODULE__{alias: alias_}) do
     Fedi.Streams.BaseProperty.name(@prop_name, alias_)
-  end
-
-  # serialize converts this into an interface representation suitable for
-  # marshalling into a text or binary format. Applications should not
-  # need this function as most typical use cases serialize types
-  # instead of individual properties. It is exposed for alternatives to
-  # go-fed implementations to use.
-  def serialize(%__MODULE__{} = prop) do
-    if is_xml_schema_any_uri(prop) do
-      get(prop) |> Fedi.Streams.Literal.AnyURI.serialize()
-    else
-      {:ok, prop.unknown}
-    end
   end
 
   # set sets the value of this property. Calling is_xml_schema_any_uri

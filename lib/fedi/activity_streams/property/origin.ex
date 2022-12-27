@@ -16,7 +16,7 @@ defmodule Fedi.ActivityStreams.Property.Origin do
           properties: list()
         }
 
-  def deserialize(m, alias_map) do
+  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize_properties(
       :activity_streams,
       __MODULE__,

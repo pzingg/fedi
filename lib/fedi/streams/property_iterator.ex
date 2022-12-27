@@ -16,15 +16,19 @@ defmodule Fedi.Streams.PropertyIterator do
         {:ok, struct(module, alias: alias_, iri: uri)}
 
       _ ->
-        case Fedi.Streams.Literal.String.deserialize(i) do
+        case Fedi.Streams.Literal.LangString.deserialize(i) do
           {:ok, v} ->
-            {:ok,
-             struct(module, alias: alias_, xml_schema_string_member: v, has_string_member: true)}
+            {:ok, struct(module, alias: alias_, rdf_lang_string_member: v)}
 
           _ ->
-            case Fedi.Streams.Literal.LangString.deserialize(i) do
+            case Fedi.Streams.Literal.String.deserialize(i) do
               {:ok, v} ->
-                {:ok, struct(module, alias: alias_, rdf_lang_string_member: v)}
+                {:ok,
+                 struct(module,
+                   alias: alias_,
+                   xml_schema_string_member: v,
+                   has_string_member: true
+                 )}
 
               error ->
                 error
@@ -130,21 +134,6 @@ defmodule Fedi.Streams.PropertyIterator do
         end
     end
   end
-
-  # serialize converts this into an interface representation suitable for
-  # marshalling into a text or binary format. Applications should not
-  # need this function as most typical use cases serialize types
-  # instead of individual properties. It is exposed for alternatives to
-  # go-fed implementations to use.
-  def serialize(%{member: {_, member_value}}) do
-    apply(member_value.__struct__, :serialize, [member_value])
-  end
-
-  def serialize(%{iri: %URI{} = iri}) do
-    Fedi.Streams.Literal.AnyURI.serialize(iri)
-  end
-
-  def serialize(_), do: {:error, "Property not set"}
 
   # set sets the value of this property. Calling is_xml_schema_any_uri
   # afterwards will return true.
