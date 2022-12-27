@@ -27,7 +27,7 @@ defmodule Fedi.ActivityStreams.Property.Units do
       nil ->
         {:ok, nil}
 
-      i ->
+      {i, _prop_name, _is_map} ->
         case Fedi.Streams.Literal.String.deserialize(i) do
           {:ok, v} ->
             {:ok,

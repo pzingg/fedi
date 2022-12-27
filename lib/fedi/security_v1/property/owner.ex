@@ -23,7 +23,7 @@ defmodule SecurityV1.Property.Owner do
       nil ->
         {:ok, nil}
 
-      i ->
+      {i, _prop_name, _is_map} ->
         case Fedi.Streams.Literal.AnyURI.deserialize(i) do
           {:ok, v} ->
             {:ok, %__MODULE__{alias: alias_, xml_schema_any_uri_member: v}}

@@ -69,7 +69,7 @@ defmodule Fedi.ActivityStreams do
     "bcc",
     "bto",
     "cc",
-    ["content", "contentMap"],
+    "content",
     "context",
     "duration",
     "endTime",
@@ -81,7 +81,7 @@ defmodule Fedi.ActivityStreams do
     "likes",
     "location",
     "mediaType",
-    ["name", "nameMap"],
+    "name",
     "object",
     "origin",
     "preview",
@@ -92,7 +92,7 @@ defmodule Fedi.ActivityStreams do
     "shares",
     "source",
     "startTime",
-    ["summary", "summaryMap"],
+    "summary",
     "tag",
     "target",
     "to",
@@ -100,21 +100,20 @@ defmodule Fedi.ActivityStreams do
     "url"
   ]
 
+  @has_map ["content", "name", "summary"]
+
   def type_modules() do
     @all_types
   end
 
   def properties() do
     @all_properties
-    |> Enum.map(fn prop_names ->
-      [base_name | _] = prop_names = List.wrap(prop_names)
-      {initial, rest} = String.split_at(base_name, 1)
+    |> Enum.map(fn prop_name ->
+      {initial, rest} = String.split_at(prop_name, 1)
       cap = String.upcase(initial)
-      prop_mod = Module.concat([Fedi, ActivityStreams, Property, cap <> rest])
-
-      prop_names
-      |> Enum.map(fn name -> {name, prop_mod} end)
+      {prop_name, Module.concat([Fedi, ActivityStreams, Property, cap <> rest])}
     end)
-    |> List.flatten()
   end
+
+  def has_map_property(prop_name), do: Enum.member?(@has_map, prop_name)
 end

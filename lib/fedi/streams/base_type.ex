@@ -65,9 +65,14 @@ defmodule Fedi.Streams.BaseType do
           known_properties
           |> Enum.reduce_while(%{}, fn {prop_name, prop_mod}, acc ->
             case apply(prop_mod, :deserialize, [m, alias_map]) do
-              {:error, reason} -> {:halt, {:error, reason}}
-              {:ok, nil} -> {:cont, acc}
-              {:ok, v} -> {:cont, Map.put(acc, prop_name, v)}
+              {:error, reason} ->
+                {:halt, {:error, reason}}
+
+              {:ok, nil} ->
+                {:cont, acc}
+
+              {:ok, v} ->
+                {:cont, Map.put(acc, prop_name, v)}
             end
           end)
 
@@ -112,12 +117,34 @@ defmodule Fedi.Streams.BaseType do
 
     properties
     |> Enum.reduce_while(
-      {:ok, m},
-      fn {prop_name, %{__struct__: prop_mod} = prop_value}, {_, acc} ->
+      m,
+      fn {prop_name, %{__struct__: prop_mod} = prop_value}, acc ->
         case apply(prop_mod, :serialize, [prop_value]) do
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:ok, nil} -> {:cont, {:ok, acc}}
-          {:ok, v} -> {:cont, {:ok, Map.put(acc, prop_name, v)}}
+          {:error, reason} ->
+            {:halt, {:error, reason}}
+
+          {:ok, nil} ->
+            {:cont, acc}
+
+          {:ok, %Fedi.Streams.MappedNameProp{mapped: mapped, unmapped: unmapped}} ->
+            acc =
+              case mapped do
+                nil -> acc
+                [] -> acc
+                _ -> Map.put(acc, prop_name <> "Map", mapped)
+              end
+
+            acc =
+              case unmapped do
+                nil -> acc
+                [] -> acc
+                _ -> Map.put(acc, prop_name, unmapped)
+              end
+
+            {:cont, acc}
+
+          {:ok, v} ->
+            {:cont, Map.put(acc, prop_name, v)}
         end
       end
     )
@@ -126,8 +153,8 @@ defmodule Fedi.Streams.BaseType do
       {:error, reason} ->
         {:error, reason}
 
-      {:ok, m} ->
-        # Begin: Serialize unknown properties
+      m ->
+        # Begin: Serialize unknown properties, like "@context"
         m =
           Enum.reduce(unknown, m, fn {k, v}, acc ->
             Map.put_new(acc, k, v)
@@ -163,7 +190,7 @@ defmodule Fedi.Streams.BaseType do
   end
 
   def find_type(m, _alias_prefix, _type_name) do
-    Logger.error("find_type no \"type\" property in map #{inspect(m)}")
-    {:error, "no \"type\" property in map"}
+    Logger.error("Could not find a \"type\" property in map #{inspect(m)}")
+    {:error, "Could not find a \"type\" property in map"}
   end
 end

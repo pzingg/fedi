@@ -74,17 +74,17 @@ defmodule Fedi.StreamsTest do
       assert event_prop.member.__struct__ == Fedi.ActivityStreams.Type.Event
 
       name_object = event_prop.member.properties["name"]
-      name_prop = List.first(name_object.properties)
-      assert name_prop.__struct__ == Fedi.ActivityStreams.Property.NameIterator
-      assert is_map(name_prop.rdf_lang_string_member)
-      assert name_prop.rdf_lang_string_member["en"] == "Going-Away Party for Jim"
-      assert name_prop.unknown == nil
+      name_map_prop = List.first(name_object.mapped_properties)
+      assert name_map_prop.__struct__ == Fedi.ActivityStreams.Property.NameIterator
+      assert is_map(name_map_prop.rdf_lang_string_member)
+      assert name_map_prop.rdf_lang_string_member["en"] == "Going-Away Party for Jim"
+      assert name_map_prop.unknown == nil
 
-      assert Fedi.ActivityStreams.Property.NameIterator.name(name_prop) == "nameMap"
+      assert Fedi.ActivityStreams.Property.NameIterator.name(name_map_prop) == "nameMap"
     end
   end
 
-  describe "serialize" do
+  describe "re-serialize" do
     test "example 9 with langString" do
       source = """
       {
@@ -111,7 +111,31 @@ defmodule Fedi.StreamsTest do
 
       assert {:ok, accept} = Fedi.Streams.JsonResolver.resolve(source)
       assert {:ok, json} = Fedi.Streams.Serializer.serialize(accept)
-      assert json == ""
+
+      expected = """
+      {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "actor": {
+          "name": "Sally",
+          "type": "Person"
+        },
+        "object": {
+          "actor": "http://john.example.org",
+          "object": {
+            "nameMap": {
+              "en": "Going-Away Party for Jim",
+              "fr": "Fête de départ pour Jim"
+            },
+            "type": "Event"
+          },
+          "type": "Invite"
+        },
+        "summary": "Sally accepted an invitation to a party",
+        "type": "Accept"
+      }
+      """
+
+      assert Jason.encode!(json, pretty: true) == String.trim_trailing(expected)
     end
   end
 end

@@ -8,11 +8,13 @@ defmodule Fedi.ActivityStreams.Property.Summary do
   @enforce_keys :alias
   defstruct [
     :alias,
+    mapped_properties: [],
     properties: []
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
+          mapped_properties: list(),
           properties: list()
         }
 
@@ -27,6 +29,6 @@ defmodule Fedi.ActivityStreams.Property.Summary do
   end
 
   def serialize(%__MODULE__{} = prop) do
-    Fedi.Streams.BaseProperty.serialize_properties(prop)
+    Fedi.Streams.BaseProperty.serialize_mapped_properties(prop)
   end
 end

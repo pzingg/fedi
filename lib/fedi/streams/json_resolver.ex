@@ -35,8 +35,6 @@ defmodule Fedi.Streams.JsonResolver do
        }} ->
         Fedi.Streams.type_modules(:activity_streams)
         |> Enum.reduce_while({m, alias_map}, fn type_module, {acc_m, acc_alias_map} ->
-          # Logger.error("trying #{type_module}.deserialize")
-
           case apply(type_module, :deserialize, [acc_m, acc_alias_map]) do
             {:ok, val} -> {:halt, {:ok, val}}
             {:error, _} -> {:cont, {acc_m, acc_alias_map}}

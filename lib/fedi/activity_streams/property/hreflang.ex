@@ -27,7 +27,7 @@ defmodule Fedi.ActivityStreams.Property.Hreflang do
       nil ->
         {:ok, nil}
 
-      i ->
+      {i, _prop_name, _is_map} ->
         case Fedi.Streams.BaseProperty.maybe_iri(i) do
           {:ok, uri} ->
             {:ok, %__MODULE__{alias: alias_, iri: uri}}

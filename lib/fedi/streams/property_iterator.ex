@@ -30,8 +30,8 @@ defmodule Fedi.Streams.PropertyIterator do
                    has_string_member: true
                  )}
 
-              error ->
-                error
+              {:error, reason} ->
+                {:error, reason}
             end
         end
     end

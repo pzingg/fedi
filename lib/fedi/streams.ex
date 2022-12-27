@@ -42,4 +42,8 @@ defmodule Fedi.Streams do
     Fedi.JSON.LD.properties() ++
       Fedi.ActivityStreams.properties()
   end
+
+  def has_map_property(_namespace, prop_name) do
+    Fedi.ActivityStreams.has_map_property(prop_name)
+  end
 end
