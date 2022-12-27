@@ -69,7 +69,7 @@ defmodule Fedi.ActivityStreams do
     "bcc",
     "bto",
     "cc",
-    "content",
+    ["content", "contentMap"],
     "context",
     "duration",
     "endTime",
@@ -81,7 +81,7 @@ defmodule Fedi.ActivityStreams do
     "likes",
     "location",
     "mediaType",
-    "name",
+    ["name", "nameMap"],
     "object",
     "origin",
     "preview",
@@ -92,7 +92,7 @@ defmodule Fedi.ActivityStreams do
     "shares",
     "source",
     "startTime",
-    "summary",
+    ["summary", "summaryMap"],
     "tag",
     "target",
     "to",
@@ -106,11 +106,15 @@ defmodule Fedi.ActivityStreams do
 
   def properties() do
     @all_properties
-    |> Enum.map(fn
-      prop_name ->
-        {initial, rest} = String.split_at(prop_name, 1)
-        cap = String.upcase(initial)
-        {prop_name, Module.concat([Fedi, ActivityStreams, Property, cap <> rest])}
+    |> Enum.map(fn prop_names ->
+      [base_name | _] = prop_names = List.wrap(prop_names)
+      {initial, rest} = String.split_at(base_name, 1)
+      cap = String.upcase(initial)
+      prop_mod = Module.concat([Fedi, ActivityStreams, Property, cap <> rest])
+
+      prop_names
+      |> Enum.map(fn name -> {name, prop_mod} end)
     end)
+    |> List.flatten()
   end
 end

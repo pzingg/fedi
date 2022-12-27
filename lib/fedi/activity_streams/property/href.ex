@@ -17,25 +17,19 @@ defmodule Fedi.ActivityStreams.Property.Href do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias = Fedi.Streams.get_alias(alias_map, :activity_streams)
+    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
 
-    prop_name =
-      case alias do
-        "" -> @prop_name
-        _ -> alias <> ":" <> @prop_name
-      end
-
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
       nil ->
         {:ok, nil}
 
       i ->
         case Fedi.Streams.Literal.AnyURI.deserialize(i) do
           {:ok, v} ->
-            {:ok, %__MODULE__{alias: alias, xml_schema_any_uri_member: v}}
+            {:ok, %__MODULE__{alias: alias_, xml_schema_any_uri_member: v}}
 
           _error ->
-            {:ok, %__MODULE__{alias: alias, unknown: i}}
+            {:ok, %__MODULE__{alias: alias_, unknown: i}}
         end
     end
   end

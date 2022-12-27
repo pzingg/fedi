@@ -3,7 +3,7 @@ defmodule Fedi.ActivityStreams.Property.Summary do
 
   require Logger
 
-  @prop_name "summary"
+  @prop_name ["summary", "summaryMap"]
 
   @enforce_keys :alias
   defstruct [

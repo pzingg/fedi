@@ -5,6 +5,8 @@ defmodule Fedi.JSON.LD.Property.Type do
 
   alias Fedi.JSON.LD.Property.TypeIterator
 
+  @prop_name "type"
+
   @enforce_keys [:alias]
   defstruct [
     :alias,
@@ -21,13 +23,9 @@ defmodule Fedi.JSON.LD.Property.Type do
     %__MODULE__{alias: ""}
   end
 
-  # name returns the name of this property: "id".
-  def name(%__MODULE__{alias: alias}) do
-    if String.length(alias) > 0 do
-      alias <> ":type"
-    else
-      "type"
-    end
+  # name returns the name of this property: "type".
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
   # serialize converts this into an interface representation suitable for
@@ -56,16 +54,9 @@ defmodule Fedi.JSON.LD.Property.Type do
   # deserialize creates a "type" property from an interface representation
   # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias = ""
-    # Use alias both to find the property, and set within the property.
-    prop_name =
-      if String.length(alias) > 0 do
-        alias <> ":type"
-      else
-        "type"
-      end
+    alias_ = ""
 
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
       nil ->
         {:ok, nil}
 
@@ -82,7 +73,7 @@ defmodule Fedi.JSON.LD.Property.Type do
 
         case properties do
           {:error, reason} -> {:error, reason}
-          l when is_list(l) -> {:ok, %__MODULE__{alias: alias, properties: Enum.reverse(l)}}
+          l when is_list(l) -> {:ok, %__MODULE__{alias: alias_, properties: Enum.reverse(l)}}
         end
     end
   end

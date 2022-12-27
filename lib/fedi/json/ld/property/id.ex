@@ -3,6 +3,8 @@ defmodule Fedi.JSON.LD.Property.Id do
   Provides the globally unique identifier for JSON-LD entities.
   """
 
+  @prop_name "id"
+
   defstruct [
     :xml_schema_any_uri_member,
     :unknown,
@@ -18,16 +20,9 @@ defmodule Fedi.JSON.LD.Property.Id do
   # deserialize creates an "id" property from an interface representation
   # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias = ""
-    # Use alias both to find the property, and set within the property.
-    prop_name =
-      if String.length(alias) > 0 do
-        alias <> ":id"
-      else
-        "id"
-      end
+    alias_ = ""
 
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
       nil ->
         {:ok, nil}
 
@@ -36,14 +31,14 @@ defmodule Fedi.JSON.LD.Property.Id do
           {:ok, v} ->
             {:ok,
              %__MODULE__{
-               alias: alias,
+               alias: alias_,
                xml_schema_any_uri_member: v
              }}
 
           {:error, _reason} ->
             {:ok,
              %__MODULE__{
-               alias: alias,
+               alias: alias_,
                unknown: i
              }}
         end
@@ -131,12 +126,8 @@ defmodule Fedi.JSON.LD.Property.Id do
   end
 
   # name returns the name of this property: "id".
-  def name(%__MODULE__{alias: alias}) do
-    if String.length(alias) > 0 do
-      alias <> ":id"
-    else
-      "id"
-    end
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
   # serialize converts this into an interface representation suitable for

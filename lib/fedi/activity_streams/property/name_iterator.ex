@@ -27,30 +27,10 @@ defmodule Fedi.ActivityStreams.Property.NameIterator do
         }
 
   def deserialize(i, alias_map) when is_map(alias_map) do
-    alias = Fedi.Streams.get_alias(alias_map, :activity_streams)
+    Fedi.Streams.PropertyIterator.deserialize_name(:activity_streams, __MODULE__, i, alias_map)
+  end
 
-    case Fedi.Streams.BaseProperty.maybe_iri(i) do
-      {:ok, uri} ->
-        {:ok, %__MODULE__{alias: alias, iri: uri}}
-
-      _ ->
-        case Fedi.Streams.Literal.String.deserialize(i) do
-          {:ok, v} ->
-            {:ok, %__MODULE__{alias: alias, xml_schema_string_member: v, has_string_member: true}}
-
-          _ ->
-            case Fedi.Streams.Literal.LangString.deserialize(i) do
-              {:ok, v} ->
-                {:ok, %__MODULE__{alias: alias, rdf_lang_string_member: v}}
-
-              error ->
-                error
-            end
-        end
-    end
-    |> case do
-      {:ok, this} -> {:ok, this}
-      _error -> {:ok, %__MODULE__{alias: alias, unknown: i}}
-    end
+  def name(%{alias: alias_, rdf_lang_string_member: lang_string}) do
+    Fedi.Streams.BaseProperty.name("name", alias_, is_map(lang_string))
   end
 end

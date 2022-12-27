@@ -23,33 +23,27 @@ defmodule Fedi.ActivityStreams.Property.PreferredUsername do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias = Fedi.Streams.get_alias(alias_map, :activity_streams)
+    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
 
-    prop_name =
-      case alias do
-        "" -> @prop_name
-        _ -> alias <> ":" <> @prop_name
-      end
-
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
       nil ->
         {:ok, nil}
 
       i ->
         case Fedi.Streams.BaseProperty.maybe_iri(i) do
           {:ok, uri} ->
-            {:ok, %__MODULE__{alias: alias, iri: uri}}
+            {:ok, %__MODULE__{alias: alias_, iri: uri}}
 
           _ ->
             case Fedi.Streams.Literal.String.deserialize(i) do
               {:ok, v} ->
                 {:ok,
-                 %__MODULE__{alias: alias, xml_schema_string_member: v, has_string_member: true}}
+                 %__MODULE__{alias: alias_, xml_schema_string_member: v, has_string_member: true}}
 
               _ ->
                 case Fedi.Streams.Literal.LangString.deserialize(i) do
                   {:ok, v} ->
-                    {:ok, %__MODULE__{alias: alias, rdf_lang_string_member: v}}
+                    {:ok, %__MODULE__{alias: alias_, rdf_lang_string_member: v}}
 
                   error ->
                     error
@@ -58,7 +52,7 @@ defmodule Fedi.ActivityStreams.Property.PreferredUsername do
         end
         |> case do
           {:ok, this} -> {:ok, this}
-          _error -> {:ok, %__MODULE__{alias: alias, unknown: i}}
+          _error -> {:ok, %__MODULE__{alias: alias_, unknown: i}}
         end
     end
   end

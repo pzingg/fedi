@@ -6,26 +6,20 @@ defmodule Fedi.Streams.BaseProperty do
   def deserialize(namespace, module, prop_name, m, alias_map, types \\ nil)
 
   def deserialize(namespace, module, prop_name, m, alias_map, types) do
-    al = Fedi.Streams.get_alias(alias_map, namespace)
+    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
-    prop_name =
-      case al do
-        "" -> prop_name
-        _ -> al <> ":" <> prop_name
-      end
-
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, prop_name, alias_) do
       nil ->
         {:ok, nil}
 
       i ->
-        deserialize_with_alias(al, module, i, alias_map, types)
+        deserialize_with_alias(alias_, module, i, alias_map, types)
     end
   end
 
   def deserialize_properties(namespace, module, prop_name, m, alias_map)
       when is_map(m) and is_map(alias_map) do
-    alias = Fedi.Streams.get_alias(alias_map, namespace)
+    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
     iterator_module =
       Module.split(module)
@@ -34,13 +28,7 @@ defmodule Fedi.Streams.BaseProperty do
 
     # Logger.error("iterator module #{inspect(iterator_module)}")
 
-    prop_name =
-      case alias do
-        "" -> prop_name
-        _ -> alias <> ":" <> prop_name
-      end
-
-    case Map.get(m, prop_name) do
+    case get_prop(m, prop_name, alias_) do
       nil ->
         {:ok, nil}
 
@@ -59,23 +47,54 @@ defmodule Fedi.Streams.BaseProperty do
           end)
 
         case properties do
-          {:ok, props} -> {:ok, struct(module, alias: alias, properties: Enum.reverse(props))}
+          {:ok, props} -> {:ok, struct(module, alias: alias_, properties: Enum.reverse(props))}
           error -> error
         end
     end
   end
 
-  def deserialize_with_alias(al, module, i, alias_map, types) do
+  def get_prop(m, prop_names, alias_) do
+    prop_names
+    |> List.wrap()
+    |> Enum.reduce_while(nil, fn prop_name, _acc ->
+      prop_name =
+        case alias_ do
+          "" -> prop_name
+          _ -> alias_ <> ":" <> prop_name
+        end
+
+      case Map.get(m, prop_name) do
+        nil -> {:cont, nil}
+        val -> {:halt, val}
+      end
+    end)
+  end
+
+  def name(prop_names, alias_, is_map \\ false) do
+    prop_name =
+      prop_names
+      |> List.wrap()
+      |> List.first()
+
+    map_suffix = if is_map, do: "Map", else: ""
+
+    case alias_ do
+      "" -> prop_name <> map_suffix
+      _ -> alias_ <> ":" <> prop_name <> map_suffix
+    end
+  end
+
+  def deserialize_with_alias(alias_, module, i, alias_map, types) do
     case maybe_iri(i) do
       {:ok, uri} ->
-        {:ok, struct(module, alias: al, iri: uri)}
+        {:ok, struct(module, alias: alias_, iri: uri)}
 
       _ ->
-        deserialize_types(al, module, i, alias_map, types)
+        deserialize_types(alias_, module, i, alias_map, types)
     end
     |> case do
       {:ok, this} -> {:ok, this}
-      _ -> {:ok, struct(module, alias: al, unknown: i)}
+      _ -> {:ok, struct(module, alias: alias_, unknown: i)}
     end
   end
 
@@ -97,14 +116,14 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
-  def deserialize_types(al, module, i, alias_map, types \\ nil)
+  def deserialize_types(alias_, module, i, alias_map, types \\ nil)
 
-  def deserialize_types(al, module, i, alias_map, types) when is_map(i) do
+  def deserialize_types(alias_, module, i, alias_map, types) when is_map(i) do
     (types || Fedi.Streams.all_type_modules())
     |> Enum.reduce_while(:error, fn type_mod, acc ->
       case apply(type_mod, :deserialize, [i, alias_map]) do
         {:ok, v} when is_struct(v) ->
-          {:halt, {:ok, struct(module, alias: al, member: v)}}
+          {:halt, {:ok, struct(module, alias: alias_, member: v)}}
 
         {:ok, v} ->
           Logger.error("deserialize_types didn't return a struct: #{inspect(v)}")

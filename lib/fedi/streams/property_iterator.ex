@@ -8,6 +8,35 @@ defmodule Fedi.Streams.PropertyIterator do
     |> Fedi.Streams.BaseProperty.deserialize_with_alias(module, i, alias_map, types)
   end
 
+  def deserialize_name(namespace, module, i, alias_map) when is_map(alias_map) do
+    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+
+    case Fedi.Streams.BaseProperty.maybe_iri(i) do
+      {:ok, uri} ->
+        {:ok, struct(module, alias: alias_, iri: uri)}
+
+      _ ->
+        case Fedi.Streams.Literal.String.deserialize(i) do
+          {:ok, v} ->
+            {:ok,
+             struct(module, alias: alias_, xml_schema_string_member: v, has_string_member: true)}
+
+          _ ->
+            case Fedi.Streams.Literal.LangString.deserialize(i) do
+              {:ok, v} ->
+                {:ok, struct(module, alias: alias_, rdf_lang_string_member: v)}
+
+              error ->
+                error
+            end
+        end
+    end
+    |> case do
+      {:ok, this} -> {:ok, this}
+      _error -> {:ok, struct(module, alias: alias_, unknown: i)}
+    end
+  end
+
   # clear ensures no value of this property is set. Calling
   # is_xml_schema_any_uri afterwards will return false.
   def clear(%{} = prop) do

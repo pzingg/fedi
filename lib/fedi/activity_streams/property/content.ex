@@ -3,7 +3,7 @@ defmodule Fedi.ActivityStreams.Property.Content do
 
   require Logger
 
-  @prop_name "content"
+  @prop_name ["content", "contentMap"]
 
   @enforce_keys :alias
   defstruct [

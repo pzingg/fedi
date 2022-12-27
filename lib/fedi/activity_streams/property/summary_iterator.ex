@@ -10,19 +10,27 @@ defmodule Fedi.ActivityStreams.Property.SummaryIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
+    :xml_schema_string_member,
+    :has_string_member,
+    :rdf_lang_string_member,
     :unknown,
-    :iri,
-    :member
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
+          xml_schema_string_member: String.t() | nil,
+          has_string_member: boolean(),
+          rdf_lang_string_member: map() | nil,
           unknown: term(),
-          iri: URI.t() | nil,
-          member: term()
+          iri: URI.t() | nil
         }
 
   def deserialize(i, alias_map) when is_map(alias_map) do
-    Fedi.Streams.PropertyIterator.deserialize(:activity_streams, __MODULE__, i, alias_map)
+    Fedi.Streams.PropertyIterator.deserialize_name(:activity_streams, __MODULE__, i, alias_map)
+  end
+
+  def name(%{alias: alias_, rdf_lang_string_member: lang_string}) do
+    Fedi.Streams.BaseProperty.name("summary", alias_, is_map(lang_string))
   end
 end

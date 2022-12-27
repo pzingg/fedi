@@ -9,6 +9,8 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   values, so that this property is empty.
   """
 
+  @prop_name "JSONLDType"
+
   @enforce_keys [:alias]
   defstruct [
     :alias,
@@ -32,12 +34,8 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   end
 
   # name returns the name of this property: "id".
-  def name(%__MODULE__{alias: alias}) do
-    if String.length(alias) > 0 do
-      alias <> ":JSONLDType"
-    else
-      "JSONLDType"
-    end
+  def name(%__MODULE__{alias: alias_}) do
+    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
   end
 
   # serialize converts this into an interface representation suitable for
@@ -61,19 +59,20 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   # deserialize creates an iterator from an element that
   # has been unmarshalled from a text or binary format.
   def deserialize(i, alias_map) when is_map(alias_map) do
-    alias = ""
+    alias_ = ""
 
     case Fedi.Streams.Literal.AnyURI.deserialize(i) do
       {:ok, v} ->
-        {:ok, %__MODULE__{alias: alias, xml_schema_any_uri_member: v}}
+        {:ok, %__MODULE__{alias: alias_, xml_schema_any_uri_member: v}}
 
       _ ->
         case Fedi.Streams.Literal.String.deserialize(i) do
           {:ok, v} ->
-            {:ok, %__MODULE__{alias: alias, has_string_member: true, xml_schema_string_member: v}}
+            {:ok,
+             %__MODULE__{alias: alias_, has_string_member: true, xml_schema_string_member: v}}
 
           _ ->
-            {:ok, %__MODULE__{alias: alias, unknown: i}}
+            {:ok, %__MODULE__{alias: alias_, unknown: i}}
         end
     end
   end

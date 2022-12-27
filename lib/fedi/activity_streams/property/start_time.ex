@@ -21,29 +21,23 @@ defmodule Fedi.ActivityStreams.Property.StartTime do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias = Fedi.Streams.get_alias(alias_map, :activity_streams)
+    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
 
-    prop_name =
-      case alias do
-        "" -> @prop_name
-        _ -> alias <> ":" <> @prop_name
-      end
-
-    case Map.get(m, prop_name) do
+    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
       nil ->
         {:ok, nil}
 
       i ->
         case Fedi.Streams.BaseProperty.maybe_iri(i) do
           {:ok, uri} ->
-            {:ok, %__MODULE__{alias: alias, iri: uri}}
+            {:ok, %__MODULE__{alias: alias_, iri: uri}}
 
           _ ->
             case Fedi.Streams.Literal.DateTime.deserialize(i) do
               {:ok, v} ->
                 {:ok,
                  %__MODULE__{
-                   alias: alias,
+                   alias: alias_,
                    xml_schema_date_time_member: v,
                    has_date_time_member: true
                  }}
@@ -54,7 +48,7 @@ defmodule Fedi.ActivityStreams.Property.StartTime do
         end
         |> case do
           {:ok, this} -> {:ok, this}
-          _error -> {:ok, %__MODULE__{alias: alias, unknown: i}}
+          _error -> {:ok, %__MODULE__{alias: alias_, unknown: i}}
         end
     end
   end

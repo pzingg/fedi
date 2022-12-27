@@ -45,7 +45,7 @@ defmodule Fedi.Streams.BaseType do
   end
 
   def deserialize(namespace, module, m, alias_map) when is_map(m) and is_map(alias_map) do
-    {alias, alias_prefix} =
+    {alias_, alias_prefix} =
       case Fedi.Streams.get_alias(alias_map, namespace) do
         "" -> {"", ""}
         a -> {a, a <> ":"}
@@ -92,7 +92,7 @@ defmodule Fedi.Streams.BaseType do
 
             # End: Code that ensures a property name is unknown
             # End: Unknown deserialization
-            {:ok, struct(module, alias: alias, properties: known_prop_map, unknown: unknown)}
+            {:ok, struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)}
         end
     end
   end
