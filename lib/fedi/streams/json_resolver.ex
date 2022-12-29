@@ -46,12 +46,15 @@ defmodule Fedi.Streams.JsonResolver do
   def get_type_and_context(m) do
     case m["type"] do
       nil ->
-        {:error, "cannot determine ActivityStreams type: 'type' property is missing"}
+        {:error,
+         {:err_unmatched_type,
+          "cannot determine ActivityStreams type: 'type' property is missing"}}
 
       type_value ->
         case m["@context"] do
           nil ->
-            {:error, "cannot determine ActivityStreams type: '@context' is missing"}
+            {:error,
+             {:err_unmatched_type, "cannot determine ActivityStreams type: '@context' is missing"}}
 
           raw_context ->
             alias_map = to_alias_map(raw_context)
