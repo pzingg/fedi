@@ -8,18 +8,18 @@ defmodule Fedi.JSON.LD.Property.Type do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    properties: []
+    values: []
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          properties: list()
+          values: list()
         }
 
   # deserialize creates a "type" property from an interface representation
   # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_properties(
+    Fedi.Streams.BaseProperty.deserialize_values(
       :json_ld,
       __MODULE__,
       @prop_name,
@@ -29,7 +29,7 @@ defmodule Fedi.JSON.LD.Property.Type do
   end
 
   def serialize(%__MODULE__{} = prop) do
-    Fedi.Streams.BaseProperty.serialize_properties(prop)
+    Fedi.Streams.BaseProperty.serialize_values(prop)
   end
 
   # new creates a new type property.
@@ -45,6 +45,6 @@ defmodule Fedi.JSON.LD.Property.Type do
   # clear ensures no value of this property is set. Calling
   # is_xml_schema_any_uri afterwards will return false.
   def clear(%__MODULE__{} = prop) do
-    %__MODULE__{prop | properties: []}
+    %__MODULE__{prop | values: []}
   end
 end

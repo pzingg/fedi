@@ -6,16 +6,16 @@ defmodule SecurityV1.Property.PublicKey do
   @enforce_keys :alias
   defstruct [
     :alias,
-    properties: []
+    values: []
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          properties: list()
+          values: list()
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_properties(
+    Fedi.Streams.BaseProperty.deserialize_values(
       :security_v1,
       __MODULE__,
       @prop_name,
@@ -25,6 +25,6 @@ defmodule SecurityV1.Property.PublicKey do
   end
 
   def serialize(%__MODULE__{} = prop) do
-    Fedi.Streams.BaseProperty.serialize_properties(prop)
+    Fedi.Streams.BaseProperty.serialize_values(prop)
   end
 end

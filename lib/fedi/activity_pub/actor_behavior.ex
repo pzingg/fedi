@@ -17,6 +17,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   implementation is completely provided out of the box.
   """
 
+  @type actor_context() :: Plug.Conn.t() | Fedi.ActivityPub.Actor.t()
+
   @doc """
   Hook callback after parsing the request body for a federated request
   to the Actor's inbox.
@@ -125,7 +127,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authorized must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authorize_post_inbox(conn :: Plug.Conn.t()) ::
+  @callback authorize_post_inbox(conn :: Plug.Conn.t(), activity :: term()) ::
               {:ok, {response :: Plug.Conn.t(), authorized :: boolean()}} | {:error, term()}
 
   @doc """
@@ -142,7 +144,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
   Request status is sent in the response.
   """
-  @callback post_inbox(inbox_iri :: URI.t(), activity :: term()) :: :ok | {:error, term()}
+  @callback post_inbox(context :: actor_context(), inbox_iri :: URI.t(), activity :: term()) ::
+              :ok | {:error, term()}
 
   @doc """
   inbox_forwarding delegates inbox forwarding logic when a POST request
@@ -164,7 +167,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_inbox.
   """
-  @callback inbox_forwarding(inbox_iri :: URI.t(), activity :: term()) :: :ok | {:error, term()}
+  @callback inbox_forwarding(context :: actor_context(), inbox_iri :: URI.t(), activity :: term()) ::
+              :ok | {:error, term()}
 
   @doc """
   post_outbox delegates the logic for side effects and adding to the
@@ -187,7 +191,12 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   values that are simply not present, the 'raw_json' map is ONLY needed
   for this narrow and specific use case.
   """
-  @callback post_outbox(outbox_iri :: URI.t(), activity :: term(), raw_json :: map()) ::
+  @callback post_outbox(
+              context :: actor_context(),
+              outbox_iri :: URI.t(),
+              activity :: term(),
+              raw_json :: map()
+            ) ::
               {:ok, deliverable :: boolean()} | {:error, term()}
 
   @doc """
@@ -198,7 +207,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback add_new_ids(activity :: term()) :: {:ok, activity :: term()} | {:error, term()}
+  @callback add_new_ids(context :: actor_context(), activity :: term()) ::
+              {:ok, activity :: term()} | {:error, term()}
 
   @doc """
   deliver sends a federated message. Called only if federation is
@@ -211,7 +221,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback deliver(outbox :: URI.t(), activity :: term()) :: :ok | {:error, term()}
+  @callback deliver(context :: actor_context(), outbox :: URI.t(), activity :: term()) ::
+              :ok | {:error, term()}
 
   @doc """
   authenticate_post_outbox delegates the authentication and authorization
@@ -266,7 +277,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   Only called if the Social API is enabled.
   """
-  @callback wrap_in_create(value :: term(), outbox_iri :: URI.t()) ::
+  @callback wrap_in_create(context :: actor_context(), value :: term(), outbox_iri :: URI.t()) ::
               {:ok, create :: term()} | {:error, term()}
 
   @doc """

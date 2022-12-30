@@ -1,5 +1,6 @@
-defmodule FediServerWeb.MyActorDelegate do
-  @behaviour Fedi.ActivityPub.ActorBehavior
+defmodule FediServerWeb.MyFallbackBehavior do
+  @behaviour Fedi.ActivityPub.CommonBehavior
+  @behaviour Fedi.ActivityPub.SocialProtocol
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -19,7 +20,7 @@ defmodule FediServerWeb.MyActorDelegate do
   write a response to the connection as is expected that the caller
   to post_inbox will do so when handling the error.
   """
-  def post_inbox_request_body_hook(%Plug.Conn{} = conn, activity) do
+  def post_inbox_request_body_hook(actor, %Plug.Conn{} = conn, activity) do
     {:ok, conn}
   end
 
@@ -41,7 +42,7 @@ defmodule FediServerWeb.MyActorDelegate do
   write a response to the connection as is expected that the caller
   to post_outbox will do so when handling the error.
   """
-  def post_outbox_request_body_hook(%Plug.Conn{} = conn, data) do
+  def post_outbox_request_body_hook(actor, %Plug.Conn{} = conn, data) do
     {:ok, conn}
   end
 
@@ -65,7 +66,7 @@ defmodule FediServerWeb.MyActorDelegate do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_post_inbox(%Plug.Conn{} = conn) do
+  def authenticate_post_inbox(actor, %Plug.Conn{} = conn) do
     {:error, "Unauthenticated"}
   end
 
@@ -90,7 +91,7 @@ defmodule FediServerWeb.MyActorDelegate do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_get_inbox(%Plug.Conn{} = conn) do
+  def authenticate_get_inbox(actor, %Plug.Conn{} = conn) do
     {:ok, {conn, true}}
   end
 
@@ -113,7 +114,7 @@ defmodule FediServerWeb.MyActorDelegate do
   authorized must be true and error nil. The request will continue
   to be processed.
   """
-  def authorize_post_inbox(%Plug.Conn{} = conn) do
+  def authorize_post_inbox(actor, %Plug.Conn{} = conn, activity) do
     {:ok, {conn, true}}
   end
 
@@ -131,7 +132,7 @@ defmodule FediServerWeb.MyActorDelegate do
   If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
   Request status is sent in the response.
   """
-  def post_inbox(%URI{} = inbox_iri, activity) do
+  def post_inbox(actor, %URI{} = inbox_iri, activity) do
     :ok
   end
 
@@ -155,7 +156,7 @@ defmodule FediServerWeb.MyActorDelegate do
 
   If an error is returned, it is returned to the caller of post_inbox.
   """
-  def inbox_forwarding(%URI{} = inbox_iri, activity) do
+  def inbox_forwarding(actor, %URI{} = inbox_iri, activity) do
     :ok
   end
 
@@ -180,7 +181,7 @@ defmodule FediServerWeb.MyActorDelegate do
   values that are simply not present, the 'raw_json' map is ONLY needed
   for this narrow and specific use case.
   """
-  def post_outbox(%URI{} = outbox_iri, activity, raw_json) do
+  def post_outbox(actor, %URI{} = outbox_iri, activity, raw_json) do
     {:ok, true}
   end
 
@@ -192,7 +193,7 @@ defmodule FediServerWeb.MyActorDelegate do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  def add_new_ids(activity) do
+  def add_new_ids(actor, activity) do
     {:ok, activity}
   end
 
@@ -207,7 +208,7 @@ defmodule FediServerWeb.MyActorDelegate do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  def deliver(%URI{} = outbox, activity) do
+  def deliver(actor, %URI{} = outbox, activity) do
     :ok
   end
 
@@ -231,7 +232,7 @@ defmodule FediServerWeb.MyActorDelegate do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_post_outbox(%Plug.Conn{} = conn) do
+  def authenticate_post_outbox(actor, %Plug.Conn{} = conn) do
     {:ok, {conn, true}}
   end
 
@@ -256,7 +257,7 @@ defmodule FediServerWeb.MyActorDelegate do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_get_outbox(%Plug.Conn{} = conn) do
+  def authenticate_get_outbox(actor, %Plug.Conn{} = conn) do
     {:ok, {conn, true}}
   end
 
@@ -266,7 +267,7 @@ defmodule FediServerWeb.MyActorDelegate do
 
   Only called if the Social API is enabled.
   """
-  def wrap_in_create(value, %URI{} = outbox_iri) do
+  def wrap_in_create(actor, value, %URI{} = outbox_iri) do
     # {:ok, create}
     {:error, "Unimplemented"}
   end
@@ -281,7 +282,7 @@ defmodule FediServerWeb.MyActorDelegate do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_outbox(%Plug.Conn{} = conn) do
+  def get_outbox(actor, %Plug.Conn{} = conn) do
     # {:ok, ordered_collection_page}
     {:error, "Unimplemented"}
   end
@@ -296,7 +297,7 @@ defmodule FediServerWeb.MyActorDelegate do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_inbox(%Plug.Conn{} = conn) do
+  def get_inbox(actor, %Plug.Conn{} = conn) do
     # {:ok, ordered_collection_page}
     {:error, "Unimplemented"}
   end

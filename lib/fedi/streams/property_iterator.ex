@@ -47,22 +47,22 @@ defmodule Fedi.Streams.PropertyIterator do
     |> Module.concat()
   end
 
-  def clear(%{__struct__: _module, mapped_properties: _, properties: _} = prop) do
-    struct(prop, mapped_properties: [], properties: [])
+  def clear(%{__struct__: _module, mapped_values: _, values: _} = prop) do
+    struct(prop, mapped_values: [], values: [])
   end
 
-  def clear(%{__struct__: _module, properties: _} = prop) do
-    struct(prop, properties: [])
+  def clear(%{__struct__: _module, values: _} = prop) do
+    struct(prop, values: [])
   end
 
   # append_iri appends an IRI value to the back of a list of the property "type"
-  def append_iri(%{__struct__: module, alias: alias_, properties: properties} = prop, %URI{} = v) do
+  def append_iri(%{__struct__: module, alias: alias_, values: values} = prop, %URI{} = v) do
     prop_mod = iterator_module(module)
 
     struct(
       prop,
-      properties:
-        properties ++
+      values:
+        values ++
           [
             struct(prop_mod, alias: alias_, xml_schema_any_uri_member: v)
           ]
@@ -72,15 +72,15 @@ defmodule Fedi.Streams.PropertyIterator do
   # append_xml_schema_any_uri appends a anyURI value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def append_xml_schema_any_uri(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         %URI{} = v
       ) do
     prop_mod = iterator_module(module)
 
     struct(
       prop,
-      properties:
-        properties ++
+      values:
+        values ++
           [
             struct(prop_mod, alias: alias_, xml_schema_any_uri_member: v)
           ]
@@ -90,7 +90,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # append_xml_schema_string appends a string value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def append_xml_schema_string(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         v
       )
       when is_binary(v) do
@@ -98,8 +98,8 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
-        properties ++
+      values:
+        values ++
           [
             struct(prop_mod,
               alias: alias_,
@@ -111,13 +111,13 @@ defmodule Fedi.Streams.PropertyIterator do
   end
 
   # prepend_iri appends an IRI value to the back of a list of the property "type"
-  def prepend_iri(%{__struct__: module, alias: alias_, properties: properties} = prop, %URI{} = v) do
+  def prepend_iri(%{__struct__: module, alias: alias_, values: values} = prop, %URI{} = v) do
     prop_mod = iterator_module(module)
 
     struct(
       prop,
-      properties: [
-        struct(prop_mod, alias: alias_, xml_schema_any_uri_member: v) | properties
+      values: [
+        struct(prop_mod, alias: alias_, xml_schema_any_uri_member: v) | values
       ]
     )
   end
@@ -125,16 +125,16 @@ defmodule Fedi.Streams.PropertyIterator do
   # prepend_xml_schema_any_uri appends a anyURI value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def prepend_xml_schema_any_uri(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         %URI{} = v
       ) do
     prop_mod = iterator_module(module)
 
     struct(
       prop,
-      properties: [
+      values: [
         struct(prop_mod, alias: alias_, xml_schema_any_uri_member: v)
-        | properties
+        | values
       ]
     )
   end
@@ -142,7 +142,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # prepend_xml_schema_string appends a string value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def prepend_xml_schema_string(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         v
       )
       when is_binary(v) do
@@ -150,13 +150,13 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties: [
+      values: [
         struct(prop_mod,
           alias: alias_,
           has_string_member: true,
           xml_schema_string_member: v
         )
-        | properties
+        | values
       ]
     )
   end
@@ -165,7 +165,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # Existing elements at that index and higher are shifted back once.
   # Invalidates all iterators.
   def insert_iri(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         i,
         %URI{} = v
       )
@@ -174,9 +174,9 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
+      values:
         List.insert_at(
-          properties,
+          values,
           i,
           struct(prop_mod,
             alias: alias_,
@@ -189,7 +189,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # insert_xml_schema_any_uri appends a anyURI value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def insert_xml_schema_any_uri(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         i,
         %URI{} = v
       )
@@ -198,9 +198,9 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
+      values:
         List.insert_at(
-          properties,
+          values,
           i,
           struct(prop_mod,
             alias: alias_,
@@ -213,7 +213,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # insert_xml_schema_string appends a string value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def insert_xml_schema_string(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         i,
         v
       )
@@ -222,9 +222,9 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
+      values:
         List.insert_at(
-          properties,
+          values,
           i,
           struct(prop_mod,
             alias: alias_,
@@ -237,14 +237,14 @@ defmodule Fedi.Streams.PropertyIterator do
 
   # set_iri sets an IRI value to be at the specified index for the property "type".
   # Panics if the index is out of bounds.
-  def set_iri(%{__struct__: module, alias: alias_, properties: properties} = prop, i, %URI{} = v)
+  def set_iri(%{__struct__: module, alias: alias_, values: values} = prop, i, %URI{} = v)
       when is_integer(i) do
     prop_mod = iterator_module(module)
 
     struct(
       prop,
-      properties:
-        List.update_at(properties, i, fn _ ->
+      values:
+        List.update_at(values, i, fn _ ->
           struct(prop_mod,
             alias: alias_,
             xml_schema_any_uri_member: v
@@ -256,7 +256,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # set_xml_schema_any_uri appends a anyURI value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def set_xml_schema_any_uri(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         i,
         %URI{} = v
       )
@@ -265,8 +265,8 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
-        List.update_at(properties, i, fn _ ->
+      values:
+        List.update_at(values, i, fn _ ->
           struct(prop_mod,
             alias: alias_,
             xml_schema_any_uri_member: v
@@ -278,7 +278,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # set_xml_schema_string appends a string value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def set_xml_schema_string(
-        %{__struct__: module, alias: alias_, properties: properties} = prop,
+        %{__struct__: module, alias: alias_, values: values} = prop,
         i,
         v
       )
@@ -287,8 +287,8 @@ defmodule Fedi.Streams.PropertyIterator do
 
     struct(
       prop,
-      properties:
-        List.update_at(properties, i, fn _ ->
+      values:
+        List.update_at(values, i, fn _ ->
           struct(prop_mod,
             alias: alias_,
             has_string_member: true,
@@ -301,26 +301,26 @@ defmodule Fedi.Streams.PropertyIterator do
   # Remove deletes an element at the specified index from a list of the property
   # "type", regardless of its type. Panics if the index is out of bounds.
   #  Invalidates all iterators.
-  def remove(%{mapped_properties: mapped_properties, properties: properties} = prop, i)
+  def remove(%{mapped_values: mapped_values, values: values} = prop, i)
       when is_integer(i) do
     try do
-      struct(prop, properties: List.delete_at(properties, i))
+      struct(prop, values: List.delete_at(values, i))
     rescue
       _ ->
         struct(
           prop,
-          mapped_properties: List.delete_at(mapped_properties, i - Enum.count(properties))
+          mapped_values: List.delete_at(mapped_values, i - Enum.count(values))
         )
     end
   end
 
-  def remove(%{properties: properties} = prop, i)
+  def remove(%{values: values} = prop, i)
       when is_integer(i) do
-    struct(prop, properties: List.delete_at(properties, i))
+    struct(prop, values: List.delete_at(values, i))
   end
 
   # wwap swaps the location of values at two indices for the "type" property.
-  def swap(%{properties: properties} = prop, i, j)
+  def swap(%{values: values} = prop, i, j)
       when is_integer(i) and is_integer(j) do
     if i == j do
       prop
@@ -328,49 +328,49 @@ defmodule Fedi.Streams.PropertyIterator do
       p1 = at(prop, i)
       p2 = at(prop, j)
 
-      properties =
-        properties
+      values =
+        values
         |> List.update_at(i, fn _ -> p2 end)
         |> List.update_at(j, fn _ -> p1 end)
 
-      struct(prop, properties: properties)
+      struct(prop, values: values)
     end
   end
 
   # at returns the property value for the specified index. Panics if the index is
   # out of bounds.
-  def at(%{mapped_properties: mapped_properties, properties: properties}, i) when is_integer(i) do
+  def at(%{mapped_values: mapped_values, values: values}, i) when is_integer(i) do
     try do
-      Enum.at(properties, i)
+      Enum.at(values, i)
     rescue
       _ ->
-        Enum.at(mapped_properties, i - Enum.count(properties))
+        Enum.at(mapped_values, i - Enum.count(values))
     end
   end
 
-  def at(%{properties: properties}, i) when is_integer(i) do
-    Enum.at(properties, i)
+  def at(%{values: values}, i) when is_integer(i) do
+    Enum.at(values, i)
   end
 
   # empty returns true if there are no elements.
-  def empty(%{mapped_properties: [], properties: []}), do: true
-  def empty(%{mapped_properties: _, properties: _}), do: false
-  def empty(%{properties: []}), do: true
+  def empty(%{mapped_values: [], values: []}), do: true
+  def empty(%{mapped_values: _, values: _}), do: false
+  def empty(%{values: []}), do: true
   def empty(_prop), do: false
 
   # len returns the number of elements.
-  def len(%{mapped_properties: mapped_properties, properties: properties}) do
-    Enum.count(mapped_properties) + Enum.count(properties)
+  def len(%{mapped_values: mapped_values, values: values}) do
+    Enum.count(mapped_values) + Enum.count(values)
   end
 
-  def len(%{properties: properties}), do: Enum.count(properties)
+  def len(%{values: values}), do: Enum.count(values)
 
-  def all_properties(%{mapped_properties: mapped_properties, properties: properties}) do
-    properties ++ mapped_properties
+  def all_values(%{mapped_values: mapped_values, values: values}) do
+    values ++ mapped_values
   end
 
-  def all_properties(%{properties: properties}), do: properties
-  def all_properties(_), do: []
+  def all_values(%{values: values}), do: values
+  def all_values(_), do: []
 
   # json_ld_context returns the JSONLD URIs required in the context string
   # for this property and the specific values that are set. The value
@@ -378,7 +378,7 @@ defmodule Fedi.Streams.PropertyIterator do
   # values.
   def json_ld_context(prop) do
     prop
-    |> all_properties()
+    |> all_values()
     |> Enum.reduce(Map.new(), fn v, acc ->
       case v do
         %{__struct__: module} ->

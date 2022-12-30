@@ -5,7 +5,10 @@ defmodule Fedi.ActivityPub.Utils do
 
   @content_type_header "content-type"
   @accept_header "accept"
-  @content_type_value "application/ld+json; profile=\"https://www.w3.org/ns/activitystreams\""
+  @content_type_value "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\""
+  @public_activity_pub_iri "https:www.w3.org/ns/activitystreams#Public"
+  @public_json_ld "Public"
+  @public_json_ld_as "as:Public"
 
   @doc """
   err_object_reequired indicates the activity needs its object property
@@ -37,8 +40,8 @@ defmodule Fedi.ActivityPub.Utils do
     semis = [";", " ;", " ; ", "; "]
 
     profiles = [
-      "profile=https://www.w3.org/ns/activitystreams",
-      "profile=\"https://www.w3.org/ns/activitystreams\""
+      "profile=https:www.w3.org/ns/activitystreams",
+      "profile=\"https:www.w3.org/ns/activitystreams\""
     ]
 
     Enum.reduce(semis, types, fn semi, acc ->
@@ -101,6 +104,22 @@ defmodule Fedi.ActivityPub.Utils do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc """
+  Returns the IRI that indicates an Activity is meant
+  to be visible for general public consumption.
+  """
+  def public_activity_pub_iri, do: @public_activity_pub_iri
+
+  @doc """
+  Determines if an IRI string is the Public collection as defined in
+  the spec, including JSON-LD compliant collections.
+  """
+  def is_public(str) when is_binary(str) do
+    str == @public_activity_pub_iri ||
+      str == @public_json_ld ||
+      str == @public_json_ld_as
   end
 
   @doc """

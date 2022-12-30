@@ -164,7 +164,7 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
-  def deserialize_properties(namespace, module, prop_name, m, alias_map)
+  def deserialize_values(namespace, module, prop_name, m, alias_map)
       when is_map(m) and is_map(alias_map) do
     alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
@@ -173,17 +173,17 @@ defmodule Fedi.Streams.BaseProperty do
       |> List.update_at(-1, fn name -> name <> "Iterator" end)
       |> Module.concat()
 
-    case get_props(m, prop_name, alias_) do
+    case get_values(m, prop_name, alias_) do
       [] ->
         {:ok, nil}
 
-      props ->
+      values ->
         result =
-          props
-          |> Enum.reduce_while({[], []}, fn {i, prop_name, map_prop}, {map_acc, acc} ->
+          values
+          |> Enum.reduce_while({[], []}, fn {i, prop_name, mapped_property?}, {map_acc, acc} ->
             case apply(iterator_module, :deserialize, [i, alias_map]) do
               {:ok, value} ->
-                if map_prop do
+                if mapped_property? do
                   {:cont, {[value | map_acc], acc}}
                 else
                   {:cont, {map_acc, [value | acc]}}
@@ -199,18 +199,18 @@ defmodule Fedi.Streams.BaseProperty do
           {:error, reason} ->
             {:error, reason}
 
-          {mapped_properties, properties} ->
-            mapped_properties = Enum.reverse(mapped_properties)
-            properties = Enum.reverse(properties)
+          {mapped_values, values} ->
+            mapped_values = Enum.reverse(mapped_values)
+            values = Enum.reverse(values)
 
-            if Enum.empty?(mapped_properties) do
-              {:ok, struct(module, alias: alias_, properties: properties)}
+            if Enum.empty?(mapped_values) do
+              {:ok, struct(module, alias: alias_, values: values)}
             else
               {:ok,
                struct(module,
                  alias: alias_,
-                 mapped_properties: mapped_properties,
-                 properties: properties
+                 mapped_values: mapped_values,
+                 values: values
                )}
             end
         end
@@ -259,7 +259,7 @@ defmodule Fedi.Streams.BaseProperty do
   # need this function as most typical use cases serialize types
   # instead of individual properties. It is exposed for alternatives to
   # go-fed implementations to use.
-  def serialize_properties(prop) do
+  def serialize_values(prop) do
     result =
       Enum.reduce_while(prop.properties, [], fn it, acc ->
         case serialize(it) do
@@ -276,14 +276,14 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
-  def serialize_mapped_properties(prop) do
-    case serialize_properties(prop) do
+  def serialize_mapped_values(prop) do
+    case serialize_values(prop) do
       {:error, reason} ->
         {:error, reason}
 
       {:ok, unmapped} ->
         result =
-          Enum.reduce_while(prop.mapped_properties, [], fn it, acc ->
+          Enum.reduce_while(prop.mapped_values, [], fn it, acc ->
             case serialize(it) do
               {:error, reason} -> {:halt, {:error, reason}}
               {:ok, b} -> {:cont, [b | acc]}
@@ -511,13 +511,13 @@ defmodule Fedi.Streams.BaseProperty do
 
         val ->
           # TODO use predicate function
-          map_property = String.ends_with?(prop_name, "Map")
-          {:halt, {val, prop_name, map_property}}
+          mapped_property? = String.ends_with?(prop_name, "Map")
+          {:halt, {val, prop_name, mapped_property?}}
       end
     end)
   end
 
-  def get_props(m, prop_names, alias_) when is_binary(alias_) do
+  def get_values(m, prop_names, alias_) when is_binary(alias_) do
     prop_names
     |> List.wrap()
     |> Enum.reduce([], fn prop_name, acc ->
@@ -536,8 +536,8 @@ defmodule Fedi.Streams.BaseProperty do
 
         val ->
           # TODO use predicate function
-          map_property = String.ends_with?(prop_name, "Map")
-          [{val, prop_name, map_property} | acc]
+          mapped_property? = String.ends_with?(prop_name, "Map")
+          [{val, prop_name, mapped_property?} | acc]
       end
     end)
   end
