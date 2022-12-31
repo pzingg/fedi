@@ -3,16 +3,37 @@ defmodule Fedi.Streams.PropertyIterator do
 
   require Logger
 
-  @name_like_properties ["content", "name", "summary", "contentMap", "nameMap", "summaryMap"]
+  def deserialize(namespace, module, i, prop_name, mapped_property?, alias_map, types \\ nil)
 
-  def deserialize(namespace, module, i, prop_name, mapped_property?, alias_map, types \\ nil) do
+  def deserialize(namespace, module, i, _prop_name, _mapped_property?, alias_map, types)
+      when is_list(i) do
+    prop_module =
+      Module.split(module)
+      |> List.update_at(-1, fn name -> String.replace_trailing(name, "Iterator", "") end)
+      |> Module.concat()
+
     alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
-    if Enum.member?(@name_like_properties, prop_name) do
-      deserialize_name_with_alias(alias_, module, i, prop_name, mapped_property?, alias_map)
-    else
-      Fedi.Streams.BaseProperty.deserialize_with_alias(alias_, module, i, alias_map, types)
+    Enum.reduce_while(i, [], fn v, acc ->
+      case Fedi.Streams.BaseProperty.deserialize_types(alias_, module, v, alias_map, types) do
+        {:ok, value} -> {:cont, [value | acc]}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:error, reason} ->
+        Logger.error("Failed to deserialize #{reason}")
+        {:ok, struct(prop_module, alias: alias_, unknown: i)}
+
+      values ->
+        {:ok, struct(prop_module, alias: alias_, values: Enum.reverse(values))}
     end
+  end
+
+  def deserialize(namespace, module, i, _prop_name, _mapped_property?, alias_map, types) do
+    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+
+    Fedi.Streams.BaseProperty.deserialize_with_alias(alias_, module, i, alias_map, types)
   end
 
   def deserialize_name_with_alias(alias_, module, i, _prop_name, _mapped_property?, alias_map)

@@ -316,9 +316,10 @@ defmodule Fedi.ActivityPub.Actor do
            {:serialized, Fedi.Streams.Serializer.serialize(oc)},
          {:encoded, {:ok, json_body}} <-
            {:encoded, Jason.encode(m)} do
-      conn
-      |> Utils.add_response_headers(json_body)
-      |> Plug.Conn.send_resp(:ok, json_body)
+      {:ok,
+       conn
+       |> Utils.add_response_headers(json_body)
+       |> Plug.Conn.send_resp(:ok, json_body)}
     else
       # Do nothing if it is not an ActivityPub GET request.
       {:is_activity_pub_get, false} ->
@@ -375,8 +376,8 @@ defmodule Fedi.ActivityPub.Actor do
 
          # The HTTP request steps are complete, complete the rest of the outbox
          # and delivery process.
-         {:delivered, {:ok, {conn, true}}} <-
-           {:delivered, delegate(actor, :c2s, :deliver, [conn, outbox_id, activity])} do
+         {:delivered, :ok} <-
+           {:delivered, delegate(actor, :c2s, :deliver, [outbox_id, activity])} do
       # Respond to the request with the new Activity's IRI location.
       location = URI.to_string(activity_id)
 
@@ -475,9 +476,10 @@ defmodule Fedi.ActivityPub.Actor do
            {:serialized, Fedi.Streams.Serializer.serialize(oc)},
          {:encoded, {:ok, json_body}} <-
            {:encoded, Jason.encode(m)} do
-      conn
-      |> Utils.add_response_headers(json_body)
-      |> Plug.Conn.send_resp(:ok, json_body)
+      {:ok,
+       conn
+       |> Utils.add_response_headers(json_body)
+       |> Plug.Conn.send_resp(:ok, json_body)}
     else
       # Do nothing if it is not an ActivityPub GET request.
       {:is_activity_pub_get, false} ->

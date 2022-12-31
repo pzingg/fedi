@@ -179,7 +179,7 @@ defmodule Fedi.Streams.Utils do
   end
 
   def get_ordered_items(%{properties: properties}) do
-    Logger.error("get_ordered_items properties: #{inspect(properties)}")
+    # Logger.error("get_ordered_items properties: #{inspect(properties)}")
 
     case Map.get(properties, "orderedItems") do
       %Fedi.ActivityStreams.Property.OrderedItems{} = value ->

@@ -3,6 +3,8 @@ defmodule Fedi.ActivityStreams do
   ActivityStreams vocabulary.
   """
 
+  @name_like_properties ["content", "name", "summary", "contentMap", "nameMap", "summaryMap"]
+
   @all_types [
     Fedi.ActivityStreams.Type.Object,
     Fedi.ActivityStreams.Type.Link,

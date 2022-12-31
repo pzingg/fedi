@@ -1,17 +1,21 @@
 defmodule Fedi.Streams.Serializer do
   @moduledoc false
 
+  require Logger
+
   def serialize(%{__struct__: module} = object) do
     try do
       module = Code.ensure_compiled!(module)
-      apply(module, :serialize, [object])
+      result = apply(module, :serialize, [object])
+      # Logger.error("serialized: #{inspect(result)}")
+      result
     rescue
       e ->
         {:error, "Serializer exception: #{inspect(e)}"}
     end
   end
 
-  def serialize(_object) do
-    {:error, "Object is not a struct"}
+  def serialize(object) do
+    {:error, "Cannot serialize non-struct #{inspect(object)}"}
   end
 end

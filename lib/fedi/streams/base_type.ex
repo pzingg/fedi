@@ -66,13 +66,13 @@ defmodule Fedi.Streams.BaseType do
           |> Enum.reduce_while(%{}, fn {prop_name, prop_mod}, acc ->
             case apply(prop_mod, :deserialize, [m, alias_map]) do
               {:error, reason} ->
+                Logger.error("Error adding known #{prop_name}: #{reason}")
                 {:halt, {:error, reason}}
 
               {:ok, nil} ->
                 {:cont, acc}
 
               {:ok, v} ->
-                Logger.error("adding known #{prop_name}")
                 {:cont, Map.put(acc, prop_name, v)}
             end
           end)
@@ -84,7 +84,6 @@ defmodule Fedi.Streams.BaseType do
 
           _ ->
             known_property_names = Enum.map(known_properties, fn {prop_name, _} -> prop_name end)
-            Logger.error("checking unknown props in #{Map.keys(m) |> Enum.join(" ")}")
             # Begin: Unknown deserialization
             # Begin: Code that ensures a property name is unknown
             unknown =
@@ -92,14 +91,12 @@ defmodule Fedi.Streams.BaseType do
                 if Enum.member?(known_property_names, prop_name) do
                   acc
                 else
-                  Logger.error("adding unknown #{prop_name}")
                   Map.put(acc, prop_name, v)
                 end
               end)
 
             # End: Code that ensures a property name is unknown
             # End: Unknown deserialization
-            Logger.error("deserialized #{module}")
             {:ok, struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)}
         end
     end
@@ -115,7 +112,6 @@ defmodule Fedi.Streams.BaseType do
       end
 
     # Begin: Serialize known properties
-
     m = %{"type" => type_name}
 
     properties
@@ -167,6 +163,11 @@ defmodule Fedi.Streams.BaseType do
 
         {:ok, m}
     end
+  end
+
+  def serialize(%{__struct__: module, alias: _} = _object) do
+    Logger.error("Error serializing #{module} without properties")
+    {:error, "Object #{module} must have properties"}
   end
 
   def find_type(%{"type" => type_value}, alias_prefix, type_name) do

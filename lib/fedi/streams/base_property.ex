@@ -240,8 +240,7 @@ defmodule Fedi.Streams.BaseProperty do
         {:ok, v} when is_struct(v) ->
           {:halt, {:ok, struct(module, alias: alias_, member: v)}}
 
-        {:ok, v} ->
-          Logger.error("deserialize_types did not return a struct: #{inspect(v)}")
+        {:ok, _v} ->
           {:cont, acc}
 
         _ ->
@@ -250,7 +249,7 @@ defmodule Fedi.Streams.BaseProperty do
     end)
   end
 
-  def deserialize_types(_, _, _, _, _), do: :error
+  def deserialize_types(_, _, i, _, _), do: {:error, "#{inspect(i)} is not a map"}
 
   ##### Serialization
 
@@ -259,9 +258,9 @@ defmodule Fedi.Streams.BaseProperty do
   # need this function as most typical use cases serialize types
   # instead of individual properties. It is exposed for alternatives to
   # go-fed implementations to use.
-  def serialize_values(prop) do
+  def serialize_values(%{values: values}) when is_list(values) do
     result =
-      Enum.reduce_while(prop.properties, [], fn it, acc ->
+      Enum.reduce_while(values, [], fn it, acc ->
         case serialize(it) do
           {:error, reason} -> {:halt, {:error, reason}}
           {:ok, b} -> {:cont, [b | acc]}
@@ -274,6 +273,29 @@ defmodule Fedi.Streams.BaseProperty do
       [v] -> {:ok, v}
       l -> {:ok, Enum.reverse(l)}
     end
+  end
+
+  def serialize_values(%{properties: properties}) when is_map(properties) do
+    result =
+      Enum.reduce_while(properties, [], fn it, acc ->
+        Logger.error("serializing property #{inspect(it)}")
+
+        case serialize(it) do
+          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, b} -> {:cont, [b | acc]}
+        end
+      end)
+
+    case result do
+      {:error, reason} -> {:error, reason}
+      # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
+      [v] -> {:ok, v}
+      l -> {:ok, Enum.reverse(l)}
+    end
+  end
+
+  def serialize_values(prop) do
+    {:error, "#{inspect(prop)} is not a property map nor a values list"}
   end
 
   def serialize_mapped_values(prop) do
@@ -301,6 +323,19 @@ defmodule Fedi.Streams.BaseProperty do
           mapped ->
             {:ok, %Fedi.Streams.MappedNameProp{mapped: Enum.reverse(mapped), unmapped: unmapped}}
         end
+    end
+  end
+
+  def serialize(%{values: values}) when is_list(values) do
+    Enum.reduce_while(values, [], fn value, acc ->
+      case apply(value.__struct__, :serialize, [value]) do
+        {:ok, m} -> {:cont, [m | acc]}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:error, reason} -> {:error, reason}
+      values -> {:ok, Enum.reverse(values)}
     end
   end
 

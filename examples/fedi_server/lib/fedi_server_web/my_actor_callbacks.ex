@@ -206,7 +206,8 @@ defmodule FediServerWeb.MyActorCallbacks do
   If an error is returned, it is returned to the caller of post_outbox.
   """
   def deliver(actor, %URI{} = outbox, activity) do
-    :ok
+    # :ok
+    {:error, "We are not a federated instance, unable to deliver #{inspect(activity.__struct__)}"}
   end
 
   @doc """
