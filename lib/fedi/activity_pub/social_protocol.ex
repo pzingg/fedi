@@ -21,7 +21,7 @@ defmodule Fedi.ActivityPub.SocialProtocol do
 
   To override the default behavior, instead supply the function in
   'other', which does not guarantee the application will be compliant
-  with the ActivityPub Social Protocol.
+  with the ActivityPub Social API.
 
   Applications are not expected to handle every single ActivityStreams
   type and extension. The unhandled ones are passed to DefaultCallback.
@@ -188,7 +188,7 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   blocking behavior.
 
   Note that go-fed does not federate 'Block' activities received in the
-  Social Protocol.
+  Social API.
   """
   @callback block(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
 end

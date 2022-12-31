@@ -9,7 +9,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   guaranteed to be correctly followed.
   """
 
-  @behaviour Fedi.ActivityPub.CommonBehavior
+  @behaviour Fedi.ActivityPub.ActorBehavior
 
   alias Fedi.ActivityPub.Actor
 
@@ -37,19 +37,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         }
 
   def new(common, opts \\ []) do
-    c2s = Keyword.get(opts, :c2s)
-    s2s = Keyword.get(opts, :s2s)
-
-    %__MODULE__{
-      common: common,
-      database: Keyword.get(opts, :database),
-      c2s: c2s,
-      s2s: s2s,
-      fallback: Keyword.get(opts, :fallback),
-      enable_social_protocol: !is_nil(c2s),
-      enable_federated_protocol: !is_nil(s2s),
-      data: Keyword.get(opts, :data)
-    }
+    Fedi.ActivityPub.Actor.make_actor(__MODULE__, common, opts)
   end
 
   @doc """
@@ -229,7 +217,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   @doc """
-  authenticate_post_outbox delegates the authentication and authorization
+  Delegates the authentication and authorization
   of a POST to an outbox.
 
   Only called if the Social API is enabled.
@@ -248,13 +236,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_post_outbox(%Plug.Conn{} = conn) do
-    Actor.delegate(conn, :c2s, :authenticate_post_outbox, [conn])
+  def authenticate_post_outbox(actor, %Plug.Conn{} = conn) do
+    Actor.delegate(actor, :c2s, :authenticate_post_outbox, [conn])
   end
 
   @doc """
-  authenticate_get_outbox delegates the authentication of a GET to an
-  outbox.
+  Delegates the authentication of a GET to an outbox.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
@@ -273,8 +260,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  def authenticate_get_outbox(%Plug.Conn{} = conn) do
-    Actor.delegate(conn, :common, :authenticate_get_outbox, [conn])
+  def authenticate_get_outbox(actor, %Plug.Conn{} = conn) do
+    Actor.delegate(actor, :common, :authenticate_get_outbox, [conn])
   end
 
   @doc """
@@ -298,8 +285,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_outbox(%Plug.Conn{} = conn) do
-    Actor.delegate(conn, :common, :get_outbox, [conn])
+  def get_outbox(actor, %Plug.Conn{} = conn) do
+    Actor.delegate(actor, :common, :get_outbox, [conn])
   end
 
   @doc """
@@ -312,26 +299,17 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_inbox(%Plug.Conn{} = conn) do
-    Actor.delegate(conn, :s2s, :get_inbox, [conn])
+  def get_inbox(actor, %Plug.Conn{} = conn) do
+    Actor.delegate(actor, :s2s, :get_inbox, [conn])
   end
 
-  @doc """
-  addToInboxIfNew will add the activity to the inbox at the specified IRI if
-  the activity's ID has not yet been added to the inbox.
-
-  It does not add the activity to this database's know federated data.
-
-  Returns true when the activity is novel.
-  """
-  def add_to_inbox_if_new(%Plug.Conn{} = conn, %URI{} = inbox_iri, activity) do
-    case Actor.get_actor(conn) do
-      {:ok, actor} when is_struct(actor) -> add_to_inbox_if_new(actor, inbox_iri, activity)
-      error -> error
-    end
-  end
-
-  def add_to_inbox_if_new(%{database: db_context} = actor, %URI{} = inbox_iri, activity) do
+  # Adds the activity to the inbox at the specified IRI if
+  # the activity's ID has not yet been added to the inbox.
+  #
+  # It does not add the activity to this database's know federated data.
+  #
+  # Returns true when the activity is novel.
+  defp add_to_inbox_if_new(%{database: db_context}, %URI{} = inbox_iri, activity) do
     with %URI{} = id <- Fedi.Streams.Utils.get_json_ld_id(activity),
          {:ok, false} <- apply(db_context, :inbox_contains, [inbox_iri, id]) do
       # It is a new id, acquire the inbox.

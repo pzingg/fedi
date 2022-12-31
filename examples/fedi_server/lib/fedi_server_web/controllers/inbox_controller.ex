@@ -6,9 +6,9 @@ defmodule FediServerWeb.InboxController do
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
   def get_inbox(conn, _params) do
-    actor = conn.private[:actor]
+    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.get_inbox(actor, conn) do
+    case Fedi.ActivityPub.Actor.handle_get_inbox(actor, conn) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("get_inbox state #{actor_state}")
@@ -32,9 +32,9 @@ defmodule FediServerWeb.InboxController do
   end
 
   def post_inbox(conn, _params) do
-    actor = conn.private[:actor]
+    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.post_inbox(actor, conn, "http") do
+    case Fedi.ActivityPub.Actor.handle_post_inbox(actor, conn, "http") do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("post_inbox state #{actor_state}")

@@ -22,8 +22,15 @@ defmodule Fedi.ActivityStreams.Property.OneOfIterator do
           member: term()
         }
 
-  def deserialize(i, alias_map) when is_map(alias_map) do
-    Fedi.Streams.PropertyIterator.deserialize(:activity_streams, __MODULE__, i, alias_map)
+  def deserialize(i, prop_name, mapped_property?, alias_map) when is_map(alias_map) do
+    Fedi.Streams.PropertyIterator.deserialize(
+      :activity_streams,
+      __MODULE__,
+      i,
+      prop_name,
+      mapped_property?,
+      alias_map
+    )
   end
 
   def serialize(%__MODULE__{} = prop) do

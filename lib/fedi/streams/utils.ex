@@ -1,6 +1,8 @@
 defmodule Fedi.Streams.Utils do
   @moduledoc false
 
+  require Logger
+
   def get_json_ld_id(%{properties: properties}) do
     case Map.get(properties, "id") do
       %Fedi.JSON.LD.Property.Id{xml_schema_any_uri_member: %URI{} = id} ->
@@ -177,6 +179,8 @@ defmodule Fedi.Streams.Utils do
   end
 
   def get_ordered_items(%{properties: properties}) do
+    Logger.error("get_ordered_items properties: #{inspect(properties)}")
+
     case Map.get(properties, "orderedItems") do
       %Fedi.ActivityStreams.Property.OrderedItems{} = value ->
         value

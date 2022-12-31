@@ -6,9 +6,9 @@ defmodule FediServerWeb.OutboxController do
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
   def get_outbox(conn, _params) do
-    actor = conn.private[:actor]
+    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.get_outbox(actor, conn) do
+    case Fedi.ActivityPub.Actor.handle_get_outbox(actor, conn) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("get_outbox state #{actor_state}")
@@ -32,9 +32,9 @@ defmodule FediServerWeb.OutboxController do
   end
 
   def post_outbox(conn, _params) do
-    actor = conn.private[:actor]
+    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.post_outbox(actor, conn, "http") do
+    case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn, "http") do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("post_outbox state #{actor_state}")

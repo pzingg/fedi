@@ -21,7 +21,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
 
   To override the default behavior, instead supply the function in
   'other', which does not guarantee the application will be compliant
-  with the ActivityPub Social Protocol.
+  with the ActivityPub Social API.
 
   Applications are not expected to handle every single ActivityStreams
   type and extension. The unhandled ones are passed to DefaultCallback.

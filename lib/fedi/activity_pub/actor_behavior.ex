@@ -17,7 +17,18 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   implementation is completely provided out of the box.
   """
 
-  @type actor_context() :: Plug.Conn.t() | Fedi.ActivityPub.Actor.t()
+  @type actor() :: Fedi.ActivityPub.Actor.context()
+
+  @optional_callbacks [
+    # Always called, for Social or Federated Protocols
+    authenticate_get_inbox: 2,
+    # Only called if the Federated Protocol is enabled.
+    authenticate_post_inbox: 2,
+    # Only called if the Federated Protocol is enabled.
+    post_inbox_request_body_hook: 3,
+    # Only called if the Social API is enabled.
+    post_outbox_request_body_hook: 3
+  ]
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -37,7 +48,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   write a response to the connection as is expected that the caller
   to post_inbox will do so when handling the error.
   """
-  @callback post_inbox_request_body_hook(request :: Plug.Conn.t(), activity :: term()) ::
+  @callback post_inbox_request_body_hook(
+              actor :: actor(),
+              request :: Plug.Conn.t(),
+              activity :: term()
+            ) ::
               {:ok, Plug.Conn.t()} | {:error, term()}
 
   @doc """
@@ -58,7 +73,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   write a response to the connection as is expected that the caller
   to post_outbox will do so when handling the error.
   """
-  @callback post_outbox_request_body_hook(request :: Plug.Conn.t(), data :: term()) ::
+  @callback post_outbox_request_body_hook(
+              actor :: actor(),
+              request :: Plug.Conn.t(),
+              data :: term()
+            ) ::
               {:ok, response :: Plug.Conn.t()} | {:error, term()}
 
   @doc """
@@ -81,7 +100,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_post_inbox(request :: Plug.Conn.t()) ::
+  @callback authenticate_post_inbox(actor :: actor(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
 
   @doc """
@@ -105,7 +124,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_get_inbox(conn :: Plug.Conn.t()) ::
+  @callback authenticate_get_inbox(actor :: actor(), conn :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
 
   @doc """
@@ -127,7 +146,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authorized must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authorize_post_inbox(conn :: Plug.Conn.t(), activity :: term()) ::
+  @callback authorize_post_inbox(actor :: actor(), conn :: Plug.Conn.t(), activity :: term()) ::
               {:ok, {response :: Plug.Conn.t(), authorized :: boolean()}} | {:error, term()}
 
   @doc """
@@ -144,7 +163,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
   Request status is sent in the response.
   """
-  @callback post_inbox(context :: actor_context(), inbox_iri :: URI.t(), activity :: term()) ::
+  @callback post_inbox(actor :: actor(), inbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
 
   @doc """
@@ -167,11 +186,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_inbox.
   """
-  @callback inbox_forwarding(context :: actor_context(), inbox_iri :: URI.t(), activity :: term()) ::
+  @callback inbox_forwarding(actor :: actor(), inbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
 
   @doc """
-  post_outbox delegates the logic for side effects and adding to the
+  Delegates the logic for side effects and adding to the
   outbox.
 
   Always called, regardless whether the Federated Protocol or Social
@@ -192,7 +211,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   for this narrow and specific use case.
   """
   @callback post_outbox(
-              context :: actor_context(),
+              actor :: actor(),
               outbox_iri :: URI.t(),
               activity :: term(),
               raw_json :: map()
@@ -207,7 +226,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback add_new_ids(context :: actor_context(), activity :: term()) ::
+  @callback add_new_ids(actor :: actor(), activity :: term()) ::
               {:ok, activity :: term()} | {:error, term()}
 
   @doc """
@@ -221,7 +240,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback deliver(context :: actor_context(), outbox :: URI.t(), activity :: term()) ::
+  @callback deliver(actor :: actor(), outbox :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
 
   @doc """
@@ -244,7 +263,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_post_outbox(request :: Plug.Conn.t()) ::
+  @callback authenticate_post_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
@@ -268,7 +287,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_get_outbox(request :: Plug.Conn.t()) ::
+  @callback authenticate_get_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
@@ -277,7 +296,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   Only called if the Social API is enabled.
   """
-  @callback wrap_in_create(context :: actor_context(), value :: term(), outbox_iri :: URI.t()) ::
+  @callback wrap_in_create(actor :: actor(), value :: term(), outbox_iri :: URI.t()) ::
               {:ok, create :: term()} | {:error, term()}
 
   @doc """
@@ -290,7 +309,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_outbox(request :: Plug.Conn.t()) ::
+  @callback get_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
               {:ok, ordered_collection_page :: term()} | {:error, term()}
 
   @doc """
@@ -303,6 +322,6 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_inbox(request :: Plug.Conn.t()) ::
+  @callback get_inbox(actor :: actor(), request :: Plug.Conn.t()) ::
               {:ok, ordered_collection_page :: term()} | {:error, term()}
 end

@@ -3,14 +3,18 @@ defmodule Fedi.Streams.PropertyIterator do
 
   require Logger
 
-  def deserialize(namespace, module, i, alias_map, types \\ nil) do
-    Fedi.Streams.get_alias(alias_map, namespace)
-    |> Fedi.Streams.BaseProperty.deserialize_with_alias(module, i, alias_map, types)
+  @name_like_properties ["content", "name", "summary", "contentMap", "nameMap", "summaryMap"]
+
+  def deserialize(namespace, module, i, prop_name, mapped_property?, alias_map, types \\ nil) do
+    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+    if Enum.member?(@name_like_properties, prop_name) do
+      deserialize_name_with_alias(alias_, module, i, prop_name, mapped_property?, alias_map)
+    else
+      Fedi.Streams.BaseProperty.deserialize_with_alias(alias_, module, i, alias_map, types)
+    end
   end
 
-  def deserialize_name(namespace, module, i, alias_map) when is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
-
+  def deserialize_name_with_alias(alias_, module, i, _prop_name, _mapped_property?, alias_map) when is_map(alias_map) do
     case Fedi.Streams.BaseProperty.maybe_iri(i) do
       {:ok, uri} ->
         {:ok, struct(module, alias: alias_, iri: uri)}

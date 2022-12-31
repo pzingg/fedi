@@ -1,4 +1,4 @@
-defmodule Fedi.ActivityPub.CommonBehavior do
+defmodule Fedi.ActivityPub.CommonProtocol do
   @moduledoc """
   Common contains functions required for both the Social API and Federating
   Protocol.

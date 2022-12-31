@@ -31,32 +31,52 @@ defmodule Fedi.ActivityPub.Actor do
           data: term()
         }
 
+  @type context() :: %{
+          common: module(),
+          c2s: module() | nil,
+          s2s: module() | nil,
+          fallback: module() | nil,
+          database: module() | nil,
+          enable_social_protocol: boolean(),
+          enable_federated_protocol: boolean(),
+          data: term()
+        }
+
   def new_custom_actor(common, opts \\ []) do
+    make_actor(__MODULE__, common, opts)
+  end
+
+  def make_actor(module, common, opts) do
     c2s = Keyword.get(opts, :c2s)
     s2s = Keyword.get(opts, :s2s)
+    database = Keyword.get(opts, :database)
+    fallback = Keyword.get(opts, :fallback)
 
-    %__MODULE__{
+    [c2s, s2s, database, fallback]
+    |> Enum.each(fn
+      nil ->
+        :ok
+
+      mod when is_atom(mod) ->
+        case Code.ensure_compiled(mod) do
+          {:module, _} -> :ok
+          {:error, reason} -> raise "Module #{alias_module(mod)} is not compiled: #{reason}"
+        end
+
+      mod ->
+        raise "Module #{mod} is not an atom or nil"
+    end)
+
+    struct(module,
       common: common,
-      database: Keyword.get(opts, :database),
+      database: database,
       c2s: c2s,
       s2s: s2s,
-      fallback: Keyword.get(opts, :fallback),
+      fallback: fallback,
       enable_social_protocol: !is_nil(c2s),
       enable_federated_protocol: !is_nil(s2s),
       data: Keyword.get(opts, :data)
-    }
-  end
-
-  def protocol_supported?(%Plug.Conn{} = conn, which) do
-    with %{common: _} = actor <- Map.get(conn.private, :actor) do
-      !is_nil(Map.get(actor, which))
-    else
-      _ -> false
-    end
-  end
-
-  def alias_module(module) when is_atom(module) do
-    Module.split(module) |> List.last()
+    )
   end
 
   def get_actor(%Plug.Conn{} = conn) do
@@ -66,11 +86,25 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
+  def get_actor!(%Plug.Conn{} = conn) do
+    with {:ok, actor} <- get_actor(conn) do
+      actor
+    else
+      _ -> raise "No actor in connection"
+    end
+  end
+
+  def protocol_supported?(%Plug.Conn{} = conn, which) do
+    with {:ok, actor} <- get_actor(conn) do
+      !is_nil(Map.get(actor, which))
+    else
+      _ -> false
+    end
+  end
+
   def delegate(%Plug.Conn{} = conn, which, func, args) when is_list(args) do
     with {:ok, actor} <- get_actor(conn) do
       delegate(actor, which, func, args)
-    else
-      error -> error
     end
   end
 
@@ -84,7 +118,7 @@ defmodule Fedi.ActivityPub.Actor do
     with {:which, true} <- {:which, Enum.member?([:c2s, :s2s, :common], which)},
          {:protocol, protocol_module} when is_atom(protocol_module) <-
            {:protocol, Map.get(actor, which)} do
-      apply_if_exported(actor_module, which, protocol_module, fallback_module, func, [
+      apply_if_exported(which, protocol_module, fallback_module, func, [
         actor | args
       ])
     else
@@ -93,37 +127,56 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
-  def apply_if_exported(actor_module, which, protocol_module, fallback_module, func, args) do
-    arity = Enum.count(args)
+  defp apply_if_exported(which, protocol_module, fallback_module, func, args) do
+    with :ok <- verify_module(protocol_module),
+         :ok <- verify_module(fallback_module) do
+      arity = Enum.count(args)
 
-    cond do
-      function_exported?(protocol_module, func, arity) ->
-        Logger.error("Using #{which} for #{func}/#{arity}")
-        apply(protocol_module, func, args)
+      cond do
+        function_exported?(protocol_module, func, arity) ->
+          Logger.error("Using #{which} for #{func}/#{arity}")
+          apply(protocol_module, func, args)
 
-      function_exported?(actor_module, func, arity) ->
-        Logger.error("Falling back to actor for #{func}/#{arity}")
-        apply(actor_module, func, args)
+        !is_nil(fallback_module) && function_exported?(fallback_module, func, arity) ->
+          Logger.error("Falling back to #{alias_module(fallback_module)} for #{func}/#{arity}")
+          apply(fallback_module, func, args)
 
-      !is_nil(fallback_module) && function_exported?(fallback_module, func, arity) ->
-        Logger.error("Falling back to #{alias_module(fallback_module)} for #{func}/#{arity}")
-        apply(fallback_module, func, args)
-
-      true ->
-        {:error,
-         "Function #{func}/#{arity} not found in either #{alias_module(protocol_module)} or #{alias_module(actor_module)}"}
+        true ->
+          if is_nil(fallback_module) do
+            {:error, "Function #{func}/#{arity} not found in #{alias_module(protocol_module)}"}
+          else
+            {:error,
+             "Function #{func}/#{arity} not found in either #{alias_module(protocol_module)} or #{alias_module(fallback_module)}"}
+          end
+      end
     end
   end
 
+  defp verify_module(nil), do: :ok
+
+  defp verify_module(module) do
+    with {:module, _} <- Code.ensure_compiled(module) do
+      :ok
+    else
+      {:error, reason} ->
+        {:error, "Module #{alias_module(module)} has not been compiled: #{reason}"}
+    end
+  end
+
+  defp alias_module(module) when is_atom(module) do
+    module
+    # Module.split(module) |> List.last()
+  end
+
   @doc """
-  post_inbox implements the generic algorithm for handling a POST request to an
+  Implements the generic algorithm for handling a POST request to an
   actor's inbox independent on an application. It relies on a delegate to
   implement application specific functionality.
 
   Specifying the "scheme" allows for retrieving ActivityStreams content with
   identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
-  def post_inbox(
+  def handle_post_inbox(
         %{enable_federated_protocol: enable_federated_protocol} = actor,
         %Plug.Conn{} = conn,
         scheme \\ "https"
@@ -241,7 +294,7 @@ defmodule Fedi.ActivityPub.Actor do
   actor's inbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def get_inbox(%{} = actor, %Plug.Conn{} = conn) do
+  def handle_get_inbox(%{} = actor, %Plug.Conn{} = conn) do
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, Utils.is_activity_pub_get(conn)},
 
@@ -288,7 +341,7 @@ defmodule Fedi.ActivityPub.Actor do
   Specifying the "scheme" allows for retrieving ActivityStreams content with
   identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
-  def post_outbox(
+  def handle_post_outbox(
         %{enable_social_protocol: enable_social_protocol} = actor,
         %Plug.Conn{} = conn,
         scheme \\ "https"
@@ -404,7 +457,7 @@ defmodule Fedi.ActivityPub.Actor do
   actor's outbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def get_outbox(%{} = actor, %Plug.Conn{} = conn) do
+  def handle_get_outbox(%{} = actor, %Plug.Conn{} = conn) do
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, Utils.is_activity_pub_get(conn)},
 
@@ -439,32 +492,22 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
-  def ensure_activity(actor, as_value, outbox) do
-    if Utils.is_or_extends_activity(as_value) do
-      {:ok, as_value}
-    else
-      delegate(actor, :s2s, :wrap_in_create, [as_value, outbox])
-    end
-  end
-
-  def ensure_serialized(m, _activity) when is_map(m), do: {:ok, m}
-
-  def ensure_serialized(nil, activity) do
-    case Fedi.Streams.Serializer.serialize(activity) do
-      {:ok, m} -> {:ok, m}
-      {:error, reason} -> {:error, reason}
-    end
+  @doc """
+  Send is programmatically accessible if the federated protocol is enabled.
+  """
+  def send(
+        %{enable_federated_protocol: true} = actor,
+        outbox,
+        as_value
+      ) do
+    serialize_and_deliver(actor, outbox, as_value, nil)
   end
 
   @doc """
   Delegates all outbox handling steps and optionally will federate the
   activity if the federated protocol is enabled.
-
-  This function is not exported so an Actor that only supports C2S cannot be
-  type casted to a FederatingActor. It doesn't exactly fit the Send method
-  signature anyways.
   """
-  def deliver(
+  def serialize_and_deliver(
         %{enable_federated_protocol: enable_federated_protocol} = actor,
         outbox,
         as_value,
@@ -509,14 +552,20 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
-  @doc """
-  Send is programmatically accessible if the federated protocol is enabled.
-  """
-  def send(
-        %{enable_federated_protocol: true} = actor,
-        outbox,
-        as_value
-      ) do
-    deliver(actor, outbox, as_value, nil)
+  defp ensure_activity(actor, as_value, outbox) do
+    if Utils.is_or_extends_activity(as_value) do
+      {:ok, as_value}
+    else
+      delegate(actor, :s2s, :wrap_in_create, [as_value, outbox])
+    end
+  end
+
+  defp ensure_serialized(m, _activity) when is_map(m), do: {:ok, m}
+
+  defp ensure_serialized(nil, activity) do
+    case Fedi.Streams.Serializer.serialize(activity) do
+      {:ok, m} -> {:ok, m}
+      {:error, reason} -> {:error, reason}
+    end
   end
 end

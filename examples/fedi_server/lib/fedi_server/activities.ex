@@ -1,5 +1,5 @@
 defmodule FediServer.Activities do
-  @behavior Fedi.ActivityPub.DatabaseContext
+  @behaviour Fedi.ActivityPub.DatabaseContext
 
   @doc """
   InboxContains returns true if the OrderedCollection at 'inbox'

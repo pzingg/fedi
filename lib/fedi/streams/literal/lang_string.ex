@@ -1,8 +1,9 @@
 defmodule Fedi.Streams.Literal.LangString do
   @moduledoc false
 
-  def maybe_to_string(v) when is_list(v) or is_map(v),
-    do: {:error, "#{inspect(v)} cannot be interpreted as a string for rdf:langString"}
+  def maybe_to_string(v) when is_list(v) or is_map(v) do
+    {:error, "#{inspect(v)} cannot be interpreted as a string for rdf:langString"}
+  end
 
   def maybe_to_string(v) do
     try do
@@ -20,19 +21,24 @@ defmodule Fedi.Streams.Literal.LangString do
   # deserialize creates string value from an interface representation that
   # has been unmarshalled from a text or binary format.
   def deserialize(v) when is_map(v) do
-    Enum.reduce_while(v, {:ok, Map.new()}, fn {k, v}, {_, acc} ->
+    Enum.reduce_while(v, Map.new(), fn {k, v}, acc ->
       case maybe_to_string(v) do
         {:ok, s} ->
-          {:cont, {:ok, Map.put(acc, k, s)}}
+          {:cont, Map.put(acc, k, s)}
 
         _ ->
           {:halt, {:error, "#{inspect(v)} cannot be interpreted as a string for rdf:langString"}}
       end
     end)
+    |> case do
+      m when is_map(m) -> {:ok, m}
+      {:error, reason} -> {:error, reason}
+    end
   end
 
-  def deserialize(v),
-    do: {:error, "#{inspect(v)} cannot be interpreted as a map for rdf:langString"}
+  def deserialize(v) do
+    {:error, "#{inspect(v)} cannot be interpreted as a map for rdf:langString"}
+  end
 
   # less returns true if the left string value is less than the right value.
   def less(lhs, rhs) when is_map(lhs) and is_map(rhs) do

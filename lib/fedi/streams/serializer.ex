@@ -1,12 +1,13 @@
 defmodule Fedi.Streams.Serializer do
   @moduledoc false
 
-  def serialize(object) when is_struct(object) do
+  def serialize(%{__struct__: module} = object)  do
     try do
-      apply(object.__struct__, :serialize, [object])
+      module = Code.ensure_compiled!(module)
+      apply(module, :serialize, [object])
     rescue
-      _e ->
-        {:error, "Undefined: #{object.__struct__}.serialize/1"}
+      e ->
+        {:error, "Serializer exception: #{inspect(e)}"}
     end
   end
 

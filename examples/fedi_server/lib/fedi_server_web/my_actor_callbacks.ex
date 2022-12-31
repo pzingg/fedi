@@ -1,6 +1,5 @@
-defmodule FediServerWeb.MyFallbackBehavior do
-  @behaviour Fedi.ActivityPub.CommonBehavior
-  @behaviour Fedi.ActivityPub.SocialProtocol
+defmodule FediServerWeb.MyActorCallbacks do
+  @behaviour Fedi.ActivityPub.ActorBehavior
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -47,8 +46,7 @@ defmodule FediServerWeb.MyFallbackBehavior do
   end
 
   @doc """
-  authenticate_post_inbox delegates the authentication of a POST to an
-  inbox.
+  Delegates the authentication of a POST to an inbox.
 
   Only called if the Federated Protocol is enabled.
 
@@ -71,8 +69,7 @@ defmodule FediServerWeb.MyFallbackBehavior do
   end
 
   @doc """
-  authenticate_get_inbox delegates the authentication of a GET to an
-  inbox.
+  Delegates the authentication of a GET to an inbox.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
@@ -213,8 +210,7 @@ defmodule FediServerWeb.MyFallbackBehavior do
   end
 
   @doc """
-  authenticate_post_outbox delegates the authentication and authorization
-  of a POST to an outbox.
+  Delegates the authentication and authorization of a POST to an outbox.
 
   Only called if the Social API is enabled.
 
@@ -237,8 +233,7 @@ defmodule FediServerWeb.MyFallbackBehavior do
   end
 
   @doc """
-  authenticate_get_outbox delegates the authentication of a GET to an
-  outbox.
+  Delegates the authentication of a GET to an outbox.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
@@ -273,7 +268,7 @@ defmodule FediServerWeb.MyFallbackBehavior do
   end
 
   @doc """
-  get_outbox returns the OrderedCollection inbox of the actor for this
+  Returns the OrderedCollection inbox of the actor for this
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
@@ -283,12 +278,13 @@ defmodule FediServerWeb.MyFallbackBehavior do
   API is enabled.
   """
   def get_outbox(actor, %Plug.Conn{} = conn) do
-    # {:ok, ordered_collection_page}
-    {:error, "Unimplemented"}
+    with {:ok, oc} <- mock_ordered_collection_page() do
+      {:ok, {conn, oc}}
+    end
   end
 
   @doc """
-  GetInbox returns the OrderedCollection inbox of the actor for this
+  Returns the OrderedCollection inbox of the actor for this
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
@@ -298,7 +294,31 @@ defmodule FediServerWeb.MyFallbackBehavior do
   API is enabled.
   """
   def get_inbox(actor, %Plug.Conn{} = conn) do
-    # {:ok, ordered_collection_page}
-    {:error, "Unimplemented"}
+    with {:ok, oc} <- mock_ordered_collection_page() do
+      {:ok, {conn, oc}}
+    end
+  end
+
+  defp mock_ordered_collection_page() do
+    """
+      {
+        "@context": "https://www.w3.org/ns/activitystreams",
+        "id": "http://example.org/foo?page=1",
+        "orderedItems": [
+          {
+            "name": "A Simple Note",
+            "type": "Note"
+          },
+          {
+            "name": "Another Simple Note",
+            "type": "Note"
+          }
+        ],
+        "partOf": "http://example.org/foo",
+        "summary": "Page 1 of Sally's notes",
+        "type": "OrderedCollectionPage"
+      }
+    """
+    |> Fedi.Streams.JsonResolver.resolve()
   end
 end

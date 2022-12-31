@@ -30,7 +30,8 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
 
   # deserialize creates an iterator from an element that
   # has been unmarshalled from a text or binary format.
-  def deserialize(i, alias_map) when is_map(alias_map) do
+
+  def deserialize(i, prop_name, mapped_property?, alias_map) when is_map(alias_map) do
     alias_ = ""
 
     case Fedi.Streams.Literal.AnyURI.deserialize(i) do

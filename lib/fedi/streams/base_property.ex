@@ -181,7 +181,7 @@ defmodule Fedi.Streams.BaseProperty do
         result =
           values
           |> Enum.reduce_while({[], []}, fn {i, prop_name, mapped_property?}, {map_acc, acc} ->
-            case apply(iterator_module, :deserialize, [i, alias_map]) do
+            case apply(iterator_module, :deserialize, [i, prop_name, mapped_property?, alias_map]) do
               {:ok, value} ->
                 if mapped_property? do
                   {:cont, {[value | map_acc], acc}}
@@ -556,8 +556,12 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
-  def maybe_iri(i) do
-    case Fedi.Streams.Literal.String.maybe_to_string(i) do
+  def maybe_iri(v) when is_map(v) do
+    {:error, "#{inspect(v)} cannot be interpreted as a string for IRI"}
+  end
+
+  def maybe_iri(v) do
+    case Fedi.Streams.Literal.String.maybe_to_string(v) do
       {:ok, s} ->
         uri = URI.parse(s)
 
@@ -566,11 +570,11 @@ defmodule Fedi.Streams.BaseProperty do
         if !is_nil(uri.scheme) do
           {:ok, uri}
         else
-          :error
+          {:error, "No scheme in #{inspect(v)} for IRI"}
         end
 
       _ ->
-        :error
+        {:error, "#{inspect(v)} cannot be interpreted as a string for IRI"}
     end
   end
 end

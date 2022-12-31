@@ -72,6 +72,7 @@ defmodule Fedi.Streams.BaseType do
                 {:cont, acc}
 
               {:ok, v} ->
+                Logger.error("adding known #{prop_name}")
                 {:cont, Map.put(acc, prop_name, v)}
             end
           end)
@@ -83,7 +84,7 @@ defmodule Fedi.Streams.BaseType do
 
           _ ->
             known_property_names = Enum.map(known_properties, fn {prop_name, _} -> prop_name end)
-
+            Logger.error("checking unknown props in #{Map.keys(m) |> Enum.join(" ")}")
             # Begin: Unknown deserialization
             # Begin: Code that ensures a property name is unknown
             unknown =
@@ -91,12 +92,14 @@ defmodule Fedi.Streams.BaseType do
                 if Enum.member?(known_property_names, prop_name) do
                   acc
                 else
+                  Logger.error("adding unknown #{prop_name}")
                   Map.put(acc, prop_name, v)
                 end
               end)
 
             # End: Code that ensures a property name is unknown
             # End: Unknown deserialization
+            Logger.error("deserialized #{module}")
             {:ok, struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)}
         end
     end

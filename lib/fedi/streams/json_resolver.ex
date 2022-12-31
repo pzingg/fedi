@@ -14,9 +14,8 @@ defmodule Fedi.Streams.JsonResolver do
   error for a multi-typed object if none of the types were able to be handled.
   """
   def resolve(msg) when is_binary(msg) do
-    case Jason.decode(msg) do
-      {:ok, m} -> resolve(m)
-      error -> error
+    with {:ok, m} <- Jason.decode(msg) do
+      resolve(m)
     end
   end
 

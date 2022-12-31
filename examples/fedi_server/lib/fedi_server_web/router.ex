@@ -18,10 +18,9 @@ defmodule FediServerWeb.Router do
   def set_actor(conn, _opts) do
     actor =
       Fedi.ActivityPub.SideEffectActor.new(
-        FediServer.MyCommonBehavior,
-        c2s: FediServer.MyCommonBehavior,
-        database: FediServer.Activities,
-        fallback: FediServerWeb.MyFallbackBehavior
+        FediServerWeb.MyActorCallbacks,
+        c2s: FediServerWeb.MyActorCallbacks,
+        database: FediServer.Activities
       )
 
     Plug.Conn.put_private(conn, :actor, actor)
