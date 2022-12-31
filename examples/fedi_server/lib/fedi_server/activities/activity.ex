@@ -2,19 +2,22 @@ defmodule FediServer.Activities.Activity do
   use Ecto.Schema
   import Ecto.Changeset
 
-  alias FediServer.Activities.Inbox
-
+  @timestamps_opts [type: :utc_datetime]
+  @primary_key {:id, Ecto.ULID, autogenerate: false}
   schema "activities" do
     field :ap_id, :string
     field :type, :string
-    field :actor_id, :string
+    field :actor, :string
+    field :local, :boolean
+    field :recipients, {:array, :string}
     field :data, :map
-    belongs_to :inbox, Inbox
+
+    timestamps()
   end
 
-  def changeset(inbox, params \\ %{}) do
-    inbox
-    |> cast(params, [:ap_id, :type, :actor_id, :data])
-    |> cast_assoc(:inbox)
+  def changeset(activity, params \\ %{}) do
+    activity
+    |> cast(params, [:ap_id, :type, :actor, :local, :recipients, :data])
+    |> validate_required([:ap_id, :type, :actor, :data])
   end
 end

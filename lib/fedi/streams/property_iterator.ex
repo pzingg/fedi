@@ -7,6 +7,7 @@ defmodule Fedi.Streams.PropertyIterator do
 
   def deserialize(namespace, module, i, prop_name, mapped_property?, alias_map, types \\ nil) do
     alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+
     if Enum.member?(@name_like_properties, prop_name) do
       deserialize_name_with_alias(alias_, module, i, prop_name, mapped_property?, alias_map)
     else
@@ -14,7 +15,8 @@ defmodule Fedi.Streams.PropertyIterator do
     end
   end
 
-  def deserialize_name_with_alias(alias_, module, i, _prop_name, _mapped_property?, alias_map) when is_map(alias_map) do
+  def deserialize_name_with_alias(alias_, module, i, _prop_name, _mapped_property?, alias_map)
+      when is_map(alias_map) do
     case Fedi.Streams.BaseProperty.maybe_iri(i) do
       {:ok, uri} ->
         {:ok, struct(module, alias: alias_, iri: uri)}

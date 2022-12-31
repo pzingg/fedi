@@ -106,6 +106,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         :ok
 
       {:ok, true} ->
+        # Wrapped data for callbacks
+        actor = %{actor | data: %{inbox_iri: inbox_iri}}
+
         # TODO callback resolvers
         case Actor.delegate(actor, :s2s, :new_type_resolver, [inbox_iri, activity, nil]) do
           {:error, :callback_not_found} ->
@@ -170,6 +173,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def post_outbox(actor, %URI{} = outbox_iri, activity, raw_json) do
     if Actor.protocol_supported?(actor, :c2s) do
+      # Wrapped data for callbacks
+      actor = %{actor | data: %{outbox_iri: outbox_iri, raw_activity: raw_json}}
+
       case Actor.delegate(actor, :c2s, :new_type_resolver, [outbox_iri, activity, raw_json]) do
         {:error, :callback_not_found} ->
           case Actor.delegate(actor, :s2s, :default_callback, [activity]) do

@@ -16,6 +16,10 @@ defmodule Fedi.ActivityStreams.Property.OrderedItems do
           values: list()
         }
 
+  def new() do
+    %__MODULE__{alias: ""}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize_values(
       :activity_streams,

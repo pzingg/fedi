@@ -23,6 +23,8 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollectionPage do
     }
   """
 
+  alias Fedi.ActivityStreams.Property.OrderedItems
+
   defmodule Meta do
     def type_name, do: "OrderedCollectionPage"
     def disjoint_with, do: ["Link", "Mention"]
@@ -42,6 +44,10 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollectionPage do
           properties: map(),
           unknown: term()
         }
+
+  def new() do
+    %__MODULE__{alias: "", properties: %{orderedItems: OrderedItems.new()}}
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)

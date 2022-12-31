@@ -1,7 +1,7 @@
 defmodule Fedi.Streams.Serializer do
   @moduledoc false
 
-  def serialize(%{__struct__: module} = object)  do
+  def serialize(%{__struct__: module} = object) do
     try do
       module = Code.ensure_compiled!(module)
       apply(module, :serialize, [object])

@@ -7,5 +7,18 @@
 #
 #     FediServer.Repo.insert!(%FediServer.SomeSchema{})
 #
-# We recommend using the bang functions (`insert!`, `update!`
+# We resocialmend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
+
+alias FediServer.Repo
+alias FediServer.Activities.User
+
+Repo.insert!(%User{
+  ap_id: "http://example.social/users/gargron",
+  inbox: "http://example.social/users/gargron/inbox",
+  name: "Eugen Rochko",
+  nickname: "gargron",
+  email: "gargron@example.social",
+  local: true,
+  data: %{}
+})
