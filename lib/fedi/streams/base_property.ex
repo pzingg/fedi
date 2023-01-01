@@ -3,9 +3,38 @@ defmodule Fedi.Streams.BaseProperty do
 
   require Logger
 
-  def deserialize(namespace, module, prop_name, m, alias_map, types \\ nil)
+  @deserializers [
+    :any_uri,
+    :iri,
+    :lang_string,
+    :string,
+    :boolean,
+    :non_neg_integer,
+    :float,
+    :date_time,
+    :duration,
+    :bcp47,
+    :rfc2045,
+    :rfc5988,
+    :object
+  ]
 
-  def deserialize(namespace, module, prop_name, m, alias_map, types) do
+  defmodule Pipeline do
+    # Used for pipelines
+    defstruct [
+      :alias,
+      :module,
+      :member_types,
+      :allowed_types,
+      :prop_name,
+      :input,
+      :alias_map,
+      :resolved_by,
+      :result
+    ]
+  end
+
+  def deserialize(namespace, module, member_types, prop_name, m, alias_map) do
     alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
     case Fedi.Streams.BaseProperty.get_prop(m, prop_name, alias_) do
@@ -13,243 +42,367 @@ defmodule Fedi.Streams.BaseProperty do
         {:ok, nil}
 
       {i, _prop_name, _is_map} ->
-        deserialize_with_alias(alias_, module, i, alias_map, types)
+        deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map)
     end
   end
 
-  def deserialize_string(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map) do
+    # TODO: supply allowed_types?
+    pipeline = %Pipeline{
+      allowed_types: nil,
+      alias: alias_,
+      module: module,
+      member_types: member_types,
+      prop_name: prop_name,
+      input: i,
+      alias_map: alias_map
+    }
 
-    case Fedi.Streams.BaseProperty.get_prop(m, prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.Literal.AnyURI.deserialize(i) do
-          {:ok, v} ->
-            {:ok, struct(module, alias: alias_, xml_schema_any_uri_member: v)}
-
+    pipeline =
+      Enum.reduce_while(@deserializers, pipeline, fn deser, acc ->
+        with true <- Enum.member?(pipeline.member_types, deser),
+             %Pipeline{result: result} = acc when not is_nil(result) <-
+               deserialize_type(acc, deser) do
+          {:halt, acc}
+        else
           _ ->
-            case Fedi.Streams.Literal.String.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 struct(module,
-                   alias: alias_,
-                   xml_schema_string_member: v,
-                   has_string_member: true
-                 )}
-
-              _error ->
-                {:ok, struct(module, alias: alias_, unknown: i)}
-            end
+            {:cont, acc}
         end
+      end)
+
+    case pipeline do
+      %Pipeline{result: nil} ->
+        {:ok, struct(pipeline.module, alias: pipeline.alias, unknown: pipeline.input)}
+
+      %Pipeline{result: {:ok, value}} ->
+        {:ok, value}
+
+      %Pipeline{resolved_by: resolver, result: {:error, reason}} ->
+        Logger.error("Pipeline #{resolver} returned error #{reason}")
+        {:error, reason}
+
+      %Pipeline{} = pipeline ->
+        Logger.error("No result in #{inspect(pipeline)}")
+        {:error, "Internal deserialization error"}
     end
   end
 
-  def deserialize_uri(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_type(%Pipeline{input: i} = pipeline, :iri) when is_map(i) do
+    # Logger.debug("#{inspect(i)} cannot be interpreted as a string for IRI")
+    pipeline
+  end
 
-    case Fedi.Streams.BaseProperty.get_prop(m, prop_name, alias_) do
-      nil ->
-        {:ok, nil}
+  def deserialize_type(%Pipeline{input: i} = pipeline, :iri) do
+    case Fedi.Streams.Literal.String.maybe_to_string(i) do
+      {:ok, s} ->
+        uri = URI.parse(s)
 
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.Literal.AnyURI.deserialize(i) do
-          {:ok, v} ->
-            {:ok, struct(module, alias: alias_, xml_schema_any_uri_member: v)}
-
-          _error ->
-            {:ok, struct(module, alias: alias_, unknown: i)}
+        # If error exists, don't error out -- skip this and treat as unknown string ([]byte) at worst
+        # Also, if no scheme exists, don't treat it as a URL -- net/url is greedy
+        if is_nil(uri.scheme) do
+          Logger.debug("No scheme in #{inspect(i)} for IRI")
+          pipeline
+        else
+          %Pipeline{
+            pipeline
+            | resolved_by: :iri,
+              result: {:ok, struct(pipeline.module, alias: pipeline.alias, iri: uri)}
+          }
         end
+
+      {:error, reason} ->
+        Logger.debug(":iri deserializer ERROR #{reason}")
+        pipeline
     end
   end
 
-  def deserialize_nni(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_type(%Pipeline{input: i, alias_map: alias_map} = pipeline, :object)
+      when is_map(i) do
+    (pipeline.allowed_types || Fedi.Streams.all_type_modules())
+    |> Enum.reduce_while(:error, fn type_mod, acc ->
+      with {:ok, v} when is_struct(v) <- apply(type_mod, :deserialize, [i, alias_map]) do
+        {:halt, {:ok, struct(pipeline.module, alias: pipeline.alias, member: v)}}
+      else
+        _ ->
+          {:cont, acc}
+      end
+    end)
+    |> case do
+      {:ok, value} ->
+        %Pipeline{pipeline | resolved_by: :object, result: {:ok, value}}
 
-    case get_prop(m, prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case maybe_iri(i) do
-          {:ok, uri} ->
-            {:ok, struct(module, alias: alias_, iri: uri)}
-
-          _ ->
-            case Fedi.Streams.Literal.NonNegInteger.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 struct(module,
-                   alias: alias_,
-                   xml_schema_non_neg_integer_member: v,
-                   has_non_neg_integer_member: true
-                 )}
-
-              _ ->
-                :error
-            end
-        end
-        |> case do
-          {:ok, this} -> {:ok, this}
-          _error -> {:ok, struct(module, alias: alias_, unknown: i)}
-        end
+      {:error, reason} ->
+        Logger.debug(":object deserializer ERROR #{reason}")
+        pipeline
     end
   end
 
-  def deserialize_float(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_type(%Pipeline{input: i} = pipeline, :object) do
+    Logger.debug("#{inspect(i)} is not a map for object")
+    pipeline
+  end
 
-    case get_prop(m, prop_name, alias_) do
-      nil ->
-        {:ok, nil}
+  def deserialize_type(%Pipeline{input: i} = pipeline, :any_uri) do
+    case Fedi.Streams.Literal.AnyURI.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :any_uri,
+            result: {:ok, struct(pipeline.module, alias: pipeline.alias, xsd_any_uri_member: v)}
+        }
 
-      {i, _prop_name, _is_map} ->
-        case maybe_iri(i) do
-          {:ok, uri} ->
-            {:ok, struct(module, alias: alias_, iri: uri)}
-
-          _ ->
-            case Fedi.Streams.Literal.Float.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 struct(module, alias: alias_, xml_schema_float_member: v, has_float_member: true)}
-
-              _ ->
-                :error
-            end
-        end
-        |> case do
-          {:ok, this} -> {:ok, this}
-          _error -> {:ok, struct(module, alias: alias_, unknown: i)}
-        end
+      {:error, reason} ->
+        Logger.debug(":any_uri deserializer ERROR #{reason}")
+        pipeline
     end
   end
 
-  def deserialize_date_time(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_type(%Pipeline{input: i} = pipeline, :lang_string) do
+    case Fedi.Streams.Literal.LangString.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :lang_string,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 rdf_lang_string_member: v
+               )}
+        }
 
-    case get_prop(m, prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.BaseProperty.maybe_iri(i) do
-          {:ok, uri} ->
-            {:ok, struct(module, alias: alias_, iri: uri)}
-
-          _ ->
-            case Fedi.Streams.Literal.DateTime.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 struct(module,
-                   alias: alias_,
-                   xml_schema_date_time_member: v,
-                   has_date_time_member: true
-                 )}
-
-              _ ->
-                :error
-            end
-        end
-        |> case do
-          {:ok, this} -> {:ok, this}
-          _error -> {:ok, struct(module, alias: alias_, unknown: i)}
-        end
+      {:error, _reason} ->
+        # This error occurs often for properties that usually have :string values.
+        # Logger.debug(":lang_string deserializer ERROR #{reason}")
+        pipeline
     end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :string) do
+    case Fedi.Streams.Literal.String.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :string,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_string_member: v,
+                 has_string_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":string deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :non_neg_integer) do
+    case Fedi.Streams.Literal.NonNegInteger.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :non_neg_integer,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_non_neg_integer_member: v,
+                 has_non_neg_integer_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":non_neg_integer deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :float) do
+    case Fedi.Streams.Literal.Float.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :float,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_float_member: v,
+                 has_float_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":float deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :date_time) do
+    case Fedi.Streams.Literal.DateTime.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :date_time,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_date_time_member: v,
+                 has_date_time_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":date_time deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :duration) do
+    case Fedi.Streams.Literal.Duration.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :duration,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_duration_member: v,
+                 has_duration_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":duration deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :bcp47) do
+    case Fedi.Streams.Literal.BCP47.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :bcp47,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 rfc_bcp47_member: v,
+                 has_bcp47_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":bcp47 deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :rfc2045) do
+    case Fedi.Streams.Literal.RFC2045.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :rfc2045,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 rfc_rfc2045_member: v,
+                 has_rfc2045_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":rfc2045 deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :rfc5988) do
+    case Fedi.Streams.Literal.RFC5988.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :rfc5988,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 rfc_rfc5988_member: v,
+                 has_rfc5988_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":rfc5988 deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{} = pipeline, other) do
+    Logger.error("invalid type for deserializer #{other}")
+    pipeline
   end
 
   def deserialize_values(namespace, module, prop_name, m, alias_map)
       when is_map(m) and is_map(alias_map) do
     alias_ = Fedi.Streams.get_alias(alias_map, namespace)
 
-    iterator_module =
-      Module.split(module)
-      |> List.update_at(-1, fn name -> name <> "Iterator" end)
-      |> Module.concat()
-
     case get_values(m, prop_name, alias_) do
       [] ->
         {:ok, nil}
 
       values ->
-        result =
-          values
-          |> Enum.reduce_while({[], []}, fn {i, prop_name, mapped_property?}, {map_acc, acc} ->
-            case apply(iterator_module, :deserialize, [i, prop_name, mapped_property?, alias_map]) do
-              {:ok, value} ->
-                if mapped_property? do
-                  {:cont, {[value | map_acc], acc}}
-                else
-                  {:cont, {map_acc, [value | acc]}}
-                end
+        iterator_module =
+          Module.split(module)
+          |> List.update_at(-1, fn name -> name <> "Iterator" end)
+          |> Module.concat()
 
-              {:error, reason} ->
-                Logger.error("Error iterating #{prop_name}: #{reason}")
-                {:halt, {:error, reason}}
+        {mapped_values, unmapped_values} =
+          values
+          |> Enum.map(fn {i, prop_name, mapped_property?} ->
+            case apply(iterator_module, :deserialize, [prop_name, mapped_property?, i, alias_map]) do
+              {:ok, value} ->
+                {value, mapped_property?}
+
+              {:error, _reason} ->
+                nil
             end
           end)
+          |> Enum.filter(fn v -> !is_nil(v) end)
+          |> Enum.split_with(fn {_, mapped_property?} -> mapped_property? end)
 
-        case result do
-          {:error, reason} ->
-            {:error, reason}
+        mapped_values =
+          mapped_values
+          |> Enum.map(fn {value, _} -> value end)
+          |> List.flatten()
 
-          {mapped_values, values} ->
-            mapped_values = Enum.reverse(mapped_values)
-            values = Enum.reverse(values)
+        unmapped_values =
+          unmapped_values
+          |> Enum.map(fn {value, _} -> value end)
+          |> List.flatten()
 
-            if Enum.empty?(mapped_values) do
-              {:ok, struct(module, alias: alias_, values: values)}
-            else
-              {:ok,
-               struct(module,
-                 alias: alias_,
-                 mapped_values: mapped_values,
-                 values: values
-               )}
-            end
-        end
+        value =
+          if Enum.empty?(mapped_values) do
+            struct(module, alias: alias_, values: unmapped_values)
+          else
+            struct(module,
+              alias: alias_,
+              mapped_values: mapped_values,
+              values: unmapped_values
+            )
+          end
+
+        {:ok, value}
     end
   end
-
-  def deserialize_with_alias(alias_, module, i, alias_map, types) do
-    case maybe_iri(i) do
-      {:ok, uri} ->
-        {:ok, struct(module, alias: alias_, iri: uri)}
-
-      _ ->
-        deserialize_types(alias_, module, i, alias_map, types)
-    end
-    |> case do
-      {:ok, this} -> {:ok, this}
-      _ -> {:ok, struct(module, alias: alias_, unknown: i)}
-    end
-  end
-
-  def deserialize_types(alias_, module, i, alias_map, types \\ nil)
-
-  def deserialize_types(alias_, module, i, alias_map, types) when is_map(i) do
-    (types || Fedi.Streams.all_type_modules())
-    |> Enum.reduce_while(:error, fn type_mod, acc ->
-      case apply(type_mod, :deserialize, [i, alias_map]) do
-        {:ok, v} when is_struct(v) ->
-          {:halt, {:ok, struct(module, alias: alias_, member: v)}}
-
-        {:ok, _v} ->
-          {:cont, acc}
-
-        _ ->
-          {:cont, acc}
-      end
-    end)
-  end
-
-  def deserialize_types(_, _, i, _, _), do: {:error, "#{inspect(i)} is not a map"}
 
   ##### Serialization
 
@@ -258,7 +411,32 @@ defmodule Fedi.Streams.BaseProperty do
   # need this function as most typical use cases serialize types
   # instead of individual properties. It is exposed for alternatives to
   # go-fed implementations to use.
+  def serialize_values(%{values: values, mapped_values: mapped_values})
+      when is_list(values) and is_list(mapped_values) do
+    unmapped = do_serialize_values(values)
+    mapped = do_serialize_values(mapped_values)
+
+    case {unmapped, mapped} do
+      {{:error, reason}, _} ->
+        {:error, reason}
+
+      {_, {:error, reason}} ->
+        {:error, reason}
+
+      {{:ok, unmapped_v}, {:ok, mapped_v}} ->
+        {:ok, %Fedi.Streams.MappedNameProp{unmapped: unmapped_v, mapped: mapped_v}}
+    end
+  end
+
   def serialize_values(%{values: values}) when is_list(values) do
+    do_serialize_values(values)
+  end
+
+  def serialize_values(prop) do
+    {:error, "#{inspect(prop)} does not have values or mapped_values lists"}
+  end
+
+  def do_serialize_values(values) do
     result =
       Enum.reduce_while(values, [], fn it, acc ->
         case serialize(it) do
@@ -270,73 +448,14 @@ defmodule Fedi.Streams.BaseProperty do
     case result do
       {:error, reason} -> {:error, reason}
       # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
+      [] -> {:ok, nil}
       [v] -> {:ok, v}
       l -> {:ok, Enum.reverse(l)}
     end
   end
 
-  def serialize_values(%{properties: properties}) when is_map(properties) do
-    result =
-      Enum.reduce_while(properties, [], fn it, acc ->
-        Logger.error("serializing property #{inspect(it)}")
-
-        case serialize(it) do
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:ok, b} -> {:cont, [b | acc]}
-        end
-      end)
-
-    case result do
-      {:error, reason} -> {:error, reason}
-      # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
-      [v] -> {:ok, v}
-      l -> {:ok, Enum.reverse(l)}
-    end
-  end
-
-  def serialize_values(prop) do
-    {:error, "#{inspect(prop)} is not a property map nor a values list"}
-  end
-
-  def serialize_mapped_values(prop) do
-    case serialize_values(prop) do
-      {:error, reason} ->
-        {:error, reason}
-
-      {:ok, unmapped} ->
-        result =
-          Enum.reduce_while(prop.mapped_values, [], fn it, acc ->
-            case serialize(it) do
-              {:error, reason} -> {:halt, {:error, reason}}
-              {:ok, b} -> {:cont, [b | acc]}
-            end
-          end)
-
-        case result do
-          {:error, reason} ->
-            {:error, reason}
-
-          [mapped] ->
-            # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
-            {:ok, %Fedi.Streams.MappedNameProp{mapped: mapped, unmapped: unmapped}}
-
-          mapped ->
-            {:ok, %Fedi.Streams.MappedNameProp{mapped: Enum.reverse(mapped), unmapped: unmapped}}
-        end
-    end
-  end
-
-  def serialize(%{values: values}) when is_list(values) do
-    Enum.reduce_while(values, [], fn value, acc ->
-      case apply(value.__struct__, :serialize, [value]) do
-        {:ok, m} -> {:cont, [m | acc]}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:error, reason} -> {:error, reason}
-      values -> {:ok, Enum.reverse(values)}
-    end
+  def serialize(%{values: values} = prop) when is_list(values) do
+    serialize_values(prop)
   end
 
   def serialize(%{member: member}) when is_struct(member) do
@@ -347,27 +466,27 @@ defmodule Fedi.Streams.BaseProperty do
     Fedi.Streams.Literal.LangString.serialize(v)
   end
 
-  def serialize(%{xml_schema_date_time_member: %DateTime{} = v}) do
+  def serialize(%{xsd_date_time_member: %DateTime{} = v}) do
     Fedi.Streams.Literal.DateTime.serialize(v)
   end
 
-  def serialize(%{xml_schema_duration_member: %Timex.Duration{} = v}) do
+  def serialize(%{xsd_duration_member: %Timex.Duration{} = v}) do
     Fedi.Streams.Literal.Duration.serialize(v)
   end
 
-  def serialize(%{xml_schema_non_neg_integer_member: v}) when is_integer(v) do
+  def serialize(%{xsd_non_neg_integer_member: v}) when is_integer(v) do
     Fedi.Streams.Literal.NonNegInteger.serialize(v)
   end
 
-  def serialize(%{xml_schema_float_member: v}) when is_float(v) do
+  def serialize(%{xsd_float_member: v}) when is_float(v) do
     Fedi.Streams.Literal.Float.serialize(v)
   end
 
-  def serialize(%{xml_schema_string_member: str}) when is_binary(str) do
+  def serialize(%{xsd_string_member: str}) when is_binary(str) do
     {:ok, str}
   end
 
-  def serialize(%{xml_schema_any_uri_member: %URI{} = uri}) do
+  def serialize(%{xsd_any_uri_member: %URI{} = uri}) do
     Fedi.Streams.Literal.AnyURI.serialize(uri)
   end
 
@@ -377,6 +496,13 @@ defmodule Fedi.Streams.BaseProperty do
 
   def serialize(%{unknown: unknown}) do
     {:ok, unknown}
+  end
+
+  def serialize(nil), do: {:ok, ""}
+
+  def serialize(other) do
+    Logger.error("Attempted to serialize unknown type #{inspect(other)}")
+    {:error, "Attempted to serialize unknown type #{inspect(other)}"}
   end
 
   #### Getters
@@ -390,15 +516,15 @@ defmodule Fedi.Streams.BaseProperty do
   def get_iri(%{iri: %URI{} = v}), do: v
   def get_iri(_), do: nil
 
-  # get_xml_schema_any_uri returns the value of this property. When IsXMLSchemaAnyURI
-  # returns false, get_xml_schema_any_uri will return an arbitrary value.
-  def get_xml_schema_any_uri(%{xml_schema_any_uri_member: %URI{} = v}), do: v
-  def get_xml_schema_any_uri(_), do: nil
+  # get_xsd_any_uri returns the value of this property. When IsXMLSchemaAnyURI
+  # returns false, get_xsd_any_uri will return an arbitrary value.
+  def get_xsd_any_uri(%{xsd_any_uri_member: %URI{} = v}), do: v
+  def get_xsd_any_uri(_), do: nil
 
-  # get_xml_schema_string returns the value of this property. When is_xml_schema_string
-  # returns false, get_xml_schema_string will return an arbitrary value.
-  def get_xml_schema_string(%{xml_schema_string_member: v}) when is_binary(v), do: v
-  def get_xml_schema_string(_), do: nil
+  # get_xsd_string returns the value of this property. When is_xsd_string
+  # returns false, get_xsd_string will return an arbitrary value.
+  def get_xsd_string(%{xsd_string_member: v}) when is_binary(v), do: v
+  def get_xsd_string(_), do: nil
 
   # json_ld_context returns the JSONLD URIs required in the context string
   # for this property and the specific values that are set. The value
@@ -415,19 +541,19 @@ defmodule Fedi.Streams.BaseProperty do
   def is_iri(%{iri: %URI{}}), do: true
   def is_iri(_), do: false
 
-  # is_xml_schema_any_uri returns true if this property is set and not an IRI.
-  def is_xml_schema_any_uri(%{xml_schema_any_uri_member: %URI{}}), do: true
-  def is_xml_schema_any_uri(_), do: false
+  # is_xsd_any_uri returns true if this property is set and not an IRI.
+  def is_xsd_any_uri(%{xsd_any_uri_member: %URI{}}), do: true
+  def is_xsd_any_uri(_), do: false
 
-  # is_xml_schema_string returns true if this property has a type of "string". When
-  # true, use the get_xml_schema_string and set_xml_schema_string methods to access
+  # is_xsd_string returns true if this property has a type of "string". When
+  # true, use the get_xsd_string and set_xsd_string methods to access
   # and set this property.
-  def is_xml_schema_string(%{xml_schema_string_member: v}) when is_binary(v), do: true
-  def is_xml_schema_string(_), do: false
+  def is_xsd_string(%{xsd_string_member: v}) when is_binary(v), do: true
+  def is_xsd_string(_), do: false
 
   #### Setters
 
-  # set sets the value of this property. Calling is_xml_schema_any_uri
+  # set sets the value of this property. Calling is_xsd_any_uri
   # afterwards will return true.
   def set(%{__struct__: module, member: _old_value} = prop, v) when is_struct(v) do
     apply(module, :clear, [prop])
@@ -441,27 +567,27 @@ defmodule Fedi.Streams.BaseProperty do
     |> struct(iri: v)
   end
 
-  # set_xml_schema_any_uri sets a new IRI value.
-  def set_xml_schema_any_uri(
-        %{__struct__: module, xml_schema_any_uri_member: _old_value} = prop,
+  # set_xsd_any_uri sets a new IRI value.
+  def set_xsd_any_uri(
+        %{__struct__: module, xsd_any_uri_member: _old_value} = prop,
         %URI{} = v
       ) do
     apply(module, :clear, [prop])
-    |> struct(xml_schema_any_uri_member: v)
+    |> struct(xsd_any_uri_member: v)
   end
 
-  # set_xml_schema_string sets a new IRI value.
-  def set_xml_schema_string(
+  # set_xsd_string sets a new IRI value.
+  def set_xsd_string(
         %{
           __struct__: module,
-          xml_schema_string_member: _old_string,
-          has_string_member: _old_has
+          xsd_string_member: _old_string,
+          has_string_member?: _old_has
         } = prop,
         v
       )
       when is_binary(v) do
     apply(module, :clear, [prop])
-    |> struct(xml_schema_string_member: v, has_string_member: true)
+    |> struct(xsd_string_member: v, has_string_member?: true)
   end
 
   # kind_index computes an arbitrary value for indexing this kind of value.
@@ -481,7 +607,7 @@ defmodule Fedi.Streams.BaseProperty do
 
   def kind_index(prop, _), do: base_kind_index(prop)
 
-  def base_kind_index(%{xml_schema_any_uri_member: %URI{}}), do: 0
+  def base_kind_index(%{xsd_any_uri_member: %URI{}}), do: 0
   def base_kind_index(%{iri: %URI{}}), do: -2
   def base_kind_index(_), do: -1
 
@@ -588,28 +714,6 @@ defmodule Fedi.Streams.BaseProperty do
     case alias_ do
       "" -> prop_name <> map_suffix
       _ -> alias_ <> ":" <> prop_name <> map_suffix
-    end
-  end
-
-  def maybe_iri(v) when is_map(v) do
-    {:error, "#{inspect(v)} cannot be interpreted as a string for IRI"}
-  end
-
-  def maybe_iri(v) do
-    case Fedi.Streams.Literal.String.maybe_to_string(v) do
-      {:ok, s} ->
-        uri = URI.parse(s)
-
-        # If error exists, don't error out -- skip this and treat as unknown string ([]byte) at worst
-        # Also, if no scheme exists, don't treat it as a URL -- net/url is greedy
-        if !is_nil(uri.scheme) do
-          {:ok, uri}
-        else
-          {:error, "No scheme in #{inspect(v)} for IRI"}
-        end
-
-      _ ->
-        {:error, "#{inspect(v)} cannot be interpreted as a string for IRI"}
     end
   end
 end

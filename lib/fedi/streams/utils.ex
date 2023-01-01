@@ -3,9 +3,25 @@ defmodule Fedi.Streams.Utils do
 
   require Logger
 
+  def iterator_module(module) do
+    Module.split(module)
+    |> List.update_at(-1, fn name -> name <> "Iterator" end)
+    |> Module.concat()
+  end
+
+  def base_module(module) do
+    Module.split(module)
+    |> List.update_at(-1, fn name -> String.replace_trailing(name, "Iterator", "") end)
+    |> Module.concat()
+  end
+
+  def alias_module(module) when is_atom(module) do
+    Module.split(module) |> List.last()
+  end
+
   def get_json_ld_id(%{properties: properties}) do
     case Map.get(properties, "id") do
-      %Fedi.JSON.LD.Property.Id{xml_schema_any_uri_member: %URI{} = id} ->
+      %Fedi.JSON.LD.Property.Id{xsd_any_uri_member: %URI{} = id} ->
         id
 
       _ ->
@@ -92,7 +108,7 @@ defmodule Fedi.Streams.Utils do
       nil ->
         if type_has_href?(as_value) do
           case Map.get(properties, "href") do
-            %Fedi.ActivityStreams.Property.Href{xml_schema_any_uri_member: %URI{} = id} ->
+            %Fedi.ActivityStreams.Property.Href{xsd_any_uri_member: %URI{} = id} ->
               id
 
             _ ->

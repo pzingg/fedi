@@ -1,13 +1,23 @@
-defmodule SecurityV1.Type.PublicKey do
+defmodule Fedi.Toot.Type.Emoji do
   @moduledoc """
-  A public key represents a public cryptographical key for a user.
+  Example: Hello world :Kappa:
+    {
+      "id": "https://example.com/emoji/123",
+      "type": "Emoji",
+      "name": ":Kappa:",
+      "icon": {
+        "type": "Image",
+        "mediaType": "image/png",
+        "url": "https://example.com/files/kappa.png"
+      }
+    }
   """
 
   defmodule Meta do
-    def type_name, do: "PublicKey"
+    def type_name, do: "Emoji"
     def disjoint_with, do: []
     def extended_by, do: []
-    def extends, do: []
+    def extends, do: ["Object"]
   end
 
   @enforce_keys [:alias]
@@ -24,7 +34,7 @@ defmodule SecurityV1.Type.PublicKey do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseType.deserialize(:security_v1, __MODULE__, m, alias_map)
+    Fedi.Streams.BaseType.deserialize(:toot, __MODULE__, m, alias_map)
   end
 
   def serialize(%__MODULE__{} = object) do

@@ -3,24 +3,27 @@ defmodule Fedi.JSON.LD.Property.Id do
   Provides the globally unique identifier for JSON-LD entities.
   """
 
+  @namespace :json_ld
+  @member_types [:any_uri]
   @prop_name "id"
 
   defstruct [
-    :xml_schema_any_uri_member,
+    :xsd_any_uri_member,
     :unknown,
     :alias
   ]
 
   @type t() :: %__MODULE__{
-          xml_schema_any_uri_member: URI.t() | nil,
+          xsd_any_uri_member: URI.t() | nil,
           unknown: term(),
           alias: String.t()
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_uri(
-      :json_ld,
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
       alias_map
@@ -42,8 +45,8 @@ defmodule Fedi.JSON.LD.Property.Id do
   end
 
   # clear ensures no value of this property is set. Calling
-  # is_xml_schema_any_uri afterwards will return false.
+  # is_xsd_any_uri afterwards will return false.
   def clear(%__MODULE__{} = prop) do
-    %__MODULE__{prop | unknown: nil, xml_schema_any_uri_member: nil}
+    %__MODULE__{prop | unknown: nil, xsd_any_uri_member: nil}
   end
 end

@@ -1,4 +1,4 @@
-defmodule Fedi.Streams.Literal.Rfc2045 do
+defmodule Fedi.Streams.Literal.RFC2045 do
   @moduledoc false
 
   def maybe_to_string(v) when is_list(v) or is_map(v),

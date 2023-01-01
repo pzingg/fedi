@@ -1,48 +1,42 @@
 defmodule Fedi.ActivityStreams.Property.Units do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  Specifies the measurement units for the radius and altitude properties on a
+  Place object. If not specified, the default is assumed to be "m" for "meters".
+  """
+
+  @namespace :activity_streams
+  @member_types [:any_uri]
   @prop_name "units"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_string_member,
-    :xml_schema_any_uri_member,
     :unknown,
-    has_string_member: false
+    :xsd_any_uri_member
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_string_member: String.t() | nil,
-          has_string_member: boolean(),
-          xml_schema_any_uri_member: URI.t() | nil,
-          unknown: term()
+          unknown: term(),
+          xsd_any_uri_member: URI.t() | nil
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
-
-    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.Literal.String.deserialize(i) do
-          {:ok, v} ->
-            {:ok,
-             %__MODULE__{alias: alias_, xml_schema_string_member: v, has_string_member: true}}
-
-          _error ->
-            case Fedi.Streams.Literal.AnyURI.deserialize(i) do
-              {:ok, v} ->
-                {:ok, %__MODULE__{alias: alias_, xml_schema_any_uri_member: v}}
-
-              _error ->
-                {:ok, %__MODULE__{alias: alias_, unknown: i}}
-            end
-        end
-    end
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
+      __MODULE__,
+      @member_types,
+      @prop_name,
+      m,
+      alias_map
+    )
   end
 
   def serialize(%__MODULE__{} = prop) do

@@ -1,29 +1,37 @@
-defmodule Fedi.Mastodon.Property.VotersCount do
-  @moduledoc false
+defmodule Fedi.Toot.Property.SignatureAlgorithm do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
-  @prop_name "votersCount"
+  @moduledoc """
+  The Toot "signatureAlgorithm" property.
+  """
+
+  @namespace :toot
+  @member_types []
+  @prop_name "signatureAlgorithm"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_non_neg_integer_member,
-    :has_non_neg_integer_member,
     :unknown,
     :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_non_neg_integer_member: non_neg_integer(),
-          has_non_neg_integer_member: boolean(),
           unknown: term(),
           iri: URI.t() | nil
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_nni(
-      :activity_streams,
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
       alias_map

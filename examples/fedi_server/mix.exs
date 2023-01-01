@@ -42,6 +42,8 @@ defmodule FediServer.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.5"},
+      {:json_ld, "~> 0.3"},
+      {:timex, "~> 3.7"},
       {:fedi, path: "../.."}
     ]
   end

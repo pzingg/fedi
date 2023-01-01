@@ -3,6 +3,8 @@ defmodule Fedi.Streams.BaseType do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+
   def get_type_name(%{__struct__: module}) do
     Module.concat([module, Meta])
     |> apply(:type_name, [])
@@ -97,7 +99,8 @@ defmodule Fedi.Streams.BaseType do
 
             # End: Code that ensures a property name is unknown
             # End: Unknown deserialization
-            {:ok, struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)}
+            value = struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)
+            {:ok, value}
         end
     end
   end
@@ -125,19 +128,17 @@ defmodule Fedi.Streams.BaseType do
           {:ok, nil} ->
             {:cont, acc}
 
-          {:ok, %Fedi.Streams.MappedNameProp{mapped: mapped, unmapped: unmapped}} ->
-            acc =
-              case mapped do
-                nil -> acc
-                [] -> acc
-                _ -> Map.put(acc, prop_name <> "Map", mapped)
-              end
-
+          {:ok, %Fedi.Streams.MappedNameProp{unmapped: unmapped, mapped: mapped}} ->
             acc =
               case unmapped do
                 nil -> acc
-                [] -> acc
                 _ -> Map.put(acc, prop_name, unmapped)
+              end
+
+            acc =
+              case mapped do
+                nil -> acc
+                _ -> Map.put(acc, prop_name <> "Map", mapped)
               end
 
             {:cont, acc}
@@ -166,8 +167,8 @@ defmodule Fedi.Streams.BaseType do
   end
 
   def serialize(%{__struct__: module, alias: _} = _object) do
-    Logger.error("Error serializing #{module} without properties")
-    {:error, "Object #{module} must have properties"}
+    Logger.error("Error serializing #{Utils.alias_module(module)} without properties")
+    {:error, "Object #{Utils.alias_module(module)} must have properties"}
   end
 
   def find_type(%{"type" => type_value}, alias_prefix, type_name) do

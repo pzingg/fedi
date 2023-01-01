@@ -16,5 +16,5 @@ defmodule Fedi.JSON.LD do
     end)
   end
 
-  def has_map_property(_prop_name), do: false
+  def has_map_property?(_prop_name), do: false
 end

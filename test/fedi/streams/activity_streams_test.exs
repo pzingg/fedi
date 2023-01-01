@@ -66,21 +66,64 @@ defmodule Fedi.StreamsTest do
       assert accept.properties["type"].__struct__ == Fedi.JSON.LD.Property.Type
 
       invite_object = accept.properties["object"]
-      invite_prop = List.first(invite_object.properties)
+      invite_prop = List.first(invite_object.values)
       assert invite_prop.member.__struct__ == Fedi.ActivityStreams.Type.Invite
 
       event_object = invite_prop.member.properties["object"]
-      event_prop = List.first(event_object.properties)
+      event_prop = List.first(event_object.values)
       assert event_prop.member.__struct__ == Fedi.ActivityStreams.Type.Event
 
       name_object = event_prop.member.properties["name"]
-      name_map_prop = List.first(name_object.mapped_properties)
+      name_map_prop = List.first(name_object.mapped_values)
       assert name_map_prop.__struct__ == Fedi.ActivityStreams.Property.NameIterator
       assert is_map(name_map_prop.rdf_lang_string_member)
       assert name_map_prop.rdf_lang_string_member["en"] == "Going-Away Party for Jim"
       assert name_map_prop.unknown == nil
+    end
 
-      assert Fedi.ActivityStreams.Property.NameIterator.name(name_map_prop) == "nameMap"
+    test "orderedCollectionPage" do
+      source = """
+        {
+          "@context": "https://www.w3.org/ns/activitystreams",
+          "id": "http://example.org/foo?page=1",
+          "orderedItems": [
+            {
+              "name": "A Simple Note",
+              "type": "Note"
+            },
+            {
+              "name": "Another Simple Note",
+              "type": "Note"
+            }
+          ],
+          "partOf": "http://example.org/foo",
+          "summary": "Page 1 of Sally's notes",
+          "type": "OrderedCollectionPage"
+        }
+      """
+
+      assert {:ok, page} = Fedi.Streams.JsonResolver.resolve(source)
+      assert page.__struct__ == Fedi.ActivityStreams.Type.OrderedCollectionPage
+
+      assert page.properties["orderedItems"].__struct__ ==
+               Fedi.ActivityStreams.Property.OrderedItems
+
+      assert page.properties["type"].__struct__ == Fedi.JSON.LD.Property.Type
+
+      items = page.properties["orderedItems"]
+      assert Enum.count(items.values) == 2
+
+      note_prop = Enum.at(items.values, 0)
+      assert note_prop.member.__struct__ == Fedi.ActivityStreams.Type.Note
+      name_object = note_prop.member.properties["name"]
+      name_prop = List.first(name_object.values)
+      assert name_prop.xsd_string_member == "A Simple Note"
+
+      note_prop = Enum.at(items.values, 1)
+      assert note_prop.member.__struct__ == Fedi.ActivityStreams.Type.Note
+      name_object = note_prop.member.properties["name"]
+      name_prop = List.first(name_object.values)
+      assert name_prop.xsd_string_member == "Another Simple Note"
     end
   end
 

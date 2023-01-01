@@ -1,28 +1,43 @@
 defmodule Fedi.ActivityStreams.Property.TotalItems do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  A non-negative integer specifying the total number of objects contained by the
+  logical view of the collection. This number might not reflect the actual
+  number of items serialized within the Collection object instance.
+  """
+
+  @namespace :activity_streams
+  @member_types [:non_neg_integer]
   @prop_name "totalItems"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_non_neg_integer_member,
-    :has_non_neg_integer_member,
     :unknown,
-    :iri
+    :iri,
+    :xsd_non_neg_integer_member,
+    has_non_neg_integer_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_non_neg_integer_member: non_neg_integer(),
-          has_non_neg_integer_member: boolean(),
           unknown: term(),
+          has_non_neg_integer_member?: boolean(),
+          xsd_non_neg_integer_member: non_neg_integer() | nil,
           iri: URI.t() | nil
         }
+
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_nni(
-      :activity_streams,
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
       alias_map

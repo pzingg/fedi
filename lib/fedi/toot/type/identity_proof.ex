@@ -1,4 +1,4 @@
-defmodule Fedi.Mastodon.Type.IdentityProof do
+defmodule Fedi.Toot.Type.IdentityProof do
   @moduledoc false
 
   defmodule Meta do
@@ -22,7 +22,7 @@ defmodule Fedi.Mastodon.Type.IdentityProof do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseType.deserialize(:mastodon, __MODULE__, m, alias_map)
+    Fedi.Streams.BaseType.deserialize(:toot, __MODULE__, m, alias_map)
   end
 
   def serialize(%__MODULE__{} = object) do

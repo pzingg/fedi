@@ -1,63 +1,49 @@
 defmodule Fedi.ActivityStreams.Property.Hreflang do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  Hints as to the language used by the target resource. Value MUST be a [BCP47]
+  Language-Tag.
+  """
+
+  @namespace :activity_streams
+  @member_types [:bcp47]
   @prop_name "hreflang"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_bcp_47_member,
-    :has_bcp_47_member,
     :unknown,
-    :iri
+    :iri,
+    :rfc_bcp47_member,
+    has_bcp47_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_bcp_47_member: String.t(),
-          has_bcp_47_member: boolean(),
           unknown: term(),
+          has_bcp47_member?: boolean(),
+          rfc_bcp47_member: String.t() | nil,
           iri: URI.t() | nil
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
-
-    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.BaseProperty.maybe_iri(i) do
-          {:ok, uri} ->
-            {:ok, %__MODULE__{alias: alias_, iri: uri}}
-
-          _ ->
-            case Fedi.Streams.Literal.Bcp47.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 %__MODULE__{alias: alias_, xml_schema_bcp_47_member: v, has_bcp_47_member: true}}
-
-              _ ->
-                :error
-            end
-        end
-        |> case do
-          {:ok, this} -> {:ok, this}
-          _error -> {:ok, %__MODULE__{alias: alias_, unknown: i}}
-        end
-    end
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
+      __MODULE__,
+      @member_types,
+      @prop_name,
+      m,
+      alias_map
+    )
   end
 
-  def serialize(%__MODULE__{xml_schema_bcp_47_member: bcp_47}) when is_binary(bcp_47) do
-    Fedi.Streams.Literal.Bcp47.serialize(bcp_47)
-  end
-
-  def serialize(%__MODULE__{iri: %URI{} = iri}) do
-    {:ok, URI.to_string(iri)}
-  end
-
-  def serialize(%__MODULE__{unknown: unknown}) do
-    {:ok, unknown}
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
   end
 end

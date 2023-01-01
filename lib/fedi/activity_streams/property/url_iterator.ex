@@ -1,34 +1,41 @@
 defmodule Fedi.ActivityStreams.Property.UrlIterator do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
-  ActivityStreamsActorPropertyIterator is an iterator for a property. It is
-  permitted to be one of multiple value types. At most, one type of value can
-  be present, or none at all. Setting a value will clear the other types of
-  values so that only one of the 'Is' methods will return true. It is
-  possible to clear all values, so that this property is empty.
+  Iterator for the ActivityStreams "url" property.
   """
+
+  @namespace :activity_streams
+  @member_types [:any_uri, :iri, :object]
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
+    :xsd_any_uri_member,
     :member
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          iri: URI.t() | nil,
-          member: term()
+          member: term(),
+          xsd_any_uri_member: URI.t() | nil
         }
 
-  def deserialize(i, prop_name, mapped_property?, alias_map) when is_map(alias_map) do
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
+  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
     Fedi.Streams.PropertyIterator.deserialize(
-      :activity_streams,
+      @namespace,
       __MODULE__,
-      i,
+      @member_types,
       prop_name,
       mapped_property?,
+      i,
       alias_map
     )
   end

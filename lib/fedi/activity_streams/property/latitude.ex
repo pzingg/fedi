@@ -1,29 +1,41 @@
 defmodule Fedi.ActivityStreams.Property.Latitude do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  The latitude of a place
+  """
+
+  @namespace :activity_streams
+  @member_types [:float]
   @prop_name "latitude"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_float_member,
-    :has_float_member,
     :unknown,
-    :iri
+    :iri,
+    :xsd_float_member,
+    has_float_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_float_member: float(),
-          has_float_member: boolean(),
           unknown: term(),
+          has_float_member?: boolean(),
+          xsd_float_member: float() | nil,
           iri: URI.t() | nil
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_float(
-      :activity_streams,
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
       alias_map

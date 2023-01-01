@@ -9,43 +9,41 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   values, so that this property is empty.
   """
 
+  @namespace :json_ld
   @prop_name "JSONLDType"
+  @member_types [:any_uri, :string]
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_any_uri_member,
-    :xml_schema_string_member,
     :unknown,
-    has_string_member: false
+    :xsd_any_uri_member,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
-          xml_schema_any_uri_member: URI.t() | nil,
-          xml_schema_string_member: String.t() | nil,
-          unknown: term(),
           alias: String.t(),
-          has_string_member: boolean()
+          unknown: term(),
+          xsd_any_uri_member: URI.t() | nil,
+          xsd_string_member: String.t() | nil,
+          has_string_member?: boolean()
         }
 
   # deserialize creates an iterator from an element that
   # has been unmarshalled from a text or binary format.
-
-  def deserialize(i, prop_name, mapped_property?, alias_map) when is_map(alias_map) do
-    alias_ = ""
-
+  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
     case Fedi.Streams.Literal.AnyURI.deserialize(i) do
       {:ok, v} ->
-        {:ok, %__MODULE__{alias: alias_, xml_schema_any_uri_member: v}}
+        {:ok, %__MODULE__{alias: "", xsd_any_uri_member: v}}
 
       _ ->
         case Fedi.Streams.Literal.String.deserialize(i) do
           {:ok, v} ->
-            {:ok,
-             %__MODULE__{alias: alias_, has_string_member: true, xml_schema_string_member: v}}
+            {:ok, %__MODULE__{alias: "", has_string_member?: true, xsd_string_member: v}}
 
           _ ->
-            {:ok, %__MODULE__{alias: alias_, unknown: i}}
+            {:ok, %__MODULE__{alias: "", unknown: i}}
         end
     end
   end
@@ -70,8 +68,14 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   end
 
   # clear ensures no value of this property is set. Calling
-  # is_xml_schema_any_uri afterwards will return false.
+  # is_xsd_any_uri afterwards will return false.
   def clear(%__MODULE__{} = prop) do
-    %__MODULE__{prop | unknown: nil, xml_schema_any_uri_member: nil, has_string_member: false}
+    %__MODULE__{
+      prop
+      | unknown: nil,
+        xsd_any_uri_member: nil,
+        xsd_string_member: nil,
+        has_string_member?: false
+    }
   end
 end

@@ -1,34 +1,49 @@
 defmodule Fedi.ActivityStreams.Property.ClosedIterator do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
-  ActivityStreamsActorPropertyIterator is an iterator for a property. It is
-  permitted to be one of multiple value types. At most, one type of value can
-  be present, or none at all. Setting a value will clear the other types of
-  values so that only one of the 'Is' methods will return true. It is
-  possible to clear all values, so that this property is empty.
+  Iterator for the ActivityStreams "closed" property.
   """
+
+  @namespace :activity_streams
+  @member_types [:boolean, :date_time, :iri, :object]
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
     :iri,
-    :member
+    :member,
+    :xsd_boolean_member,
+    :xsd_date_time_member,
+    has_date_time_member?: false,
+    has_boolean_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          iri: URI.t() | nil,
-          member: term()
+          has_date_time_member?: boolean(),
+          xsd_date_time_member: DateTime.t() | nil,
+          has_boolean_member?: boolean(),
+          xsd_boolean_member: boolean() | nil,
+          member: term(),
+          iri: URI.t() | nil
         }
 
-  def deserialize(i, prop_name, mapped_property?, alias_map) when is_map(alias_map) do
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
+  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
     Fedi.Streams.PropertyIterator.deserialize(
-      :activity_streams,
+      @namespace,
       __MODULE__,
-      i,
+      @member_types,
       prop_name,
       mapped_property?,
+      i,
       alias_map
     )
   end

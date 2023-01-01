@@ -1,13 +1,15 @@
 defmodule Fedi.ActivityStreams.Property.Following do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  A link to an ActivityStreams collection of the actors that this actor is
+  following
+  """
+
+  @namespace :activity_streams
+  @member_types [:iri, :object]
   @prop_name "following"
-  @member_types [
-    Fedi.ActivityStreams.Type.Collection,
-    Fedi.ActivityStreams.Type.CollectionPage,
-    Fedi.ActivityStreams.Type.OrderedCollection,
-    Fedi.ActivityStreams.Type.OrderedCollectionPage
-  ]
 
   @enforce_keys [:alias]
   defstruct [
@@ -20,18 +22,22 @@ defmodule Fedi.ActivityStreams.Property.Following do
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          iri: URI.t() | nil,
-          member: term()
+          member: term(),
+          iri: URI.t() | nil
         }
+
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize(
-      :activity_streams,
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
-      alias_map,
-      @member_types
+      alias_map
     )
   end
 

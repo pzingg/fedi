@@ -1,29 +1,42 @@
 defmodule Fedi.ActivityStreams.Property.Deleted do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
+  @moduledoc """
+  On a Tombstone object, the deleted property is a timestamp for when the object
+  was deleted.
+  """
+
+  @namespace :activity_streams
+  @member_types [:date_time]
   @prop_name "deleted"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_date_time_member,
-    :has_date_time_member,
     :unknown,
-    :iri
+    :iri,
+    :xsd_date_time_member,
+    has_date_time_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_date_time_member: DateTime.t(),
-          has_date_time_member: boolean(),
           unknown: term(),
+          has_date_time_member?: boolean(),
+          xsd_date_time_member: DateTime.t() | nil,
           iri: URI.t() | nil
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseProperty.deserialize_date_time(
-      :activity_streams,
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
       alias_map

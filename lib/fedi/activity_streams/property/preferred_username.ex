@@ -1,61 +1,51 @@
 defmodule Fedi.ActivityStreams.Property.PreferredUsername do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
-  @prop_name "preferredUsername"
+  @moduledoc """
+  A short username which may be used to refer to the actor, with no uniqueness
+  guarantees
+  """
+
+  @namespace :activity_streams
+  @member_types [:lang_string, :string]
+  @prop_name ["preferredUsername", "preferredUsernameMap"]
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :xml_schema_string_member,
-    :rdf_lang_string_member,
     :unknown,
     :iri,
-    has_string_member: false
+    :rdf_lang_string_member,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          xml_schema_string_member: String.t() | nil,
-          has_string_member: boolean(),
-          rdf_lang_string_member: map() | nil,
           unknown: term(),
+          has_string_member?: boolean(),
+          xsd_string_member: String.t() | nil,
+          rdf_lang_string_member: map() | nil,
           iri: URI.t() | nil
         }
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, :activity_streams)
-
-    case Fedi.Streams.BaseProperty.get_prop(m, @prop_name, alias_) do
-      nil ->
-        {:ok, nil}
-
-      {i, _prop_name, _is_map} ->
-        case Fedi.Streams.BaseProperty.maybe_iri(i) do
-          {:ok, uri} ->
-            {:ok, %__MODULE__{alias: alias_, iri: uri}}
-
-          _ ->
-            case Fedi.Streams.Literal.String.deserialize(i) do
-              {:ok, v} ->
-                {:ok,
-                 %__MODULE__{alias: alias_, xml_schema_string_member: v, has_string_member: true}}
-
-              _ ->
-                case Fedi.Streams.Literal.LangString.deserialize(i) do
-                  {:ok, v} ->
-                    {:ok, %__MODULE__{alias: alias_, rdf_lang_string_member: v}}
-
-                  error ->
-                    error
-                end
-            end
-        end
-        |> case do
-          {:ok, this} -> {:ok, this}
-          _error -> {:ok, %__MODULE__{alias: alias_, unknown: i}}
-        end
-    end
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
   end
 
-  # SERIALIZE TODO
+  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+    Fedi.Streams.BaseProperty.deserialize(
+      @namespace,
+      __MODULE__,
+      @member_types,
+      @prop_name,
+      m,
+      alias_map
+    )
+  end
+
+  def serialize(%__MODULE__{} = prop) do
+    Fedi.Streams.BaseProperty.serialize(prop)
+  end
 end

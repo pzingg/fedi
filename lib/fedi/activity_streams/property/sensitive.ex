@@ -1,8 +1,14 @@
 defmodule Fedi.ActivityStreams.Property.Sensitive do
-  @moduledoc false
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
-  require Logger
+  @moduledoc """
+  Indicates that some users may wish to apply discretion about viewing this
+  object's content, whether due to nudity, violence, or any other likely aspects
+  that viewers may be sensitive to.
+  """
 
+  @namespace :activity_streams
   @prop_name "sensitive"
 
   @enforce_keys :alias
@@ -16,9 +22,13 @@ defmodule Fedi.ActivityStreams.Property.Sensitive do
           values: list()
         }
 
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize_values(
-      :activity_streams,
+      @namespace,
       __MODULE__,
       @prop_name,
       m,
@@ -27,6 +37,6 @@ defmodule Fedi.ActivityStreams.Property.Sensitive do
   end
 
   def serialize(%__MODULE__{} = prop) do
-    Fedi.Streams.BaseProperty.serialize_values(prop)
+    Fedi.Streams.BaseProperty.serialize(prop)
   end
 end

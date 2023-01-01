@@ -3,6 +3,7 @@ defmodule Fedi.JSON.LD.Property.Type do
   Identifies the schema type(s) of the JSON-LD entity.
   """
 
+  @namespace :json_ld
   @prop_name "type"
 
   @enforce_keys [:alias]
@@ -20,7 +21,7 @@ defmodule Fedi.JSON.LD.Property.Type do
   # that has been unmarshalled from a text or binary format.
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize_values(
-      :json_ld,
+      @namespace,
       __MODULE__,
       @prop_name,
       m,
@@ -43,7 +44,7 @@ defmodule Fedi.JSON.LD.Property.Type do
   end
 
   # clear ensures no value of this property is set. Calling
-  # is_xml_schema_any_uri afterwards will return false.
+  # is_xsd_any_uri afterwards will return false.
   def clear(%__MODULE__{} = prop) do
     %__MODULE__{prop | values: []}
   end

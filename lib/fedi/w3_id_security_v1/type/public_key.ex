@@ -1,23 +1,13 @@
-defmodule Fedi.Mastodon.Type.Emoji do
+defmodule W3IDSecurityV1.Type.PublicKey do
   @moduledoc """
-  Example: Hello world :Kappa:
-    {
-      "id": "https://example.com/emoji/123",
-      "type": "Emoji",
-      "name": ":Kappa:",
-      "icon": {
-        "type": "Image",
-        "mediaType": "image/png",
-        "url": "https://example.com/files/kappa.png"
-      }
-    }
+  A public key represents a public cryptographical key for a user.
   """
 
   defmodule Meta do
-    def type_name, do: "Emoji"
+    def type_name, do: "PublicKey"
     def disjoint_with, do: []
     def extended_by, do: []
-    def extends, do: ["Object"]
+    def extends, do: []
   end
 
   @enforce_keys [:alias]
@@ -34,7 +24,7 @@ defmodule Fedi.Mastodon.Type.Emoji do
         }
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseType.deserialize(:mastodon, __MODULE__, m, alias_map)
+    Fedi.Streams.BaseType.deserialize(:w3_id_security_v1, __MODULE__, m, alias_map)
   end
 
   def serialize(%__MODULE__{} = object) do

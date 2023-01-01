@@ -1,4 +1,4 @@
-defmodule Fedi.Streams.Literal.Bcp47 do
+defmodule Fedi.Streams.Literal.BCP47 do
   @moduledoc false
 
   def maybe_to_string(v) when is_list(v) or is_map(v),

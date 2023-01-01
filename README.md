@@ -4,8 +4,16 @@ ActivityStreams, and eventually ActivityPub, in Elixir.
 
 Inspired by https://github.com/go-fed/activity
 
-Hand-coded for now, because I don't have enough experience in
-Elixir meta-programming.
+Property type modules for the ActivityStreams ontology are
+generated using `mix ontology.gen`.
+
+Value type modules are hand-coded for now.
+
+See https://github.com/go-fed/activity/tree/master/astool
+for the details on how this worked in go. In this project
+we do a simpler, non-type-checked parsing of the ontology
+.jsonld file that go-fed curated from the ActivityStreams
+vocabulary and specification.
 
 ## Installation
 
@@ -26,5 +34,10 @@ be found at <https://hexdocs.pm/fedi>.
 
 ## TODO
 
-* Limit types and properties per .jsonld file specs
-* Add builder methods (new, clear, set, get, etc)
+- Limit the ranges and domains of properties and types
+  according to the .jsonld ontology.
+- Add builder methods (new, clear, set, get, etc) to
+  restrict programmatic access to valid ranges and
+  domains.
+- Get the fedi_server example application to pass
+  basic tests as an ActivityPub C2S server.

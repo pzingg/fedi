@@ -22,7 +22,6 @@ defmodule ActivityStreams.MixProject do
   defp deps do
     [
       {:plug_cowboy, "~> 2.6"},
-      {:inflex, "~> 2.0"},
       {:json_ld, "~> 0.3"},
       {:timex, "~> 3.7"}
       # {:dep_from_hexpm, "~> 0.3.0"},

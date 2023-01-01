@@ -1,35 +1,40 @@
-defmodule Fedi.Mastodon.Property.Featured do
-  @moduledoc false
+defmodule Fedi.Toot.Property.Blurhash do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
 
-  @prop_name "featured"
-  @member_types [
-    Fedi.ActivityStreams.Type.OrderedCollection,
-    Fedi.ActivityStreams.Type.OrderedCollectionPage
-  ]
+  @moduledoc """
+  The Toot "blurhash" property.
+  """
+
+  @namespace :toot
+  @member_types []
+  @prop_name "blurhash"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          iri: URI.t() | nil,
-          member: term()
+          iri: URI.t() | nil
         }
+
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseProperty.deserialize(
-      :mastodon,
+      @namespace,
       __MODULE__,
+      @member_types,
       @prop_name,
       m,
-      alias_map,
-      @member_types
+      alias_map
     )
   end
 
