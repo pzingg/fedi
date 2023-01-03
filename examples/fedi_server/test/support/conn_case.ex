@@ -31,8 +31,16 @@ defmodule FediServerWeb.ConnCase do
     end
   end
 
+  def fix_request_conn(%Plug.Conn{} = conn) do
+    # Why doesn't Phoenix do this?
+    url = FediServerWeb.Endpoint.url()
+    %URI{scheme: scheme, host: host, port: port} = uri = URI.parse(url)
+    %Plug.Conn{conn | scheme: String.to_atom(scheme), host: host, port: port}
+  end
+
   setup tags do
     FediServer.DataCase.setup_sandbox(tags)
+
     {:ok, conn: Phoenix.ConnTest.build_conn()}
   end
 end

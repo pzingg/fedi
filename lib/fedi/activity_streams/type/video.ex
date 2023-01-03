@@ -12,6 +12,7 @@ defmodule Fedi.ActivityStreams.Type.Video do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Video"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

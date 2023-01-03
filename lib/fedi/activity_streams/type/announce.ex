@@ -24,6 +24,7 @@ defmodule Fedi.ActivityStreams.Type.Announce do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Announce"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

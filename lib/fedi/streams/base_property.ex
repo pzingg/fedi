@@ -47,7 +47,7 @@ defmodule Fedi.Streams.BaseProperty do
   end
 
   def deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map) do
-    # TODO: supply allowed_types?
+    # TODO ONTOLOGY allowed_types?
     pipeline = %Pipeline{
       allowed_types: nil,
       alias: alias_,
@@ -195,6 +195,27 @@ defmodule Fedi.Streams.BaseProperty do
 
       {:error, reason} ->
         Logger.debug(":string deserializer ERROR #{reason}")
+        pipeline
+    end
+  end
+
+  def deserialize_type(%Pipeline{input: i} = pipeline, :boolean) do
+    case Fedi.Streams.Literal.NonNegInteger.deserialize(i) do
+      {:ok, v} ->
+        %Pipeline{
+          pipeline
+          | resolved_by: :boolean,
+            result:
+              {:ok,
+               struct(pipeline.module,
+                 alias: pipeline.alias,
+                 xsd_boolean_member: v,
+                 has_boolean_member?: true
+               )}
+        }
+
+      {:error, reason} ->
+        Logger.debug(":boolean deserializer ERROR #{reason}")
         pipeline
     end
   end
@@ -347,7 +368,7 @@ defmodule Fedi.Streams.BaseProperty do
   end
 
   def deserialize_type(%Pipeline{} = pipeline, other) do
-    Logger.error("invalid type for deserializer #{other}")
+    Logger.error("Invalid type for deserializer #{other}")
     pipeline
   end
 
@@ -530,7 +551,7 @@ defmodule Fedi.Streams.BaseProperty do
   # for this property and the specific values that are set. The value
   # in the map is the alias used to import the property's value or
   # values.
-  # TODO
+  # TODO IMPL
   def json_ld_context(_prop) do
     %{}
   end
@@ -671,7 +692,7 @@ defmodule Fedi.Streams.BaseProperty do
           {:cont, nil}
 
         val ->
-          # TODO use predicate function
+          # TODO ONTOLOGY
           mapped_property? = String.ends_with?(prop_name, "Map")
           {:halt, {val, prop_name, mapped_property?}}
       end
@@ -696,7 +717,7 @@ defmodule Fedi.Streams.BaseProperty do
           acc
 
         val ->
-          # TODO use predicate function
+          # TODO ONTOLOGY
           mapped_property? = String.ends_with?(prop_name, "Map")
           [{val, prop_name, mapped_property?} | acc]
       end

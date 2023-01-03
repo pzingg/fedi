@@ -18,18 +18,14 @@ defmodule Fedi.ActivityPub.DatabaseContext do
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
-  Inserts a new inbox value.
-  """
-  @callback insert_inbox(ordered_collection_page :: struct()) ::
-              :ok | {:error, term()}
-
-  @doc """
   Saves the first ordered collection page of the inbox at
-  the specified IRI with new items prepended by the update_fn.
+  the specified IRI, with new items specified in the
+  :create member of the the updates map prepended.
+
   Note that the new items must not be added
   as independent database entries. Separate calls to Create will do that.
   """
-  @callback update_inbox(inbox_iri :: URI.t(), update_fn :: function()) ::
+  @callback update_inbox(inbox_iri :: URI.t(), updates :: map()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
@@ -68,6 +64,12 @@ defmodule Fedi.ActivityPub.DatabaseContext do
               {:ok, inbox_iri :: URI.t()} | {:error, term()}
 
   @doc """
+  Returns the private key for a local actor.
+  """
+  @callback get_actor_private_key(actor_id :: URI.t()) ::
+              {:ok, String.t()} | {:error, term()}
+
+  @doc """
   Returns true if the database has an entry for the specified
   id. It may not be owned by this application instance.
   """
@@ -93,7 +95,7 @@ defmodule Fedi.ActivityPub.DatabaseContext do
   multiple times for the same ActivityStreams object.
   """
   @callback create(as_type :: struct()) ::
-              :ok | {:error, term()}
+              {:ok, {as_type :: struct(), json :: map() | nil}} | {:error, term()}
 
   @doc """
   Sets an existing entry to the database based on the value's id.
@@ -127,19 +129,14 @@ defmodule Fedi.ActivityPub.DatabaseContext do
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
-  Saves a new outbox value.
-  """
-  @callback insert_outbox(ordered_collection_page :: struct()) ::
-              :ok | {:error, term()}
-
-  @doc """
   Saves the first ordered collection page of the outbox at
-  the specified IRI, with new items prepended by the update_fn.
+  the specified IRI, with new items specified in the
+  :create member of the the updates map prepended.
 
   Note that the new items must not be added as independent
   database entries. Separate calls to Create will do that.
   """
-  @callback update_outbox(inbox_iri :: URI.t(), update_fn :: function()) ::
+  @callback update_outbox(outbox_iri :: URI.t(), updates :: map()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """

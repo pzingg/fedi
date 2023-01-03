@@ -1,48 +1,64 @@
 defmodule FediServer.Activities do
   @behaviour Fedi.ActivityPub.DatabaseContext
 
+  import Ecto.Query
+
   require Logger
 
-  def server_host, do: "http://example.social"
+  alias Ecto.Changeset
 
   alias Fedi.ActivityStreams.Type.OrderedCollectionPage
+  alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.Utils, as: APUtils
+  alias Fedi.ActivityStreams.Property, as: P
+  alias Fedi.ActivityStreams.Type, as: T
 
   alias FediServer.Activities.User
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
+  alias FediServer.Activities.Mailbox
   alias FediServer.Repo
 
   @doc """
   Returns true if the OrderedCollection at 'inbox'
   contains the specified 'id'.
+
+  Called from SideEffectActor post_inbox.
   """
-  def inbox_contains(inbox, id) do
-    {:error, "Unimplemented"}
+  def inbox_contains(%URI{} = inbox_iri, %URI{} = id) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
+      contains? =
+        get_mailbox_items(actor_iri, false)
+        |> Enum.member?(URI.to_string(id))
+
+      {:ok, contains?}
+    end
   end
 
   @doc """
   Returns the first ordered collection page of the inbox at
   the specified IRI, for prepending new items.
   """
-  def get_inbox(inbox_iri) do
-    {:error, "Unimplemented"}
-  end
-
-  @doc """
-  Saves a new inbox value.
-  """
-  def insert_inbox(ordered_collection_page) do
-    {:error, "Unimplemented"}
+  def get_inbox(%URI{} = inbox_iri) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
+      get_mailbox_page(actor_iri, false)
+    end
   end
 
   @doc """
   Saves the first ordered collection page of the inbox at
-  the specified IRI, with new items prepended by the update_fn.
+  the specified IRI, with new items specified in the
+  :create member of the the updates map prepended.
+
   Note that the new items must not be added
   as independent database entries. Separate calls to Create will do that.
   """
-  def update_inbox(inbox_iri, update_fn) do
-    {:error, "Unimplemented"}
+  def update_inbox(%URI{} = inbox_iri, updates) when is_map(updates) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
+      update_mailbox(actor_iri, updates, false)
+    else
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @doc """
@@ -51,8 +67,8 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor and Activity callbacks.
   """
-  def owns(id) do
-    {:error, "Unimplemented"}
+  def owns(%URI{} = id) do
+    {:ok, local?(id)}
   end
 
   @doc """
@@ -60,8 +76,17 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor and `like` Activity callbacks.
   """
-  def actor_for_outbox(outbox_iri) do
-    {:error, "Unimplemented"}
+  def actor_for_outbox(%URI{path: path} = iri) do
+    with true <- local?(iri, "/outbox"),
+         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+      {:ok, %URI{iri | path: "/users/#{nickname}"}}
+    else
+      false ->
+        {:error, "Not our actor #{URI.to_string(iri)}"}
+
+      {:error, _} ->
+        {:error, "Invalid outbox #{URI.to_string(iri)}"}
+    end
   end
 
   @doc """
@@ -69,16 +94,34 @@ defmodule FediServer.Activities do
 
   Used in federated `accept` and `follow` Activity callbacks.
   """
-  def actor_for_inbox(inbox_iri) do
-    {:error, "Unimplemented"}
+  def actor_for_inbox(%URI{path: path} = iri) do
+    with true <- local?(iri, "/inbox"),
+         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+      {:ok, %URI{iri | path: "/users/#{nickname}"}}
+    else
+      false ->
+        {:error, "Not our actor #{URI.to_string(iri)}"}
+
+      {:error, _} ->
+        {:error, "Invalid inbox #{URI.to_string(iri)}"}
+    end
   end
 
   @doc """
   Fetches the corresponding actor's outbox IRI for the
   actor's inbox IRI.
   """
-  def outbox_for_inbox(inbox_iri) do
-    {:error, "Unimplemented"}
+  def outbox_for_inbox(%URI{path: path} = iri) do
+    with true <- local?(iri, "/inbox"),
+         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+      {:ok, %URI{iri | path: "/users/#{nickname}/outbox"}}
+    else
+      false ->
+        {:error, "Not our actor #{URI.to_string(iri)}"}
+
+      {:error, _} ->
+        {:error, "Invalid inbox #{URI.to_string(iri)}"}
+    end
   end
 
   @doc """
@@ -87,8 +130,30 @@ defmodule FediServer.Activities do
   It is acceptable to just return nil. In this case, the library will
   attempt to resolve the inbox of the actor by remote dereferencing instead.
   """
-  def inbox_for_actor(actor_iri) do
-    {:error, "Unimplemented"}
+  def inbox_for_actor(%URI{path: path} = iri) do
+    with true <- local?(iri),
+         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+      {:ok, %URI{iri | path: "/users/#{nickname}/inbox"}}
+    else
+      false ->
+        {:ok, nil}
+
+      {:error, _} ->
+        {:ok, nil}
+    end
+  end
+
+  @doc """
+  Returns the private key for a local actor.
+  """
+  def get_actor_private_key(%URI{} = actor_id) do
+    with %User{} = user <- repo_get_by_ap_id(:actors, actor_id),
+         {:ok, private_key} <- User.private_key(user) do
+      private_key
+    else
+      {:error, reason} -> {:error, reason}
+      nil -> {:error, "No such actor"}
+    end
   end
 
   @doc """
@@ -97,15 +162,34 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor.
   """
-  def exists(id) do
-    {:error, "Unimplemented"}
+  def exists(ap_id) do
+    [:actors, :objects, :activities]
+    |> Enum.reduce_while({:ok, false}, fn schema, acc ->
+      if repo_ap_id_exists?(schema, ap_id) do
+        {:halt, {:ok, true}}
+        {:cont, acc}
+      end
+    end)
   end
 
   @doc """
   Returns the database entry for the specified id.
   """
-  def get(id) do
-    {:error, "Unimplemented"}
+  def get(%URI{} = ap_id) do
+    [:actors, :objects, :activities]
+    |> Enum.reduce_while({:error, "Not found"}, fn schema, acc ->
+      case repo_get_by_ap_id(schema, ap_id) do
+        %{__struct__: _module, data: data} ->
+          {:halt, Fedi.Streams.JSONResolver.resolve_with_as_context(data)}
+
+        nil ->
+          {:cont, acc}
+
+        other ->
+          Logger.error("Unexpected struct from Repo: #{inspect(other)}")
+          {:halt, {:error, "Internal database error"}}
+      end
+    end)
   end
 
   @doc """
@@ -121,7 +205,32 @@ defmodule FediServer.Activities do
   multiple times for the same ActivityStreams object.
   """
   def create(as_type) do
-    {:error, "Unimplemented"}
+    with {:get_actor, %URI{} = actor_iri} <-
+           {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
+         {:ok, params} <-
+           parse_basic_params(as_type),
+         {:ok, json_data} <-
+           Fedi.Streams.Serializer.serialize(as_type),
+         {:ok, recipients} <- APUtils.get_recipients(as_type),
+         params <-
+           Map.merge(params, %{
+             ap_id: URI.to_string(params.ap_id),
+             actor: URI.to_string(actor_iri),
+             recipients: Enum.map(recipients, &URI.to_string(&1)),
+             data: json_data
+           }),
+         {:ok, object} <- repo_insert(params.schema, params) do
+      {:ok, {as_type, json_data}}
+    else
+      {:get_actor, _} ->
+        {:error, "Missing actor in activity"}
+
+      {:error, %Ecto.Changeset{} = _changeset} ->
+        {:error, "Internal database error"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
@@ -133,17 +242,44 @@ defmodule FediServer.Activities do
   the entire value.
   """
   def update(as_type) do
-    {:error, "Unimplemented"}
+    with {:get_actor, %URI{} = actor_iri} <-
+           {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
+         {:ok, params} <-
+           parse_basic_params(as_type),
+         {:ok, json_data} <-
+           Fedi.Streams.Serializer.serialize(as_type),
+         {:ok, recipients} <- APUtils.get_recipients(as_type),
+         params <-
+           Map.merge(params, %{
+             ap_id: URI.to_string(params.ap_id),
+             actor: URI.to_string(actor_iri),
+             recipients: Enum.map(recipients, &URI.to_string(&1)),
+             data: json_data
+           }),
+         {:ok, object} <- repo_update(params.schema, params) do
+      {:ok, {as_type, json_data}}
+    else
+      {:get_actor, _} ->
+        {:error, "Missing actor in activity"}
+
+      {:error, %Ecto.Changeset{} = _changeset} ->
+        {:error, "Internal database error"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
   end
 
   @doc """
   Removes the entry with the given id.
 
   delete is only called for federated objects. Deletes from the Social
-  Protocol instead call Update to create a Tombstone.
+  API should call Update to create a Tombstone.
   """
-  def delete(id) do
-    {:error, "Unimplemented"}
+  def delete(ap_id) do
+    with {:ok, {_ulid_or_nickname, schema}} <- parse_ulid_or_nickname(ap_id) do
+      repo_delete(schema, ap_id)
+    end
   end
 
   @doc """
@@ -153,27 +289,27 @@ defmodule FediServer.Activities do
   Used in social SideEffectActor post_outbox.
   """
   def get_outbox(outbox_iri) do
-    {:error, "Unimplemented"}
-  end
-
-  @doc """
-  Saves a new outbox value.
-  """
-  def insert_outbox(ordered_collection_page) do
-    {:error, "Unimplemented"}
+    with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
+      get_mailbox_page(actor_iri, true)
+    end
   end
 
   @doc """
   Saves the first ordered collection page of the outbox at
-  the specified IRI, with new items prepended by the update_fn.
+  the specified IRI, with new items specified in the
+  :create member of the the updates map prepended.
 
   Note that the new items must not be added as independent
   database entries. Separate calls to Create will do that.
 
   Used in social SideEffectActor post_outbox.
   """
-  def update_outbox(outbox_iri, update_fn) do
-    {:error, "Unimplemented"}
+  def update_outbox(%URI{} = outbox_iri, updates) when is_map(updates) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
+      update_mailbox(actor_iri, updates, false)
+    else
+      {:error, reason} -> {:error, reason}
+    end
   end
 
   @doc """
@@ -186,8 +322,16 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_inbox.
   """
-  def new_id(object) do
-    {:error, "Unimplemented"}
+  def new_id(value) do
+    with {:ok, {_type_name, category}} <- Utils.get_type_name_and_category(value) do
+      ulid = Ecto.ULID.generate()
+
+      case category do
+        :actors -> {:error, "Cannot make new id for actors"}
+        :activities -> {:ok, URI.parse("http://example.com/activities/#{ulid}")}
+        _ -> {:ok, URI.parse("http://example.com/objects/#{ulid}")}
+      end
+    end
   end
 
   @doc """
@@ -215,5 +359,358 @@ defmodule FediServer.Activities do
   """
   def liked(actor_iri) do
     {:ok, OrderedCollectionPage.new()}
+  end
+
+  ### Implementation
+
+  def update_mailbox(actor_iri, updates, outgoing) do
+    # TODO IMPL handle deletes, etc.
+    new_activities = Map.get(updates, :create)
+
+    result =
+      Enum.reduce_while(new_activities, [], fn activity, acc ->
+        with {:ok, params} <- parse_basic_params(activity) do
+          params =
+            Map.merge(params, %{
+              outgoing: outgoing,
+              activity_id: params.ulid,
+              owner: URI.to_string(actor_iri),
+              local: true
+            })
+
+          case repo_insert(:mailboxes, params) do
+            {:ok, %Mailbox{id: id} = mailbox} ->
+              {:cont, [{params.ap_id, id} | acc]}
+
+            {:error, changeset} ->
+              {:halt, {:error, describe_errors(changeset)}}
+          end
+        end
+      end)
+
+    case result do
+      {:error, reason} -> {:error, reason}
+      _ -> get_mailbox_page(actor_iri, outgoing)
+    end
+  end
+
+  def get_mailbox_items(%URI{} = actor_iri, outgoing) do
+    actor = URI.to_string(actor_iri)
+
+    from(m in Mailbox,
+      join: a in Activity,
+      on: a.id == m.activity_id,
+      select: a.ap_id,
+      where: [owner: ^actor, outgoing: ^outgoing],
+      order_by: [desc: :id]
+    )
+    |> Repo.all()
+  end
+
+  def get_mailbox_page(%URI{} = actor_iri, outgoing) do
+    actor = URI.to_string(actor_iri)
+
+    result =
+      from(m in Mailbox,
+        join: a in Activity,
+        on: a.id == m.activity_id,
+        select: a.data,
+        where: [owner: ^actor, outgoing: ^outgoing],
+        order_by: [desc: :id],
+        limit: 30
+      )
+      |> Repo.all()
+
+    ordered_item_iters =
+      Enum.map(result, &mailbox_to_ordered_item(&1))
+      |> Enum.filter(fn iter -> !is_nil(iter) end)
+
+    ordered_items = %P.OrderedItems{alias: "", values: ordered_item_iters}
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: %{"orderedItems" => ordered_items}}}
+  end
+
+  def mailbox_to_ordered_item(activity_json) do
+    case Fedi.Streams.JSONResolver.resolve(activity_json) do
+      {:ok, object} -> %P.OrderedItemsIterator{alias: "", member: object}
+      _ -> nil
+    end
+  end
+
+  @doc """
+  Returns true if the IRI is for this server.
+  """
+  def local?(%URI{path: path} = iri, suffix) do
+    local?(iri) && String.ends_with?(path, suffix)
+  end
+
+  def local?(%URI{scheme: scheme, host: host, port: port} = iri) do
+    our_url = FediServerWeb.Endpoint.url()
+
+    case URI.parse(our_url) do
+      %URI{scheme: ^scheme, host: ^host, port: ^port} ->
+        true
+
+      _ ->
+        false
+    end
+  end
+
+  @doc """
+  Returns true if a local IRI exists in the users, objects, or activities table.
+  """
+  def iri_exists?(%URI{path: path} = iri) do
+    with true <- local?(iri),
+         {:ok, id, schema} <-
+           parse_ulid_or_nickname(iri) do
+      repo_exists?(schema, id)
+    else
+      _ ->
+        false
+    end
+  end
+
+  @doc """
+  Looks up a local IRI in the users, objects, or activities table.
+  """
+  def get_by_iri(%URI{path: path} = iri) do
+    with true <- local?(iri),
+         {:ok, id, schema} <-
+           parse_ulid_or_nickname(iri) do
+      repo_get(schema, id)
+    else
+      _ ->
+        nil
+    end
+  end
+
+  def parse_basic_params(as_type) do
+    case Utils.get_id_type_name_and_category(as_type) do
+      {:ok, {ap_id, type_name, category}} ->
+        if local?(ap_id) do
+          case parse_ulid_or_nickname(ap_id) do
+            {:ok, {ulid_or_nickname, schema}} ->
+              if schema == :actors do
+                {:ok,
+                 %{
+                   schema: schema,
+                   ap_id: ap_id,
+                   ulid: nil,
+                   nickname: ulid_or_nickname,
+                   local: true,
+                   type: type_name
+                 }}
+              else
+                {:ok,
+                 %{
+                   schema: schema,
+                   ap_id: ap_id,
+                   ulid: ulid_or_nickname,
+                   nickname: nil,
+                   local: true,
+                   type: type_name
+                 }}
+              end
+
+            {:error, reason} ->
+              {:error, reason}
+          end
+        else
+          schema =
+            case category do
+              :activities -> :activities
+              :actors -> :actors
+              _ -> :objects
+            end
+
+          {:ok,
+           %{
+             schema: schema,
+             ulid: nil,
+             nickname: nil,
+             ap_id: ap_id,
+             local: false,
+             type: type_name
+           }}
+        end
+    end
+  end
+
+  @doc """
+  Assumes iri is local.
+  """
+  def parse_ulid_or_nickname(%URI{path: path} = iri) do
+    case Regex.run(~r/^\/users\/([^\/]+)($|\/.*)/, path) do
+      [_match, nickname, _suffix] ->
+        {:ok, {nickname, :actors}}
+
+      _ ->
+        case Regex.run(~r/^\/([^\/]+)\/([A-Z0-9]+)$/, path) do
+          [_match, schema, ulid] ->
+            {:ok, {ulid, String.to_atom(schema)}}
+
+          _ ->
+            {:error, "Missing schema or id in #{URI.to_string(iri)}"}
+        end
+    end
+  end
+
+  def repo_exists?(:objects, ulid) do
+    query = from(Object, where: [id: ^ulid])
+    Repo.exists?(query)
+  end
+
+  def repo_exists?(:activities, ulid) do
+    query = from(Activity, where: [id: ^ulid])
+    Repo.exists?(query)
+  end
+
+  def repo_exists?(:actors, nickname) do
+    query = from(User, where: [nickname: ^nickname])
+    Repo.exists?(query)
+  end
+
+  def repo_exists?(other, _) do
+    {:error, "Invalid schema for exists #{other}"}
+  end
+
+  def repo_ap_id_exists?(:objects, ap_id) do
+    query = from(Object, where: [ap_id: ^ap_id])
+    Repo.exists?(query)
+  end
+
+  def repo_ap_id_exists?(:activities, ap_id) do
+    query = from(Activity, where: [ap_id: ^ap_id])
+    Repo.exists?(query)
+  end
+
+  def repo_ap_id_exists?(:actors, ap_id) do
+    query = from(User, where: [ap_id: ^ap_id])
+    Repo.exists?(query)
+  end
+
+  def repo_ap_id_exists?(other, _) do
+    {:error, "Invalid schema for ap_id_exists #{other}"}
+  end
+
+  def repo_get(:objects, ulid) do
+    Repo.get(Object, ulid)
+  end
+
+  def repo_get(:activities, ulid) do
+    Repo.get(Activity, ulid)
+  end
+
+  def repo_get(:actors, nickname) do
+    Repo.get_by(User, nickname: nickname)
+  end
+
+  def repo_get(other, _) do
+    {:error, "Invalid schema for get #{other}"}
+  end
+
+  def repo_get_by_ap_id(:objects, %URI{} = ap_id) do
+    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(:activities, %URI{} = ap_id) do
+    Repo.get_by(Activity, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(:actors, %URI{} = ap_id) do
+    Repo.get_by(User, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(other, _) do
+    {:error, "Invalid schema for get by ap_id #{other}"}
+  end
+
+  def repo_insert(:objects, params) do
+    ulid = params.ulid || Ecto.ULID.generate()
+    Object.changeset(%Object{id: ulid}, params) |> Repo.insert(returning: true)
+  end
+
+  def repo_insert(:activities, params) do
+    ulid = params.ulid || Ecto.ULID.generate()
+    Activity.changeset(%Activity{id: ulid}, params) |> Repo.insert(returning: true)
+  end
+
+  def repo_insert(:actors, params) do
+    ulid = Ecto.ULID.generate()
+    User.changeset(%User{id: ulid}, params) |> Repo.insert(returning: true)
+  end
+
+  def repo_insert(:mailboxes, params) do
+    Mailbox.changeset(%Mailbox{}, params) |> Repo.insert(returning: true)
+  end
+
+  def repo_insert(other, _) do
+    {:error, "Invalid schema for insert #{other}"}
+  end
+
+  def repo_update(:objects, params) do
+    with %Object{} = object <- repo_get_by_ap_id(:object, params.ap_id) do
+      Object.changeset(object, params) |> Repo.update(returning: true)
+    else
+      _ ->
+        {:error, "Object %{params.ap_id} not found"}
+    end
+  end
+
+  def repo_update(:activities, params) do
+    with %Activity{} = activity <- repo_get_by_ap_id(:activities, params.ap_id) do
+      Activity.changeset(activity, params) |> Repo.update(returning: true)
+    else
+      _ ->
+        {:error, "Activity %{params.ap_id} not found"}
+    end
+  end
+
+  def repo_update(:actors, params) do
+    with %User{} = user <- repo_get_by_ap_id(:actors, params.ap_id) do
+      User.changeset(user, params) |> Repo.update(returning: true)
+    else
+      _ ->
+        {:error, "User %{params.ap_id} not found"}
+    end
+  end
+
+  def repo_update(:mailboxes, params) do
+    User.changeset(%Mailbox{id: params.ulid}, params) |> Repo.update(returning: true)
+  end
+
+  def repo_update(other, _) do
+    {:error, "Invalid schema for insert #{other}"}
+  end
+
+  def repo_delete(:objects, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = from(Object, where: [ap_id: ^ap_id])
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(:activities, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = from(Activity, where: [ap_id: ^ap_id])
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(:actors, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = from(User, where: [ap_id: ^ap_id])
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(other, _) do
+    {:error, "Invalid schema for delete #{other}"}
+  end
+
+  def describe_errors(%Changeset{action: action, data: %{__struct__: module}, errors: errors}) do
+    error_fields =
+      Enum.map(errors, fn {field, _error_keywords} ->
+        to_string(field)
+      end)
+      |> Enum.join(", ")
+
+    "#{Utils.alias_module(module)} #{action} error on fields: #{error_fields}"
   end
 end

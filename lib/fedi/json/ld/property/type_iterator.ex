@@ -5,7 +5,7 @@ defmodule Fedi.JSON.LD.Property.TypeIterator do
   TypeIterator is an iterator for a property. It is permitted to be
   one of multiple value types. At most, one type of value can be present, or
   none at all. Setting a value will clear the other types of values so that
-  only one of the 'Is' methods will return true. It is possible to clear all
+  only one of the 'is' methods will return true. It is possible to clear all
   values, so that this property is empty.
   """
 

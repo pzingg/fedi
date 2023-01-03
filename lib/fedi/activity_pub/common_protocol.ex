@@ -28,7 +28,7 @@ defmodule Fedi.ActivityPub.CommonProtocol do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_get_inbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback authenticate_get_inbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
@@ -52,7 +52,7 @@ defmodule Fedi.ActivityPub.CommonProtocol do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_get_outbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback authenticate_get_outbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
@@ -65,7 +65,7 @@ defmodule Fedi.ActivityPub.CommonProtocol do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_outbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback get_outbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
@@ -93,6 +93,6 @@ defmodule Fedi.ActivityPub.CommonProtocol do
   returned Transport so that any private credentials are able to be
   garbage collected.
   """
-  @callback new_transport(actor :: struct(), actor_box_iri :: URI.t(), user_agent :: String.t()) ::
+  @callback new_transport(context :: struct(), actor_box_iri :: URI.t(), user_agent :: String.t()) ::
               {:ok, term()} | {:error, term()}
 end

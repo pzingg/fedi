@@ -19,153 +19,6 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   @type actor() :: Fedi.ActivityPub.Actor.context()
 
-  @optional_callbacks [
-    # Always called, for Social or Federated Protocols
-    authenticate_get_inbox: 2,
-    # Only called if the Federated Protocol is enabled.
-    authenticate_post_inbox: 2,
-    # Only called if the Federated Protocol is enabled.
-    post_inbox_request_body_hook: 3,
-    # Only called if the Social API is enabled.
-    post_outbox_request_body_hook: 3
-  ]
-
-  @doc """
-  Hook callback after parsing the request body for a federated request
-  to the Actor's inbox.
-
-  Can be used to set contextual information based on the Activity
-  received.
-
-  Only called if the Federated Protocol is enabled.
-
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
-
-  If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the ActorBehavior implementation must not
-  write a response to the connection as is expected that the caller
-  to post_inbox will do so when handling the error.
-  """
-  @callback post_inbox_request_body_hook(
-              actor :: actor(),
-              request :: Plug.Conn.t(),
-              activity :: term()
-            ) ::
-              {:ok, Plug.Conn.t()} | {:error, term()}
-
-  @doc """
-  Hook callback after parsing the request body for a client request
-  to the Actor's outbox.
-
-  Can be used to set contextual information based on the
-  ActivityStreams object received.
-
-  Only called if the Social API is enabled.
-
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
-
-  If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the ActorBehavior implementation must not
-  write a response to the connection as is expected that the caller
-  to post_outbox will do so when handling the error.
-  """
-  @callback post_outbox_request_body_hook(
-              actor :: actor(),
-              request :: Plug.Conn.t(),
-              data :: term()
-            ) ::
-              {:ok, response :: Plug.Conn.t()} | {:error, term()}
-
-  @doc """
-  authenticate_post_inbox delegates the authentication of a POST to an
-  inbox.
-
-  Only called if the Federated Protocol is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the implementation must not write a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
-  """
-  @callback authenticate_post_inbox(actor :: actor(), request :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
-
-  @doc """
-  authenticate_get_inbox delegates the authentication of a GET to an
-  inbox.
-
-  Always called, regardless whether the Federated Protocol or Social
-  API is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  GetInbox. In this case, the implementation must not write a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
-  """
-  @callback authenticate_get_inbox(actor :: actor(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
-
-  @doc """
-  authorize_post_inbox delegates the authorization of an activity that
-  has been sent by POST to an inbox.
-
-  Only called if the Federated Protocol is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the implementation must not write a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authorized' is ignored.
-
-  If no error is returned, but authorization fails, then authorized
-  must be false and error nil. It is expected that the implementation
-  handles writing to the connection in this case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authorized must be true and error nil. The request will continue
-  to be processed.
-  """
-  @callback authorize_post_inbox(actor :: actor(), conn :: Plug.Conn.t(), activity :: term()) ::
-              {:ok, {response :: Plug.Conn.t(), authorized :: boolean()}} | {:error, term()}
-
-  @doc """
-  post_inbox delegates the side effects of adding to the inbox and
-  determining if it is a request that should be blocked.
-
-  Only called if the Federated Protocol is enabled.
-
-  As a side effect, post_inbox sets the federated data in the inbox, but
-  not on its own in the database, as inbox_forwarding (which is called
-  later) must decide whether it has seen this activity before in order
-  to determine whether to do the forwarding algorithm.
-
-  If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
-  Request status is sent in the response.
-  """
-  @callback post_inbox(actor :: actor(), inbox_iri :: URI.t(), activity :: term()) ::
-              :ok | {:error, term()}
-
   @doc """
   inbox_forwarding delegates inbox forwarding logic when a POST request
   is received in the Actor's inbox.
@@ -212,8 +65,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   """
   @callback post_outbox(
               actor :: actor(),
-              outbox_iri :: URI.t(),
               activity :: term(),
+              outbox_iri :: URI.t(),
               raw_json :: map()
             ) ::
               {:ok, deliverable :: boolean()} | {:error, term()}
@@ -244,53 +97,6 @@ defmodule Fedi.ActivityPub.ActorBehavior do
               :ok | {:error, term()}
 
   @doc """
-  authenticate_post_outbox delegates the authentication and authorization
-  of a POST to an outbox.
-
-  Only called if the Social API is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not write a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
-  """
-  @callback authenticate_post_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
-
-  @doc """
-  authenticate_get_outbox delegates the authentication of a GET to an
-  outbox.
-
-  Always called, regardless whether the Federated Protocol or Social
-  API is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  get_outbox. In this case, the implementation must not write a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
-  """
-  @callback authenticate_get_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
-
-  @doc """
   wrap_in_create wraps the provided object in a Create ActivityStreams
   activity. The provided URL is the actor's outbox endpoint.
 
@@ -298,30 +104,4 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   """
   @callback wrap_in_create(actor :: actor(), value :: term(), outbox_iri :: URI.t()) ::
               {:ok, create :: term()} | {:error, term()}
-
-  @doc """
-  get_outbox returns the OrderedCollection inbox of the actor for this
-  context. It is up to the implementation to provide the correct
-  collection for the kind of authorization given in the request.
-
-  authenticate_get_outbox will be called prior to this.
-
-  Always called, regardless whether the Federated Protocol or Social
-  API is enabled.
-  """
-  @callback get_outbox(actor :: actor(), request :: Plug.Conn.t()) ::
-              {:ok, ordered_collection_page :: term()} | {:error, term()}
-
-  @doc """
-  GetInbox returns the OrderedCollection inbox of the actor for this
-  context. It is up to the implementation to provide the correct
-  collection for the kind of authorization given in the request.
-
-  authenticate_get_inbox will be called prior to this.
-
-  Always called, regardless whether the Federated Protocol or Social
-  API is enabled.
-  """
-  @callback get_inbox(actor :: actor(), request :: Plug.Conn.t()) ::
-              {:ok, ordered_collection_page :: term()} | {:error, term()}
 end

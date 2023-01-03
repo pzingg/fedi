@@ -19,6 +19,7 @@ defmodule Fedi.ActivityStreams.Type.Link do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Link"
 
     def disjoint_with,

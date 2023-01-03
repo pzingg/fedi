@@ -15,6 +15,7 @@ defmodule Fedi.ActivityStreams.Type.Block do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Block"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

@@ -7,18 +7,28 @@
 #
 #     FediServer.Repo.insert!(%FediServer.SomeSchema{})
 #
-# We resocialmend using the bang functions (`insert!`, `update!`
+# We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
 alias FediServer.Repo
 alias FediServer.Activities.User
 
-Repo.insert!(%User{
-  ap_id: "http://example.social/users/gargron",
-  inbox: "http://example.social/users/gargron/inbox",
-  name: "Eugen Rochko",
-  nickname: "gargron",
-  email: "gargron@example.social",
+user_id = URI.parse("https://mastodon.cloud/users/pzingg")
+app_agent = Application.fetch_env!(:fedi_server, :user_agent)
+%User{} = user = User.parse_federated_user(user_id, app_agent)
+
+user
+|> User.changeset()
+|> Repo.insert!()
+
+%User{
+  ap_id: "http://example.com/users/alyssa",
+  inbox: "http://example.com/users/alyssa/inbox",
+  name: "Alyssa Activa",
+  nickname: "alyssa",
+  email: "alyssa@example.com",
   local: true,
   data: %{}
-})
+}
+|> User.changeset()
+|> Repo.insert!()

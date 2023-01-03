@@ -1,9 +1,10 @@
-defmodule FediServerWeb.MyActorCallbacks do
+defmodule FediServerWeb.SocialCallbacks do
   @moduledoc """
   Provides all the Actor actions for our example.
   """
 
   @behaviour Fedi.ActivityPub.ActorBehavior
+  @behaviour Fedi.ActivityPub.SocialProtocol
 
   require Logger
 
@@ -12,16 +13,33 @@ defmodule FediServerWeb.MyActorCallbacks do
     "@context": "https://www.w3.org/ns/activitystreams",
     "id": "http://example.org/users/sally?page=1",
     "orderedItems": [
-      {
+    {
+      "type": "Create",
+      "id": "http://example.org/users/sally/1/activity",
+      "actor": "http://example.org/users/sally",
+      "to": "https://www.w3.org/ns/activitystreams#Public",
+      "object": {
         "name": "A Simple Note",
         "type": "Note",
-        "id": "http://example.org/users/sally/1"
-      },
+        "id": "http://example.org/users/sally/1",
+        "to": "https://www.w3.org/ns/activitystreams#Public",
+        "attributedTo": "http://example.org/users/sally"
+      }
+    },
+    {
+      "type": "Create",
+      "id": "http://example.org/users/sally/2/activity",
+      "actor": "http://example.org/users/sally",
+      "to": "https://www.w3.org/ns/activitystreams#Public",
+      "object":
       {
         "name": "Another Simple Note",
         "type": "Note",
-        "id": "http://example.org/users/sally/2"
+        "id": "http://example.org/users/sally/2",
+        "to": "https://www.w3.org/ns/activitystreams#Public",
+        "attributedTo": "http://example.org/users/sally"
       }
+    }
     ],
     "partOf": "http://example.org/users/sally",
     "summary": "Page 1 of Sally's notes",
@@ -29,7 +47,14 @@ defmodule FediServerWeb.MyActorCallbacks do
   }
   """
 
-  @mock_ordered_collection_page Fedi.Streams.JsonResolver.resolve(@mock_ordered_collection_json)
+  @mock_ordered_collection_page Fedi.Streams.JSONResolver.resolve(@mock_ordered_collection_json)
+
+  @doc """
+  A no-op for the Social API.
+  """
+  def default_callback(context, activity) when is_struct(context) and is_struct(activity) do
+    {:ok, {activity, get_in(context, [:data, :undeliverable])}}
+  end
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -184,6 +209,7 @@ defmodule FediServerWeb.MyActorCallbacks do
   If an error is returned, it is returned to the caller of post_inbox.
   """
   def inbox_forwarding(actor, %URI{} = inbox_iri, activity) do
+    # NEED IMPL
     :ok
   end
 
@@ -208,7 +234,9 @@ defmodule FediServerWeb.MyActorCallbacks do
   values that are simply not present, the 'raw_json' map is ONLY needed
   for this narrow and specific use case.
   """
-  def post_outbox(actor, %URI{} = outbox_iri, activity, raw_json) do
+  def post_outbox(actor, activity, %URI{} = outbox_iri, raw_json) do
+    # TODO IMPL
+    Logger.error("SocialCallbacks post_outbox")
     {:ok, true}
   end
 
@@ -221,6 +249,7 @@ defmodule FediServerWeb.MyActorCallbacks do
   If an error is returned, it is returned to the caller of post_outbox.
   """
   def add_new_ids(actor, activity) do
+    # NEED IMPL
     {:ok, activity}
   end
 

@@ -7,19 +7,23 @@ defmodule Fedi.Toot.Property.SignatureAlgorithm do
   """
 
   @namespace :toot
-  @member_types []
+  @member_types [:string]
   @prop_name "signatureAlgorithm"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri
+    :iri,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
+          has_string_member?: boolean(),
+          xsd_string_member: String.t() | nil,
           iri: URI.t() | nil
         }
 

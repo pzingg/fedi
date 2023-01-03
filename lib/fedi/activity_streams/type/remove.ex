@@ -38,6 +38,7 @@ defmodule Fedi.ActivityStreams.Type.Remove do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Remove"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

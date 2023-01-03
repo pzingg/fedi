@@ -3,6 +3,7 @@ defmodule Fedi.ActivityStreams.Type.Create do
   Indicates that the actor has created the object.
 
   Example 15 (https://www.w3.org/TR/activitystreams-vocabulary/#ex12-jsonld):
+
     {
       "actor": {
         "name": "Sally",
@@ -19,6 +20,7 @@ defmodule Fedi.ActivityStreams.Type.Create do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Create"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

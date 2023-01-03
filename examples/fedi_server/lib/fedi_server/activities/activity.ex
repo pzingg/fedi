@@ -19,5 +19,6 @@ defmodule FediServer.Activities.Activity do
     activity
     |> cast(params, [:ap_id, :type, :actor, :local, :recipients, :data])
     |> validate_required([:ap_id, :type, :actor, :data])
+    |> unique_constraint(:ap_id)
   end
 end

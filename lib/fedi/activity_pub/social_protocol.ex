@@ -27,18 +27,6 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   type and extension. The unhandled ones are passed to DefaultCallback.
   """
 
-  @optional_callbacks [
-    create: 2,
-    update: 2,
-    delete: 2,
-    follow: 2,
-    add: 2,
-    remove: 2,
-    like: 2,
-    undo: 2,
-    block: 2
-  ]
-
   @doc """
   Hook callback after parsing the request body for a client request
   to the Actor's outbox.
@@ -53,12 +41,12 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   strongly discouraged.
 
   If an error is returned, it is passed back to the caller of
-  PostOutbox. In this case, the DelegateActor implementation must not
-  write a response to the ResponseWriter as is expected that the caller
-  to PostOutbox will do so when handling the error.
+  post_outbox. In this case, the implementation must not
+  write a response to the connection as is expected that the caller
+  to post_outbox will do so when handling the error.
   """
   @callback post_outbox_request_body_hook(
-              actor :: struct(),
+              context :: struct(),
               request :: Plug.Conn.t(),
               data :: term()
             ) ::
@@ -71,124 +59,30 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  PostOutbox. In this case, the implementation must not write a
-  response to the ResponseWriter as is expected that the client will
+  post_outbox. In this case, the implementation must not write a
+  response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the ResponseWriter in this
+  the implementation handles writing to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_post_outbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback authenticate_post_outbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
 
   @doc """
-  DefaultCallback is called for types that go-fed can deserialize but
-  are not handled by the application's callbacks.
+  Called for types that can be deserialized but
+  are not handled by the application's type-specific callbacks.
 
   Applications are not expected to handle every single ActivityStreams
   type and extension, so the unhandled ones are passed to
-  DefaultCallback.
+  default_callback.
   """
-  @callback default_callback(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Handles additional side effects for the Create ActivityStreams
-  type.
-
-  The wrapping callback copies the actor(s) to the 'attributedTo'
-  property and copies recipients between the Create activity and all
-  objects. It then saves the entry in the database.
-  """
-  @callback create(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Handles additional side effects for the Update ActivityStreams
-  type.
-
-  The wrapping callback applies new top-level values on an object to
-  the stored objects. Any top-level null literals will be deleted on
-  the stored objects as well.
-  """
-  @callback update(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Delete handles additional side effects for the Delete ActivityStreams
-  type.
-
-  The wrapping callback replaces the object(s) with tombstones in the
-  database.
-  """
-  @callback delete(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Follow handles additional side effects for the Follow ActivityStreams
-  type.
-
-  The wrapping callback only ensures the 'Follow' has at least one
-  'object' entry, but otherwise has no default side effect.
-  """
-  @callback follow(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Add handles additional side effects for the Add ActivityStreams
-  type.
-
-  The wrapping function will add the 'object' IRIs to a specific
-  'target' collection if the 'target' collection(s) live on this
-  server.
-  """
-  @callback add(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Remove handles additional side effects for the Remove ActivityStreams
-  type.
-
-  The wrapping function will remove all 'object' IRIs from a specific
-  'target' collection if the 'target' collection(s) live on this
-  server.
-  """
-  @callback remove(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Like handles additional side effects for the Like ActivityStreams
-  type.
-
-  The wrapping function will add the objects on the activity to the
-  "liked" collection of this actor.
-  """
-  @callback like(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Undo handles additional side effects for the Undo ActivityStreams
-  type.
-
-  The wrapping function ensures the 'actor' on the 'Undo'
-  is be the same as the 'actor' on all Activities being undone.
-  It enforces that the actors on the Undo must correspond to all of the
-  'object' actors in some manner.
-
-  It is expected that the application will implement the proper
-  reversal of activities that are being undone.
-  """
-  @callback undo(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Block handles additional side effects for the Block ActivityStreams
-  type.
-
-  The wrapping callback only ensures the 'Block' has at least one
-  'object' entry, but otherwise has no default side effect. It is up
-  to the wrapped application function to properly enforce the new
-  blocking behavior.
-
-  Note that go-fed does not federate 'Block' activities received in the
-  Social API.
-  """
-  @callback block(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
+  @callback default_callback(context :: struct(), activity :: struct()) ::
+              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
 end

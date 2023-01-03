@@ -89,20 +89,6 @@ defmodule Fedi.Streams.PropertyIterator do
     struct(prop, values: [])
   end
 
-  # append_iri appends an IRI value to the back of a list of the property "type"
-  def append_iri(%{__struct__: module, alias: alias_, values: values} = prop, %URI{} = v) do
-    prop_mod = Utils.iterator_module(module)
-
-    struct(
-      prop,
-      values:
-        values ++
-          [
-            struct(prop_mod, alias: alias_, xsd_any_uri_member: v)
-          ]
-    )
-  end
-
   # append_xsd_any_uri appends a anyURI value to the back of a list of the
   # property "type". Invalidates iterators that are traversing using Prev.
   def append_xsd_any_uri(

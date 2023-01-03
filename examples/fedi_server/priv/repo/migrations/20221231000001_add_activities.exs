@@ -13,5 +13,11 @@ defmodule FediServer.Repo.Migrations.AddActivities do
 
       timestamps(type: :utc_datetime)
     end
+
+    create index(:activities, :ap_id, unique: true)
+    create index(:activities, :type)
+    create index(:activities, :actor)
+    create index(:activities, :local)
+    create index(:activities, :recipients)
   end
 end

@@ -8,19 +8,23 @@ defmodule Fedi.ActivityStreams.Property.Units do
   """
 
   @namespace :activity_streams
-  @member_types [:any_uri]
+  @member_types [:any_uri, :string]
   @prop_name "units"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :xsd_any_uri_member
+    :xsd_any_uri_member,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
+          has_string_member?: boolean(),
+          xsd_string_member: String.t() | nil,
           xsd_any_uri_member: URI.t() | nil
         }
 

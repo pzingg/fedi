@@ -177,7 +177,7 @@ defmodule Mix.Tasks.Ontology.Gen do
         [:string, :lang_string]
       )
       |> add_range_flag_if(
-        Enum.any?(range_, fn r -> String.contains?(r, "xsd:String") end),
+        Enum.any?(range_, fn r -> String.contains?(r, "xsd:string") end),
         :string
       )
       |> add_range_flag_if(
@@ -573,11 +573,6 @@ defmodule Mix.Tasks.Ontology.Gen do
     end
   end
 
-  def capitalize(str) do
-    {head, rest} = String.split_at(str, 1)
-    String.upcase(head) <> rest
-  end
-
   def render_file(template, data, dir, filename) do
     contents = EEx.eval_string(template, data)
 
@@ -591,7 +586,7 @@ defmodule Mix.Tasks.Ontology.Gen do
   def prop_functional(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> @file_ext
-    mod_name = capitalize(prop[:name])
+    mod_name = Fedi.Streams.Utils.capitalize(prop[:name])
     module = "Fedi.#{prop[:namespace]}.Property.#{mod_name}"
     data = [prop: prop, q3: "\"\"\"", module: module]
 
@@ -645,7 +640,7 @@ defmodule Mix.Tasks.Ontology.Gen do
   def prop_iterating(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> @file_ext
-    mod_name = capitalize(prop[:name])
+    mod_name = Fedi.Streams.Utils.capitalize(prop[:name])
     module = "Fedi.#{prop[:namespace]}.Property.#{mod_name}"
     data = [prop: prop, q3: "\"\"\"", module: module]
 
@@ -697,7 +692,7 @@ defmodule Mix.Tasks.Ontology.Gen do
   def prop_iterator(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> "_iterator" <> @file_ext
-    mod_name = capitalize(prop[:name]) <> "Iterator"
+    mod_name = Fedi.Streams.Utils.capitalize(prop[:name]) <> "Iterator"
     module = "Fedi.#{prop[:namespace]}.Property.#{mod_name}"
     data = [prop: prop, q3: "\"\"\"", module: module]
 

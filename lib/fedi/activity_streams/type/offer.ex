@@ -23,6 +23,7 @@ defmodule Fedi.ActivityStreams.Type.Offer do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Offer"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: ["Invite"]

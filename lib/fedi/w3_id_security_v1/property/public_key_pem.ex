@@ -7,19 +7,23 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyPem do
   """
 
   @namespace :w3_id_security_v1
-  @member_types []
+  @member_types [:string]
   @prop_name "publicKeyPem"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri
+    :iri,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
+          has_string_member?: boolean(),
+          xsd_string_member: String.t() | nil,
           iri: URI.t() | nil
         }
 

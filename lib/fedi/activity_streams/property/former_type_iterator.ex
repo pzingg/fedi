@@ -7,19 +7,23 @@ defmodule Fedi.ActivityStreams.Property.FormerTypeIterator do
   """
 
   @namespace :activity_streams
-  @member_types [:iri, :object]
+  @member_types [:iri, :object, :string]
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
     :iri,
-    :member
+    :member,
+    :xsd_string_member,
+    has_string_member?: false
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
+          has_string_member?: boolean(),
+          xsd_string_member: String.t() | nil,
           member: term(),
           iri: URI.t() | nil
         }

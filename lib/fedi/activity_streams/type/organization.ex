@@ -10,6 +10,7 @@ defmodule Fedi.ActivityStreams.Type.Organization do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Organization"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

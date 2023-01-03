@@ -5,9 +5,27 @@ defmodule Fedi.Streams.BaseType do
 
   alias Fedi.Streams.Utils
 
-  def get_type_name(%{__struct__: module}) do
-    Module.concat([module, Meta])
-    |> apply(:type_name, [])
+  def get_type_name(%{__struct__: module}, opts \\ []) do
+    meta_module = Module.concat([module, Meta])
+    type_name = apply(meta_module, :type_name, [])
+
+    type_name =
+      cond do
+        Keyword.get(opts, :atom, false) ->
+          type_name |> Macro.underscore() |> String.to_atom()
+
+        Keyword.get(opts, :snake_case, false) ->
+          type_name |> Macro.underscore()
+
+        true ->
+          type_name
+      end
+
+    if Keyword.get(opts, :with_namespace, false) do
+      {type_name, apply(meta_module, :namespace, [])}
+    else
+      type_name
+    end
   end
 
   def disjoint_with(%{__struct__: module}, other) when is_struct(other) do
@@ -34,7 +52,7 @@ defmodule Fedi.Streams.BaseType do
     |> Enum.member?(other_type_name)
   end
 
-  def is_or_extends(%{__struct__: module}, other) when is_struct(other) do
+  def is_or_extends?(%{__struct__: module}, other) when is_struct(other) do
     other_type_name = get_type_name(other)
     module = Module.concat([module, Meta])
 

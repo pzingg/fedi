@@ -8,40 +8,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
 
   It is passed to the library as a dependency injection from the client
   application.
-
-  Note that certain types of callbacks will be 'wrapped' with default
-  behaviors supported natively by the library. Other callbacks
-  compatible with streams.TypeResolver can be specified by 'other'.
-
-  For example, setting the 'Create' field in the
-  FederatingWrappedCallbacks lets an application dependency inject
-  additional behaviors they want to take place, including the default
-  behavior supplied by this library. This is guaranteed to be compliant
-  with the ActivityPub Social protocol.
-
-  To override the default behavior, instead supply the function in
-  'other', which does not guarantee the application will be compliant
-  with the ActivityPub Social API.
-
-  Applications are not expected to handle every single ActivityStreams
-  type and extension. The unhandled ones are passed to DefaultCallback.
   """
-
-  @optional_callbacks [
-    create: 2,
-    update: 2,
-    delete: 2,
-    follow: 2,
-    on_follow: 2,
-    accept: 2,
-    reject: 2,
-    add: 2,
-    remove: 2,
-    like: 2,
-    announce: 2,
-    undo: 2,
-    block: 2
-  ]
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -62,7 +29,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
   to PostInbox will do so when handling the error.
   """
   @callback post_inbox_request_body_hook(
-              actor :: struct(),
+              context :: struct(),
               request :: Plug.Conn.t(),
               activity :: struct()
             ) ::
@@ -86,8 +53,19 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_post_inbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback authenticate_post_inbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
+
+  @doc """
+  Called for types that can be deserialized but
+  are not handled by the application's type-specific callbacks.
+
+  Applications are not expected to handle every single ActivityStreams
+  type and extension, so the unhandled ones are passed to
+  default_callback.
+  """
+  @callback default_callback(context :: struct(), activity :: struct()) ::
+              {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
   Blocked should determine whether to permit a set of actors given by
@@ -105,7 +83,8 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
   blocked must be false and error nil. The request will continue
   to be processed.
   """
-  @callback blocked(actor :: struct(), actor_iris :: list) :: {:ok, boolean()} | {:error, term()}
+  @callback blocked(context :: struct(), actor_iris :: list) ::
+              {:ok, boolean()} | {:error, term()}
 
   @doc """
   MaxInboxForwardingRecursionDepth determines how deep to search within
@@ -113,7 +92,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
 
   Zero or negative numbers indicate infinite recursion.
   """
-  @callback max_inbox_forwarding_recursion_depth(actor :: struct()) :: integer()
+  @callback max_inbox_forwarding_recursion_depth(context :: struct()) :: {:ok, integer()}
 
   @doc """
   MaxDeliveryRecursionDepth determines how deep to search within
@@ -122,7 +101,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
 
   Zero or negative numbers indicate infinite recursion.
   """
-  @callback max_delivery_recursion_depth(actor :: struct()) :: integer()
+  @callback max_delivery_recursion_depth(context :: struct()) :: {:ok, integer()}
 
   @doc """
   FilterForwarding allows the implementation to apply business logic
@@ -133,7 +112,7 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
   The activity is provided as a reference for more intelligent
   logic to be used, but the implementation must not modify it.
   """
-  @callback filter_forwarding(actor :: struct(), recipients :: list(), activity :: struct()) ::
+  @callback filter_forwarding(context :: struct(), recipients :: list(), activity :: struct()) ::
               {:ok, recipients :: list()} | {:error, term()}
 
   @doc """
@@ -146,164 +125,6 @@ defmodule Fedi.ActivityPub.FederatingProtocol do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_inbox(actor :: struct(), request :: Plug.Conn.t()) ::
+  @callback get_inbox(context :: struct(), request :: Plug.Conn.t()) ::
               {:ok, ordered_collection_page :: term()} | {:error, term()}
-
-  @doc """
-  new_type_resolver creates a new Resolver that examines the type of an
-  ActivityStream value to determine what callback function to pass the
-  concretely typed value. The callback is guaranteed to receive a value whose
-  underlying ActivityStreams type matches the concrete interface name in its
-  signature.
-  """
-  @callback new_type_resolver(
-              actor :: struct(),
-              inbox_iri :: URI.t(),
-              activity :: term(),
-              other :: term()
-            ) ::
-              :ok | {:error, term()}
-
-  @doc """
-  DefaultCallback is called for types that go-fed can deserialize but
-  are not handled by the application's callbacks returned in the
-  Callbacks method.
-
-  Applications are not expected to handle every single ActivityStreams
-  type and extension, so the unhandled ones are passed to
-  DefaultCallback.
-  """
-  @callback default_callback(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Create handles additional side effects for the Create ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping callback for the Federating Protocol ensures the
-  'object' property is created in the database.
-
-  Create calls Create for each object in the federated Activity.
-  """
-  @callback create(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Update handles additional side effects for the Update ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping callback for the Federating Protocol ensures the
-  'object' property is updated in the database.
-
-  Update calls Update on the federated entry from the database, with a
-  new value.
-  """
-  @callback update(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Delete handles additional side effects for the Delete ActivityStreams
-  type, specific to the application using go-fed.
-
-  Delete removes the federated entry from the database.
-  """
-  @callback delete(actor :: struct(), ctivity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Follow handles additional side effects for the Follow ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function can have one of several default behaviors,
-  depending on the value of the OnFollow setting.
-  """
-  @callback follow(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  OnFollow determines what action to take for this particular callback
-  if a Follow Activity is handled.
-  """
-  @callback on_follow(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Accept handles additional side effects for the Accept ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function determines if this 'Accept' is in response to a
-  'Follow'. If so, then the 'actor' is added to the original 'actor's
-  'following' collection.
-
-  Otherwise, no side effects are done by go-fed.
-  """
-  @callback accept(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Reject handles additional side effects for the Reject ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function has no default side effects. However, if this
-  'Reject' is in response to a 'Follow' then the client MUST NOT go
-  forward with adding the 'actor' to the original 'actor's 'following'
-  collection by the client application.
-  """
-  @callback reject(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Add handles additional side effects for the Add ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function will add the 'object' IRIs to a specific
-  'target' collection if the 'target' collection(s) live on this
-  server.
-  """
-  @callback add(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Remove handles additional side effects for the Remove ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function will remove all 'object' IRIs from a specific
-  'target' collection if the 'target' collection(s) live on this
-  server.
-  """
-  @callback remove(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Like handles additional side effects for the Like ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function will add the activity to the "likes" collection
-  on all 'object' targets owned by this server.
-  """
-  @callback like(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Announce handles additional side effects for the Announce
-  ActivityStreams type, specific to the application using go-fed.
-
-  The wrapping function will add the activity to the "shares"
-  collection on all 'object' targets owned by this server.
-  """
-  @callback announce(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Undo handles additional side effects for the Undo ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function ensures the 'actor' on the 'Undo'
-  is be the same as the 'actor' on all Activities being undone.
-  It enforces that the actors on the Undo must correspond to all of the
-  'object' actors in some manner.
-
-  It is expected that the application will implement the proper
-  reversal of activities that are being undone.
-  """
-  @callback undo(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
-
-  @doc """
-  Block handles additional side effects for the Block ActivityStreams
-  type, specific to the application using go-fed.
-
-  The wrapping function provides no default side effects. It simply
-  calls the wrapped function. However, note that Blocks should not be
-  received from a federated peer, as delivering Blocks explicitly
-  deviates from the original ActivityPub specification.
-  """
-  @callback block(actor :: struct(), activity :: struct()) :: :ok | {:error, term()}
 end

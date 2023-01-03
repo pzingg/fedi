@@ -8,6 +8,9 @@
 import Config
 
 config :fedi_server,
+  user_agent: "(elixir-fedi-0.1.0)"
+
+config :fedi_server,
   ecto_repos: [FediServer.Repo]
 
 # Configures the endpoint
@@ -24,6 +27,9 @@ config :logger, :console,
 
 # Use Jason for JSON parsing in Phoenix
 config :phoenix, :json_library, Jason
+
+# Configure Akkoma's http_signatures library
+config :http_signatures, adapter: Fedi.ActivityPub.HTTPSignatureTransport
 
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.

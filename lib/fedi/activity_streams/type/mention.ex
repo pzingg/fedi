@@ -12,6 +12,7 @@ defmodule Fedi.ActivityStreams.Type.Mention do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Mention"
 
     def disjoint_with,

@@ -29,6 +29,7 @@ defmodule Fedi.ActivityStreams.Type.Tombstone do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Tombstone"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

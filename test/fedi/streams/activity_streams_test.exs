@@ -26,7 +26,7 @@ defmodule Fedi.StreamsTest do
       }
       """
 
-      assert {:ok, accept} = Fedi.Streams.JsonResolver.resolve(source)
+      assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert accept.__struct__ == Fedi.ActivityStreams.Type.Accept
       assert accept.properties["actor"].__struct__ == Fedi.ActivityStreams.Property.Actor
       assert accept.properties["object"].__struct__ == Fedi.ActivityStreams.Property.Object
@@ -58,7 +58,7 @@ defmodule Fedi.StreamsTest do
       }
       """
 
-      assert {:ok, accept} = Fedi.Streams.JsonResolver.resolve(source)
+      assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert accept.__struct__ == Fedi.ActivityStreams.Type.Accept
       assert accept.properties["actor"].__struct__ == Fedi.ActivityStreams.Property.Actor
       assert accept.properties["object"].__struct__ == Fedi.ActivityStreams.Property.Object
@@ -102,7 +102,7 @@ defmodule Fedi.StreamsTest do
         }
       """
 
-      assert {:ok, page} = Fedi.Streams.JsonResolver.resolve(source)
+      assert {:ok, page} = Fedi.Streams.JSONResolver.resolve(source)
       assert page.__struct__ == Fedi.ActivityStreams.Type.OrderedCollectionPage
 
       assert page.properties["orderedItems"].__struct__ ==
@@ -152,7 +152,7 @@ defmodule Fedi.StreamsTest do
       }
       """
 
-      assert {:ok, accept} = Fedi.Streams.JsonResolver.resolve(source)
+      assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert {:ok, json} = Fedi.Streams.Serializer.serialize(accept)
 
       expected = """

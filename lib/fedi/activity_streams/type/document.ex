@@ -11,6 +11,7 @@ defmodule Fedi.ActivityStreams.Type.Document do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Document"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: ["Audio", "Image", "Page", "Video"]

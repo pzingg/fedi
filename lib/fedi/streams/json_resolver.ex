@@ -1,10 +1,10 @@
-defmodule Fedi.Streams.JsonResolver do
+defmodule Fedi.Streams.JSONResolver do
   @moduledoc false
 
   require Logger
 
   @doc """
-  resolve determines the ActivityStreams type of the payload, then applies the
+  Determines the ActivityStreams type of the payload, then applies the
   first callback function whose signature accepts the ActivityStreams value's
   type. This strictly assures that the callback function will only be passed
   ActivityStream objects whose type matches its interface. Returns an error
@@ -40,6 +40,11 @@ defmodule Fedi.Streams.JsonResolver do
           end
         end)
     end
+  end
+
+  def resolve_with_as_context(m) when is_map(m) do
+    Map.put(m, "@context", "https://www.w3.org/ns/activitystreams")
+    |> resolve()
   end
 
   def get_type_and_context(m) do

@@ -22,6 +22,7 @@ defmodule Fedi.ActivityStreams.Type.TentativeReject do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "TentativeReject"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []

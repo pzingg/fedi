@@ -5,13 +5,13 @@ defmodule FediServerWeb.OutboxController do
 
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
-  def get_outbox(conn, _params) do
+  def get_outbox(conn, %{"nickname" => nickname} = params) do
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
     case Fedi.ActivityPub.Actor.handle_get_outbox(actor, conn) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
-          Logger.error("get_outbox state #{actor_state}")
+          Logger.error("get_outbox #{nickname} state #{actor_state}")
         end
 
         if processed_conn.state in @sent_or_chunked do
@@ -21,7 +21,7 @@ defmodule FediServerWeb.OutboxController do
         end
 
       {:error, reason} ->
-        Logger.error("get_outbox error #{inspect(reason)}")
+        Logger.error("get_outbox #{nickname} error #{inspect(reason)}")
 
         Fedi.ActivityPub.Utils.send_text_resp(
           conn,
@@ -31,13 +31,13 @@ defmodule FediServerWeb.OutboxController do
     end
   end
 
-  def post_outbox(conn, _params) do
+  def post_outbox(conn, %{"nickname" => nickname} = params) do
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn, "http") do
+    case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn, Atom.to_string(conn.scheme)) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
-          Logger.error("post_outbox state #{actor_state}")
+          Logger.error("post_outbox #{nickname} state #{actor_state}")
         end
 
         if processed_conn.state in @sent_or_chunked do
@@ -47,7 +47,7 @@ defmodule FediServerWeb.OutboxController do
         end
 
       {:error, reason} ->
-        Logger.error("post_outbox error #{inspect(reason)}")
+        Logger.error("post_outbox #{nickname} error #{inspect(reason)}")
 
         Fedi.ActivityPub.Utils.send_text_resp(
           conn,

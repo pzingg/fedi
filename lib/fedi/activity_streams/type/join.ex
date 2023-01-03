@@ -19,6 +19,7 @@ defmodule Fedi.ActivityStreams.Type.Join do
   """
 
   defmodule Meta do
+    def namespace, do: :activity_streams
     def type_name, do: "Join"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []
