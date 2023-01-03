@@ -46,7 +46,7 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollectionPage do
         }
 
   def new() do
-    %__MODULE__{alias: "", properties: %{orderedItems: OrderedItems.new()}}
+    %__MODULE__{alias: "", properties: %{"orderedItems" => OrderedItems.new()}}
   end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do

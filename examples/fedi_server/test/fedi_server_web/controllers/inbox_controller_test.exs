@@ -7,7 +7,8 @@ defmodule FediServerWeb.InboxControllerTest do
       |> Plug.Conn.put_req_header("accept", "application/activity+json")
       |> get("/server/inbox")
 
-    assert response(conn, 500) =~ "Internal server error"
+    json = response(conn, 200)
+    assert Jason.decode!(json) == FediServerWeb.MyActorCallbacks.mock_ordered_collection_json()
   end
 
   test "POST /server/inbox", %{conn: conn} do

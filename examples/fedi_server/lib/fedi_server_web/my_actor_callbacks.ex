@@ -1,5 +1,35 @@
 defmodule FediServerWeb.MyActorCallbacks do
+  @moduledoc """
+  Provides all the Actor actions for our example.
+  """
+
   @behaviour Fedi.ActivityPub.ActorBehavior
+
+  require Logger
+
+  @mock_ordered_collection_json """
+  {
+    "@context": "https://www.w3.org/ns/activitystreams",
+    "id": "http://example.org/users/sally?page=1",
+    "orderedItems": [
+      {
+        "name": "A Simple Note",
+        "type": "Note",
+        "id": "http://example.org/users/sally/1"
+      },
+      {
+        "name": "Another Simple Note",
+        "type": "Note",
+        "id": "http://example.org/users/sally/2"
+      }
+    ],
+    "partOf": "http://example.org/users/sally",
+    "summary": "Page 1 of Sally's notes",
+    "type": "OrderedCollectionPage"
+  }
+  """
+
+  @mock_ordered_collection_page Fedi.Streams.JsonResolver.resolve(@mock_ordered_collection_json)
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -279,7 +309,7 @@ defmodule FediServerWeb.MyActorCallbacks do
   API is enabled.
   """
   def get_outbox(actor, %Plug.Conn{} = conn) do
-    with {:ok, oc} <- mock_ordered_collection_page() do
+    with {:ok, oc} <- @mock_ordered_collection_page do
       {:ok, {conn, oc}}
     end
   end
@@ -295,31 +325,12 @@ defmodule FediServerWeb.MyActorCallbacks do
   API is enabled.
   """
   def get_inbox(actor, %Plug.Conn{} = conn) do
-    with {:ok, oc} <- mock_ordered_collection_page() do
+    with {:ok, oc} <- @mock_ordered_collection_page do
       {:ok, {conn, oc}}
     end
   end
 
-  defp mock_ordered_collection_page() do
-    """
-      {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "id": "http://example.org/foo?page=1",
-        "orderedItems": [
-          {
-            "name": "A Simple Note",
-            "type": "Note"
-          },
-          {
-            "name": "Another Simple Note",
-            "type": "Note"
-          }
-        ],
-        "partOf": "http://example.org/foo",
-        "summary": "Page 1 of Sally's notes",
-        "type": "OrderedCollectionPage"
-      }
-    """
-    |> Fedi.Streams.JsonResolver.resolve()
+  def mock_ordered_collection_json() do
+    Jason.decode!(@mock_ordered_collection_json)
   end
 end

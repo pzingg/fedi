@@ -46,12 +46,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def authorize_post_inbox(%{s2s: _} = actor, %Plug.Conn{} = conn, activity) do
     case Fedi.Streams.Utils.get_actors(activity) do
-      %Fedi.ActivityStreams.Property.Actor{values: values} when is_list(values) ->
+      values when is_list(values) ->
         result =
           values
           |> Enum.with_index()
           |> Enum.reduce_while([], fn {value, idx}, acc ->
-            case Fedi.Streams.Utils.get_iri_or_id(value, "actor") do
+            case Fedi.Streams.Utils.get_iri_or_id(value) do
               %URI{} = actor_id ->
                 {:cont, [actor_id | acc]}
 

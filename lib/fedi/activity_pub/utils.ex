@@ -126,21 +126,21 @@ defmodule Fedi.ActivityPub.Utils do
   deduplicates the 'orderedItems' within an ordered
   collection type. Deduplication happens by the 'id' property.
   """
-  def dedupe_ordered_items(oc) do
-    case Fedi.Streams.Utils.get_ordered_items(oc) do
-      %{properties: items} = ordered_items when is_list(items) ->
+  def dedupe_ordered_items(ordered_collection) do
+    case Fedi.Streams.Utils.get_ordered_items(ordered_collection) do
+      %{values: oi_iterator_props} = ordered_items when is_list(oi_iterator_props) ->
         {deduped, dropped, _seen} =
-          items
+          oi_iterator_props
           |> Enum.with_index()
-          |> Enum.reduce_while({[], 0, MapSet.new()}, fn {item, idx}, {acc, dropped, seen} ->
-            case Fedi.Streams.Utils.get_id_or_iri(item, "orderedItems") do
+          |> Enum.reduce_while({[], 0, MapSet.new()}, fn {prop, idx}, {acc, dropped, seen} ->
+            case Fedi.Streams.Utils.get_id_or_iri(prop) do
               %URI{} = id ->
                 id = URI.to_string(id)
 
                 if MapSet.member?(seen, id) do
                   {:cont, {acc, dropped + 1, seen}}
                 else
-                  {:cont, {[item | acc], dropped, MapSet.put(seen, id)}}
+                  {:cont, {[prop | acc], dropped, MapSet.put(seen, id)}}
                 end
 
               _ ->
@@ -150,10 +150,11 @@ defmodule Fedi.ActivityPub.Utils do
             end
           end)
 
-        if dropped != 0 do
-          {:ok, struct(ordered_items, properties: Enum.reverse(deduped))}
+        if dropped == 0 do
+          {:ok, ordered_collection}
         else
-          {:ok, ordered_items}
+          ordered_items = struct(ordered_items, values: Enum.reverse(deduped))
+          {:ok, Fedi.Streams.Utils.set_ordered_items(ordered_collection, ordered_items)}
         end
 
       _ ->

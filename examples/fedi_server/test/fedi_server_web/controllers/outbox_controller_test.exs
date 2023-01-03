@@ -7,11 +7,8 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("accept", "application/activity+json")
       |> get("/server/outbox")
 
-    expected = """
-    {"@context":"https://www.w3.org/ns/activitystreams","id":"http://example.org/foo?page=1","orderedItems":[{"name":"A Simple Note","type":"Note"},{"name":"Another Simple Note","type":"Note"}],"partOf":"http://example.org/foo","summary":"Page 1 of Sally's notes","type":"OrderedCollectionPage"}
-    """
-
-    assert response(conn, 200) == String.trim(expected)
+    json = response(conn, 200)
+    assert Jason.decode!(json) == FediServerWeb.MyActorCallbacks.mock_ordered_collection_json()
   end
 
   test "POST /server/outbox", %{conn: conn} do
