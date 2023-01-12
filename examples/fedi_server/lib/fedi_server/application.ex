@@ -33,4 +33,8 @@ defmodule FediServer.Application do
     FediServerWeb.Endpoint.config_change(changed, removed)
     :ok
   end
+
+  def app_agent() do
+    Application.get_env(:fedi_server, :user_agent, "(elixir-fedi-server-0.1.0)")
+  end
 end

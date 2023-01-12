@@ -31,7 +31,7 @@ defmodule Fedi.StreamsTest do
       assert accept.properties["actor"].__struct__ == Fedi.ActivityStreams.Property.Actor
       assert accept.properties["object"].__struct__ == Fedi.ActivityStreams.Property.Object
       assert accept.properties["summary"].__struct__ == Fedi.ActivityStreams.Property.Summary
-      assert accept.properties["type"].__struct__ == Fedi.JSON.LD.Property.Type
+      assert accept.properties["type"].__struct__ == Fedi.JSONLD.Property.Type
     end
 
     test "example 9 with langString" do
@@ -63,7 +63,7 @@ defmodule Fedi.StreamsTest do
       assert accept.properties["actor"].__struct__ == Fedi.ActivityStreams.Property.Actor
       assert accept.properties["object"].__struct__ == Fedi.ActivityStreams.Property.Object
       assert accept.properties["summary"].__struct__ == Fedi.ActivityStreams.Property.Summary
-      assert accept.properties["type"].__struct__ == Fedi.JSON.LD.Property.Type
+      assert accept.properties["type"].__struct__ == Fedi.JSONLD.Property.Type
 
       invite_object = accept.properties["object"]
       invite_prop = List.first(invite_object.values)
@@ -108,7 +108,7 @@ defmodule Fedi.StreamsTest do
       assert page.properties["orderedItems"].__struct__ ==
                Fedi.ActivityStreams.Property.OrderedItems
 
-      assert page.properties["type"].__struct__ == Fedi.JSON.LD.Property.Type
+      assert page.properties["type"].__struct__ == Fedi.JSONLD.Property.Type
 
       items = page.properties["orderedItems"]
       assert Enum.count(items.values) == 2

@@ -1,4 +1,4 @@
-defmodule Fedi.JSON.LD.Property.TypeIterator do
+defmodule Fedi.JSONLD.Property.TypeIterator do
   @moduledoc """
   TypeIterator represents a single value for the "type" property.
 

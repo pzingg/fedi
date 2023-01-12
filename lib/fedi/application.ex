@@ -21,4 +21,8 @@ defmodule Fedi.Application do
   def config_change(_changed, _new, _removed) do
     :ok
   end
+
+  def app_agent() do
+    Application.get_env(:fedi, :user_agent, "(elixir-fedi-0.1.0)")
+  end
 end

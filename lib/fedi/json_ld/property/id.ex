@@ -1,4 +1,4 @@
-defmodule Fedi.JSON.LD.Property.Id do
+defmodule Fedi.JSONLD.Property.Id do
   @moduledoc """
   Provides the globally unique identifier for JSON-LD entities.
   """

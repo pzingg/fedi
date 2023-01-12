@@ -1,6 +1,6 @@
-defmodule Fedi.ActivityPub.SocialProtocol do
+defmodule Fedi.ActivityPub.SocialApi do
   @moduledoc """
-  SocialProtocol contains behaviors an application needs to satisfy for the
+  SocialApi contains behaviors an application needs to satisfy for the
   full ActivityPub C2S implementation to be supported by this library.
 
   It is only required if the client application wants to support the client-to-
@@ -27,6 +27,8 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   type and extension. The unhandled ones are passed to DefaultCallback.
   """
 
+  @type context() :: Fedi.ActivityPub.Actor.c2s_context()
+
   @doc """
   Hook callback after parsing the request body for a client request
   to the Actor's outbox.
@@ -46,8 +48,8 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   to post_outbox will do so when handling the error.
   """
   @callback post_outbox_request_body_hook(
-              context :: struct(),
-              request :: Plug.Conn.t(),
+              context :: context(),
+              conn :: Plug.Conn.t(),
               data :: term()
             ) ::
               {:ok, response :: Plug.Conn.t()} | {:error, term()}
@@ -72,8 +74,29 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authenticate_post_outbox(context :: struct(), request :: Plug.Conn.t()) ::
+  @callback authenticate_post_outbox(context :: context(), conn :: Plug.Conn.t()) ::
               {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
+
+  @doc """
+  Sets new URL ids on the activity. It also does so for all
+  'object' properties if the Activity is a Create type.
+
+  Only called if the Social API is enabled.
+
+  If an error is returned, it is returned to the caller of PostOutbox.
+  """
+
+  @callback add_new_ids(context :: context(), activity :: struct()) ::
+              {:ok, activity :: struct()} | {:error, term()}
+
+  @doc """
+  Wraps the provided object in a Create ActivityStreams
+  activity. The provided URL is the actor's outbox endpoint.
+
+  Only called if the Social API is enabled.
+  """
+  @callback wrap_in_create(context :: context(), activity :: struct(), outbox_iri :: URI.t()) ::
+              {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
   Called for types that can be deserialized but
@@ -83,6 +106,6 @@ defmodule Fedi.ActivityPub.SocialProtocol do
   type and extension, so the unhandled ones are passed to
   default_callback.
   """
-  @callback default_callback(context :: struct(), activity :: struct()) ::
+  @callback default_callback(context :: context(), activity :: struct()) ::
               {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
 end

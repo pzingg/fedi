@@ -1,5 +1,8 @@
 import Config
 
+# Mock HTTP responses
+config :tesla, adapter: Tesla.Mock
+
 # Configure your database
 #
 # The MIX_TEST_PARTITION environment variable can be used

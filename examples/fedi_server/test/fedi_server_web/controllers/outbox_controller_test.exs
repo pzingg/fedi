@@ -8,9 +8,10 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> get("/users/alyssa/outbox")
 
     json = response(conn, 200)
-    assert Jason.decode!(json) == FediServerWeb.SocialCallbacks.mock_ordered_collection_json()
+    assert Jason.decode!(json) == FediServerWeb.CommonCallbacks.mock_ordered_collection_json()
   end
 
+  # FIXME Use Tesla.Mock to resolve remote user https://chatty.example/users/ben
   test "POST /users/alyssa/outbox", %{conn: conn} do
     activity = """
     {
@@ -28,6 +29,9 @@ defmodule FediServerWeb.OutboxControllerTest do
       }
     }
     """
+
+    # Seed local user, so we have her private key
+    _ = user_fixtures()
 
     conn =
       conn

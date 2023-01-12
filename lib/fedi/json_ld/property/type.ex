@@ -1,4 +1,4 @@
-defmodule Fedi.JSON.LD.Property.Type do
+defmodule Fedi.JSONLD.Property.Type do
   @moduledoc """
   Identifies the schema type(s) of the JSON-LD entity.
   """
@@ -55,7 +55,7 @@ defmodule Fedi.JSON.LD.Property.Type do
     %__MODULE__{
       prop
       | values: [
-          %Fedi.JSON.LD.Property.TypeIterator{
+          %Fedi.JSONLD.Property.TypeIterator{
             alias: alias_,
             has_string_member?: true,
             xsd_string_member: type

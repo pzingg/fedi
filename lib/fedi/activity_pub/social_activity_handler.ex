@@ -1,9 +1,9 @@
-defmodule Fedi.ActivityPub.SocialCallbacks do
+defmodule Fedi.ActivityPub.SocialActivityHandler do
   @moduledoc """
   Callback functions that already have some side effect behavior.
   """
 
-  @behaviour Fedi.ActivityPub.SocialResolver
+  @behaviour Fedi.ActivityPub.SocialActivityApi
 
   require Logger
 
@@ -272,13 +272,13 @@ defmodule Fedi.ActivityPub.SocialCallbacks do
   @doc """
   Implements the social Undo activity side effects.
   """
-  def undo(%{data: %{outbox_iri: outbox_iri} = context_data} = context, activity)
+  def undo(%{data: context_data} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
            {:activity_actor, Utils.get_actor(activity)},
-         :ok <- APUtils.object_actors_match_activity_actors?(context, outbox_iri, actor) do
+         :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
       context_data = Map.put(context_data, :undeliverable, false)
       context = Map.put(context, :data, context_data)
       Actor.resolver_callback(context, :c2s, activity)

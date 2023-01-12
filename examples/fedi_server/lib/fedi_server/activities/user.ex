@@ -4,7 +4,6 @@ defmodule FediServer.Activities.User do
 
   require Logger
 
-  alias Fedi.ActivityPub.HTTPSignatureTransport
   alias FediServerWeb.Router.Helpers, as: Routes
 
   @timestamps_opts [type: :utc_datetime]
@@ -23,6 +22,22 @@ defmodule FediServer.Activities.User do
     timestamps()
   end
 
+  @doc """
+  Use the data from a Fediverse server to
+  populate a User struct for a remote user.
+  """
+  def new_from_masto_data(data) when is_map(data) do
+    %__MODULE__{
+      ap_id: data["id"],
+      inbox: data["inbox"],
+      name: data["name"],
+      nickname: data["preferredUsername"],
+      local: false,
+      public_key: get_in(data, ["publicKey", "publicKeyPem"]),
+      data: data
+    }
+  end
+
   def changeset(user, params \\ %{}) do
     user
     |> cast(params, [:ap_id, :inbox, :name, :nickname, :local, :email, :public_key, :data])
@@ -34,24 +49,12 @@ defmodule FediServer.Activities.User do
     |> put_data()
   end
 
-  def public_key(%{public_key: pem}) when is_binary(pem) do
-    {:ok, pem}
-  end
-
-  def public_key(_), do: {:error, "Public key not found"}
-
-  def private_key(%{keys: pem}) when is_binary(pem) do
-    {:ok, pem}
-  end
-
-  def private_key(_), do: {:error, "Private key not found"}
-
   defp put_keys(changeset) do
     if get_field(changeset, :local) && is_nil(get_field(changeset, :keys)) do
-      {:ok, pem, public_key_pem} = Fedi.ActivityPub.HTTPSignatureTransport.generate_rsa_pem()
+      {:ok, private_key_pem, public_key_pem} = FediServer.HTTPClient.generate_rsa_pem()
 
       changeset
-      |> put_change(:keys, pem)
+      |> put_change(:keys, private_key_pem)
       |> put_change(:public_key, public_key_pem)
     else
       changeset
@@ -69,14 +72,14 @@ defmodule FediServer.Activities.User do
           name = get_field(changeset, :name)
           nickname = get_field(changeset, :nickname)
           public_key = get_field(changeset, :public_key)
-          put_change(changeset, :data, make_actor_data(ap_id, name, nickname, public_key))
+          put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key))
         else
           changeset
         end
     end
   end
 
-  def make_actor_data(ap_id, name, nickname, public_key, opts \\ []) do
+  def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
     %{
       "id" => ap_id,
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -104,25 +107,5 @@ defmodule FediServer.Activities.User do
       # "capabilities" => capabilities,
       # "alsoKnownAs" => Keyword.get(opts, :also_known_as)
     }
-  end
-
-  def parse_federated_user(%URI{} = user_id, app_agent \\ nil) do
-    with client <- HTTPSignatureTransport.anonymous_client(app_agent),
-         {:ok, json_body} <- HTTPSignatureTransport.fetch_masto_user(client, user_id),
-         {:ok, data} <- Jason.decode(json_body) do
-      %__MODULE__{
-        ap_id: data["id"],
-        inbox: data["inbox"],
-        name: data["name"],
-        nickname: data["preferredUsername"],
-        local: false,
-        public_key: get_in(data, ["publicKey", "publicKeyPem"]),
-        data: data
-      }
-    else
-      {:error, reason} ->
-        Logger.error("parse_federated_user ERROR: #{reason}")
-        nil
-    end
   end
 end

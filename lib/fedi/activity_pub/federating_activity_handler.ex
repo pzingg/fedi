@@ -1,28 +1,26 @@
-defmodule Fedi.ActivityPub.FederatingCallbacks do
+defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @moduledoc """
   Callback functions that already have some side effect behavior.
   """
 
-  @behaviour Fedi.ActivityPub.FederatingResolver
+  @behaviour Fedi.ActivityPub.FederatingActivityApi
 
   require Logger
 
   alias Fedi.Streams.Utils
-  alias Fedi.Streams.JSONResolver
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
   alias Fedi.ActivityPub.Actor
-  alias Fedi.ActivityPub.HTTPSignatureTransport
   alias Fedi.ActivityPub.Utils, as: APUtils
 
   @doc """
   Implements the federating Create activity side effects.
   """
-  def create(%{data: %{inbox_iri: inbox_iri}, database: database} = context, activity)
+  def create(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
-         {:ok, created} when is_list(created) <- create_objects(context, values, inbox_iri),
+         {:ok, created} when is_list(created) <- create_objects(context, values),
          {:ok, _created} <- apply(database, :create, [activity]) do
       Actor.resolver_callback(context, :s2s, activity)
     else
@@ -31,7 +29,10 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
     end
   end
 
-  def create_objects(%{database: database} = context, values, inbox_iri) do
+  def create_objects(
+        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        values
+      ) do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
         case apply(database, :create, [as_type]) do
@@ -40,10 +41,8 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
         end
 
       %{iri: %URI{} = iri}, acc ->
-        transport = HTTPSignatureTransport.new(context, inbox_iri)
-
-        with {:ok, json_body} <- HTTPSignatureTransport.dereference(transport, iri),
-             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(json_body),
+        with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m),
              {:ok, created} <- apply(database, :create, [as_type]) do
           {:cont, [created | acc]}
         else
@@ -236,7 +235,7 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
       end
       |> case do
         {:error, reason} -> {:error, reason}
-        _ -> Actor.delegate(context, :s2s, :deliver, [outbox_iri, response])
+        _ -> Actor.delegate(context, :s2s, :deliver, [response])
       end
     else
       {:error, reason} -> {:error, reason}
@@ -323,15 +322,16 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
     end
   end
 
-  def find_follow(%{inbox_iri: inbox_iri} = context, values, %URI{} = actor_iri) do
+  def find_follow(
+        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        values,
+        %URI{} = actor_iri
+      ) do
     Enum.reduce_while(values, {:error, "Not found"}, fn
       # Attempt to dereference the IRI instead
       %{iri: %URI{} = iri}, acc ->
-        transport = HTTPSignatureTransport.new(context, inbox_iri)
-
-        with {:ok, json_body} <- HTTPSignatureTransport.dereference(transport, iri),
-             {:ok, m} <- Jason.decode(json_body),
-             {:ok, as_type} <- JSONResolver.resolve(m) do
+        with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
           case follow_is_me?(as_type, actor_iri) do
             {:error, reason} -> {:halt, {:error, reason}}
             {:ok, %URI{} = follow_id} -> {:halt, {:ok, {as_type, follow_id}}}
@@ -417,7 +417,7 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
   """
   def like(%{database: database} = context, activity)
       when is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _] = values} = object_prop} <-
+    with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_id, %URI{} = id} <-
            {:activity_id, APUtils.get_id(activity)},
@@ -483,7 +483,7 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
   """
   def announce(%{database: database} = context, activity)
       when is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _] = values} = object_prop} <-
+    with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_id, %URI{} = id} <-
            {:activity_id, APUtils.get_id(activity)},
@@ -547,8 +547,8 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
   @doc """
   Implements the federating Undo activity side effects.
   """
-  def undo(%{data: %{inbox_iri: inbox_iri}} = context, activity) when is_struct(activity) do
-    with :ok <- APUtils.object_actors_match_activity_actors?(context, inbox_iri, activity) do
+  def undo(context, activity) when is_struct(activity) do
+    with :ok <- APUtils.object_actors_match_activity_actors?(context, activity) do
       Actor.resolver_callback(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -560,7 +560,7 @@ defmodule Fedi.ActivityPub.FederatingCallbacks do
   """
   def block(context, activity)
       when is_struct(context) and is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _] = values}} <-
+    with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
       Actor.resolver_callback(context, :s2s, activity)
     else

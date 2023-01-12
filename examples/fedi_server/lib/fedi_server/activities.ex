@@ -1,5 +1,5 @@
 defmodule FediServer.Activities do
-  @behaviour Fedi.ActivityPub.DatabaseContext
+  @behaviour Fedi.ActivityPub.DatabaseApi
 
   import Ecto.Query
 
@@ -17,7 +17,11 @@ defmodule FediServer.Activities do
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
   alias FediServer.Activities.Mailbox
+  alias FediServer.HTTPClient
   alias FediServer.Repo
+
+  @users_regex ~r/^\/users\/([^\/]+)($|\/.*)/
+  @objects_regex ~r/^\/([^\/]+)\/([A-Z0-9]+)$/
 
   @doc """
   Returns true if the OrderedCollection at 'inbox'
@@ -144,29 +148,17 @@ defmodule FediServer.Activities do
   end
 
   @doc """
-  Returns the private key for a local actor.
-  """
-  def get_actor_private_key(%URI{} = actor_id) do
-    with %User{} = user <- repo_get_by_ap_id(:actors, actor_id),
-         {:ok, private_key} <- User.private_key(user) do
-      private_key
-    else
-      {:error, reason} -> {:error, reason}
-      nil -> {:error, "No such actor"}
-    end
-  end
-
-  @doc """
   Returns true if the database has an entry for the specified
   id. It may not be owned by this application instance.
 
   Used in federated SideEffectActor.
   """
-  def exists(ap_id) do
+  def exists(%URI{} = ap_id) do
     [:actors, :objects, :activities]
     |> Enum.reduce_while({:ok, false}, fn schema, acc ->
       if repo_ap_id_exists?(schema, ap_id) do
         {:halt, {:ok, true}}
+      else
         {:cont, acc}
       end
     end)
@@ -186,7 +178,7 @@ defmodule FediServer.Activities do
           {:cont, acc}
 
         other ->
-          Logger.error("Unexpected struct from Repo: #{inspect(other)}")
+          Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
           {:halt, {:error, "Internal database error"}}
       end
     end)
@@ -218,19 +210,32 @@ defmodule FediServer.Activities do
              actor: URI.to_string(actor_iri),
              recipients: Enum.map(recipients, &URI.to_string(&1)),
              data: json_data
-           }),
-         {:ok, object} <- repo_insert(params.schema, params) do
-      {:ok, {as_type, json_data}}
+           }) do
+      case repo_insert(params.schema, params) do
+        {:ok, object} ->
+          {:ok, {as_type, json_data}}
+
+        {:error, %Ecto.Changeset{} = changeset} ->
+          if unique_constraint_error(changeset) do
+            {:ok, {as_type, json_data}}
+          else
+            Logger.error("Create failed: #{describe_errors(changeset)}")
+            {:error, "Internal database error"}
+          end
+      end
     else
       {:get_actor, _} ->
         {:error, "Missing actor in activity"}
 
-      {:error, %Ecto.Changeset{} = _changeset} ->
-        {:error, "Internal database error"}
-
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  def unique_constraint_error(changeset) do
+    Enum.find(changeset.errors, fn {field, {_msg, opts}} ->
+      opts[:constraint] == :unique
+    end)
   end
 
   @doc """
@@ -262,7 +267,8 @@ defmodule FediServer.Activities do
       {:get_actor, _} ->
         {:error, "Missing actor in activity"}
 
-      {:error, %Ecto.Changeset{} = _changeset} ->
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.error("Update failed: #{describe_errors(changeset)}")
         {:error, "Internal database error"}
 
       {:error, reason} ->
@@ -361,6 +367,71 @@ defmodule FediServer.Activities do
     {:ok, OrderedCollectionPage.new()}
   end
 
+  @doc """
+  Returns a `FediServer.HTTPClient` struct, with credentials built
+  from the actor's inbox or outbox IRI.
+  """
+  def new_transport(%URI{path: path} = box_iri, app_agent)
+      when is_binary(app_agent) do
+    actor_path =
+      path
+      |> String.replace_trailing("/inbox", "")
+      |> String.replace_trailing("/outbox", "")
+
+    actor_id = %URI{box_iri | path: actor_path}
+    make_transport(actor_id, app_agent)
+  end
+
+  def new_transport(params, _) do
+    Logger.error("Invalid params for transport #{inspect(params)}")
+    raise "new_transport invalid_params"
+    {:error, "Must provide app_agent and either inbox_iri or outbox_iri"}
+  end
+
+  def make_transport(actor_id, app_agent) do
+    case repo_get_by_ap_id(:actors, actor_id) do
+      %User{} = user ->
+        FediServer.HTTPClient.credentialed(user, app_agent)
+
+      _ ->
+        {:error, "No actor credentials found"}
+    end
+  end
+
+  def dereference(%FediServer.HTTPClient{} = client, %URI{} = iri) do
+    FediServer.HTTPClient.dereference(client, iri)
+  end
+
+  def dereference(%URI{} = box_iri, app_agent, %URI{} = iri) when is_binary(app_agent) do
+    with {:ok, client} <- new_transport(box_iri, app_agent) do
+      FediServer.HTTPClient.dereference(client, iri)
+    end
+  end
+
+  def deliver(%FediServer.HTTPClient{} = client, json_body, %URI{} = iri)
+      when is_binary(json_body) do
+    FediServer.HTTPClient.deliver(client, json_body, iri)
+  end
+
+  def deliver(%URI{} = box_iri, app_agent, json_body, %URI{} = iri)
+      when is_binary(app_agent) and is_binary(json_body) do
+    with {:ok, client} <- new_transport(box_iri, app_agent) do
+      FediServer.HTTPClient.deliver(client, json_body, iri)
+    end
+  end
+
+  def batch_deliver(%FediServer.HTTPClient{} = client, json_body, recipients)
+      when is_binary(json_body) and is_list(recipients) do
+    FediServer.HTTPClient.batch_deliver(client, json_body, recipients)
+  end
+
+  def batch_deliver(%URI{} = box_iri, app_agent, json_body, recipients)
+      when is_binary(app_agent) and is_binary(json_body) and is_list(recipients) do
+    with {:ok, client} <- new_transport(box_iri, app_agent) do
+      FediServer.HTTPClient.batch_deliver(client, json_body, recipients)
+    end
+  end
+
   ### Implementation
 
   def update_mailbox(actor_iri, updates, outgoing) do
@@ -373,9 +444,9 @@ defmodule FediServer.Activities do
           params =
             Map.merge(params, %{
               outgoing: outgoing,
-              activity_id: params.ulid,
+              activity_id: URI.to_string(params.ap_id),
               owner: URI.to_string(actor_iri),
-              local: true
+              local: params.local
             })
 
           case repo_insert(:mailboxes, params) do
@@ -399,7 +470,7 @@ defmodule FediServer.Activities do
 
     from(m in Mailbox,
       join: a in Activity,
-      on: a.id == m.activity_id,
+      on: a.ap_id == m.activity_id,
       select: a.ap_id,
       where: [owner: ^actor, outgoing: ^outgoing],
       order_by: [desc: :id]
@@ -413,7 +484,7 @@ defmodule FediServer.Activities do
     result =
       from(m in Mailbox,
         join: a in Activity,
-        on: a.id == m.activity_id,
+        on: a.ap_id == m.activity_id,
         select: a.data,
         where: [owner: ^actor, outgoing: ^outgoing],
         order_by: [desc: :id],
@@ -539,18 +610,39 @@ defmodule FediServer.Activities do
   Assumes iri is local.
   """
   def parse_ulid_or_nickname(%URI{path: path} = iri) do
-    case Regex.run(~r/^\/users\/([^\/]+)($|\/.*)/, path) do
+    case Regex.run(@users_regex, path) do
       [_match, nickname, _suffix] ->
         {:ok, {nickname, :actors}}
 
       _ ->
-        case Regex.run(~r/^\/([^\/]+)\/([A-Z0-9]+)$/, path) do
+        case Regex.run(@objects_regex, path) do
           [_match, schema, ulid] ->
             {:ok, {ulid, String.to_atom(schema)}}
 
           _ ->
             {:error, "Missing schema or id in #{URI.to_string(iri)}"}
         end
+    end
+  end
+
+  def resolve_and_insert_user(%URI{} = id) do
+    app_agent = FediServer.Application.app_agent()
+
+    with client <- HTTPClient.anonymous(app_agent),
+         {:ok, json_body} <- HTTPClient.fetch_masto_user(client, id),
+         {:ok, data} <- Jason.decode(json_body),
+         user <- User.new_from_masto_data(data) do
+      User.changeset(user) |> Repo.insert(returning: true)
+    end
+  end
+
+  def get_public_key(%URI{} = ap_id) do
+    with {:ok, %User{public_key: public_key}} <- repo_get_by_ap_id(:actors, ap_id) do
+      if is_binary(public_key) && public_key != "" do
+        {:ok, public_key}
+      else
+        {:error, "No public key found"}
+      end
     end
   end
 
@@ -573,17 +665,20 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for exists #{other}"}
   end
 
-  def repo_ap_id_exists?(:objects, ap_id) do
+  def repo_ap_id_exists?(:objects, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
     query = from(Object, where: [ap_id: ^ap_id])
     Repo.exists?(query)
   end
 
-  def repo_ap_id_exists?(:activities, ap_id) do
+  def repo_ap_id_exists?(:activities, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
     query = from(Activity, where: [ap_id: ^ap_id])
     Repo.exists?(query)
   end
 
-  def repo_ap_id_exists?(:actors, ap_id) do
+  def repo_ap_id_exists?(:actors, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
     query = from(User, where: [ap_id: ^ap_id])
     Repo.exists?(query)
   end
@@ -705,12 +800,13 @@ defmodule FediServer.Activities do
   end
 
   def describe_errors(%Changeset{action: action, data: %{__struct__: module}, errors: errors}) do
-    error_fields =
-      Enum.map(errors, fn {field, _error_keywords} ->
-        to_string(field)
+    error_str =
+      Enum.map(errors, fn {field, _error_keywords} = error ->
+        "#{inspect(error)}"
+        # to_string(field)
       end)
       |> Enum.join(", ")
 
-    "#{Utils.alias_module(module)} #{action} error on fields: #{error_fields}"
+    "#{Utils.alias_module(module)} #{action} error on fields: #{error_str}"
   end
 end

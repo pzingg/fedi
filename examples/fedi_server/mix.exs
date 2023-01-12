@@ -43,6 +43,7 @@ defmodule FediServer.MixProject do
       {:jason, "~> 1.2"},
       {:plug_cowboy, "~> 2.5"},
       {:json_ld, "~> 0.3"},
+      {:sweet_xml, "~> 0.7"},
       {:timex, "~> 3.7"},
       {:fedi, path: "../.."}
     ]

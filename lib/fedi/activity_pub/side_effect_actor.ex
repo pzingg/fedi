@@ -32,7 +32,6 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityPub.Actor
   alias Fedi.ActivityPub.Utils, as: APUtils
-  alias Fedi.ActivityPub.HTTPSignatureTransport
 
   @enforce_keys [:common]
   defstruct [
@@ -43,8 +42,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :s2s_resolver,
     :fallback,
     :database,
-    :enable_social_protocol,
-    :enable_federated_protocol,
+    :social_api_enabled?,
+    :federated_protocol_enabled?,
     :data
   ]
 
@@ -56,8 +55,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           s2s_resolver: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
           data: term()
         }
 
@@ -70,8 +69,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           s2s_resolver: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
           data: term()
         }
 
@@ -79,8 +78,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     opts =
       Keyword.merge(
         [
-          c2s_resolver: Fedi.ActivityPub.SocialCallbacks,
-          s2s_resolver: Fedi.ActivityPub.FederatingCallbacks
+          c2s_resolver: Fedi.ActivityPub.SocialActivityHandler,
+          s2s_resolver: Fedi.ActivityPub.FederatingActivityHandler
         ],
         opts
       )
@@ -160,28 +159,24 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   request, adding the activity to the actor's inbox, and triggering side
   effects based on the activity's type.
   """
-  def post_inbox(context, %URI{} = inbox_iri, activity) do
+  def post_inbox(context, %Plug.Conn{} = conn, %URI{} = inbox_iri, activity)
+      when is_struct(context) and is_struct(activity) do
     case add_to_inbox_if_new(context, inbox_iri, activity) do
       {:error, reason} ->
         {:error, reason}
 
       {:ok, false} ->
-        :ok
+        # Already in our inbox, all good
+        {:ok, conn}
 
       {:ok, true} ->
+        # A new activity was added to the inbox
         if Actor.protocol_supported?(context, :s2s) do
-          # Wrapped data for FederatingCallbacks
-          on_follow =
-            case Actor.delegate(context, :s2s, :on_follow, []) do
-              {:ok, value} when is_atom(value) -> value
-              _ -> :do_nothing
-            end
-
-          context = %{context | data: %{inbox_iri: inbox_iri, on_follow: on_follow}}
+          context = wrap_for_federated_protocol(context, inbox_iri)
 
           case Actor.resolver_callback(context, :s2s, activity, top_level: true) do
             {:error, reason} -> {:error, reason}
-            _ -> {:ok, {activity, context.data}}
+            _ -> {:ok, conn}
           end
         end
     end
@@ -196,7 +191,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Ref: [Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   """
+  # FIXME where is inbox_iri used?
   def inbox_forwarding(%{database: database} = context, %URI{} = inbox_iri, activity) do
+    Logger.error("SideEffectActor.inbox_forwarding #{URI.to_string(inbox_iri)}")
+
     # Ref: This is the first time the server has seen this Activity.
     with {:get_id, %URI{} = id} <-
            {:get_id, Utils.get_json_ld_id(activity)},
@@ -227,7 +225,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         with {:ok, max_depth} <-
                Actor.delegate(context, :s2s, :max_inbox_forwarding_recursion_depth, []),
              {:ok, owns_value} <-
-               has_inbox_forwarding_values(context, inbox_iri, activity, max_depth, 0) do
+               has_inbox_forwarding_values(context, activity, max_depth, 0) do
           # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
           # values, then no need to do inbox forwarding.
           if !owns_value do
@@ -238,7 +236,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
             # collections to be targeted.
             with {:ok, recipients} <-
                    get_collection_recipients(context, col_iris, cols, ocols, activity) do
-              deliver_to_recipients(context, inbox_iri, activity, recipients)
+              deliver_to_recipients(context, activity, recipients)
             end
 
             # else {:error, reason}
@@ -352,11 +350,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
     {context, activity} =
       if Actor.protocol_supported?(context, :c2s) do
-        # Wrapped data for SocialCallbacks
-        context = %{
-          context
-          | data: %{outbox_iri: outbox_iri, raw_activity: raw_json, undeliverable: false}
-        }
+        context = wrap_for_social_api(context, outbox_iri, raw_json)
 
         case Actor.resolver_callback(context, :c2s, activity, top_level: true) do
           {:ok, {new_actor, new_activity}} -> {new_actor, new_activity}
@@ -391,9 +385,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Called if the Federated protocol is supported.
   """
-  def deliver(context, %URI{} = outbox, activity) do
-    with {:ok, activity, recipients} <- prepare(context, outbox, activity) do
-      deliver_to_recipients(context, outbox, activity, recipients)
+  def deliver(context, outbox_iri, activity) do
+    with {:ok, wrapped_context, activity, recipients} <- prepare(context, outbox_iri, activity) do
+      deliver_to_recipients(wrapped_context, activity, recipients)
     end
   end
 
@@ -439,24 +433,27 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Only called if both the Social API and Federated Protocol are supported.
   """
   def prepare(%{database: database} = context, %URI{} = outbox_iri, %{properties: _} = activity) do
-    with {:ok, recipients} <- APUtils.get_recipients(activity) do
+    # Get inboxes of recipients ("to", "bto", "cc", "bcc" and "audience")
+    with {:ok, activity_recipients} <- APUtils.get_recipients(activity) do
       # 1. When an object is being delivered to the originating actor's
       #    followers, a server MAY reduce the number of receiving actors
       #    delivered to by identifying all followers which share the same
       #    sharedInbox who would otherwise be individual recipients and
       #    instead deliver objects to said sharedInbox.
+
       # 2. If an object is addressed to the Public special collection, a
       #    server MAY deliver that object to all known sharedInbox endpoints
       #    on the network.
-      recipients = Enum.filter(recipients, fn actor_iri -> !APUtils.public?(actor_iri) end)
+      {_public_recipients, non_public_recipients} =
+        Enum.split_with(activity_recipients, &APUtils.public?(&1))
 
       # First check if the implemented database logic can return any inboxes
       # from our list of actor IRIs.
-      {_inboxes, actors_with_inboxes} =
-        Enum.reduce(recipients, [], fn actor_iri, acc ->
+      {found_actors, found_inboxes} =
+        Enum.reduce(non_public_recipients, [], fn actor_iri, acc ->
           case apply(database, :inbox_for_actor, [actor_iri]) do
             {:ok, %URI{} = inbox_iri} ->
-              [{inbox_iri, actor_iri} | acc]
+              [{actor_iri, inbox_iri} | acc]
 
             _ ->
               acc
@@ -466,32 +463,76 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
       # For every actor we found an inbox for in the db, we should
       # remove it from the list of actors we still need to dereference
-      recipients =
-        Enum.filter(recipients, fn actor_iri -> !Enum.member?(actors_with_inboxes, actor_iri) end)
+      case Enum.filter(non_public_recipients, fn actor_iri ->
+             !Enum.member?(found_actors, actor_iri)
+           end) do
+        [] ->
+          []
 
-      # Look for any actors' inboxes that weren't already discovered above;
-      # find these by making dereference calls to remote instances
-      transport = HTTPSignatureTransport.new(context, outbox_iri)
+        actors_to_resolve ->
+          # Look for any actors' inboxes that weren't already discovered above;
+          # find these by making dereference calls to remote instances
+          app_agent = Fedi.Application.app_agent()
 
-      with {:ok, max_depth} <- Actor.delegate(context, :s2s, :max_delivery_recursion_depth, []),
-           {:ok, remote_actors} <- resolve_actors(context, transport, recipients, 0, max_depth),
-           {:ok, remote_inboxes} <- APUtils.get_inboxes(remote_actors),
-           # Combine this list of dereferenced inbox IRIs with the inboxes we already
-           # found in the db, to make a complete list of target IRIs
-           targets <- remote_actors ++ remote_inboxes,
-           # Get inboxes of sender.
-           {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
-           {:ok, this_actor} <- apply(database, :get, [actor_iri]),
-           # Post-processing
-           {:get_inbox, %URI{} = _ignore} <- {:get_inbox, APUtils.get_inbox(this_actor)} do
-        recipients = MapSet.new(targets) |> MapSet.to_list()
-        activity = APUtils.strip_hidden_recipients(activity)
-        {:ok, activity, recipients}
-      else
-        {:get_inbox, _} -> {:error, "Actor for #{URI.to_string(outbox_iri)} has no inbox"}
-        {:error, reason} -> {:error, reason}
+          with {:ok, transport} <- apply(database, :new_transport, [outbox_iri, app_agent]),
+               {:ok, max_depth} <-
+                 Actor.delegate(context, :s2s, :max_delivery_recursion_depth, []),
+               {:ok, remote_actors} <-
+                 resolve_actors(database, transport, actors_to_resolve, 0, max_depth),
+               {:ok, remote_inboxes} <- APUtils.get_inboxes(remote_actors) do
+            remote_inboxes
+          end
+      end
+      |> case do
+        {:error, reason} ->
+          {:error, reason}
+
+        remote_inboxes ->
+          # Combine this list of dereferenced inbox IRIs with the inboxes we already
+          # found in the db, to make a complete list of target IRIs
+          case found_inboxes ++ remote_inboxes do
+            [] ->
+              Logger.error("No non-public recipients")
+              {:error, "No non-public recipients"}
+
+            targets ->
+              Logger.error("prepare targets #{inspect(targets)}")
+              # Verify the inbox on the sender.
+              with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
+                   {:ok, this_actor} <- apply(database, :get, [actor_iri]),
+                   # Post-processing
+                   {:get_inbox, %URI{} = ignore} <- {:get_inbox, APUtils.get_inbox(this_actor)} do
+                case dedupe_iris(targets, [ignore]) do
+                  [] ->
+                    Logger.error("No external recipients")
+                    {:error, "No external recipients"}
+
+                  recipients ->
+                    Logger.error("prepare final recipients #{inspect(recipients)}")
+                    activity = APUtils.strip_hidden_recipients(activity)
+                    Logger.error("prepare stripped activity #{inspect(activity)}")
+                    {:ok, context, activity, recipients}
+                end
+              else
+                {:error, reason} -> {:error, reason}
+                {:get_inbox, _} -> {:error, "No inbox for sender #{URI.to_string(outbox_iri)}"}
+              end
+
+              # end targets ->
+          end
+
+          # end remote_inboxes ->
       end
     end
+  end
+
+  def dedupe_iris(recipients, ignored) do
+    ignored_set = MapSet.new(ignored)
+
+    recipients
+    |> MapSet.new()
+    |> MapSet.delete(ignored_set)
+    |> MapSet.to_list()
   end
 
   @doc """
@@ -506,15 +547,32 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Note that this also applies to CollectionPage and OrderedCollectionPage.
   """
-  def resolve_actors(context, transport, actor_ids, depth, max_depth, actors \\ []) do
+  def resolve_actors(database, transport, actor_ids, depth, max_depth, acc \\ [])
+
+  def resolve_actors(_database, _transport, [], 0, _max_depth, _acc) do
+    {:error, "No actor ids to be resolved"}
+  end
+
+  def resolve_actors(
+        database,
+        transport,
+        actor_ids,
+        depth,
+        max_depth,
+        actors
+      ) do
     if max_depth > 0 && depth >= max_depth do
-      {:ok, actors}
+      if Enum.empty?(actors) do
+        {:error, "No actors resolved (depth #{max_depth} exceeded)"}
+      else
+        {:ok, actors}
+      end
     else
       # TODO: Determine if more logic is needed here for inaccessible
       # collections owned by peer servers.
       {actors, more} =
         Enum.reduce(actor_ids, {actors, []}, fn iri, {actor_acc, coll_acc} = acc ->
-          case dereference_for_resolving_inboxes(transport, iri) do
+          case dereference_for_resolving_inboxes(database, transport, iri) do
             {:ok, actor, []} ->
               {[actor | actor_acc], coll_acc}
 
@@ -530,11 +588,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       more_count = Enum.count(more)
 
       if more_count == 0 do
-        {:ok, actors}
+        if Enum.empty?(actors) do
+          actor_ids = Enum.map(actor_ids, &URI.to_string(&1)) |> Enum.join(", ")
+          {:error, "No actors resolved from #{actor_ids}"}
+        else
+          {:ok, actors}
+        end
       else
         # Recurse
-        Logger.error("resolve_actors #{depth + 1} for an additional #{more_count} items")
-        resolve_actors(context, transport, more, depth + 1, max_depth, actors)
+        resolve_actors(database, transport, more, depth + 1, max_depth, actors)
       end
     end
   end
@@ -546,11 +608,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   The returned actor could be nil, if it wasn't an actor (ex: a Collection or
   OrderedCollection).
   """
-  def dereference_for_resolving_inboxes(transport, %URI{} = actor_id) do
-    with {:ok, json_body} <-
-           HTTPSignatureTransport.dereference(transport, actor_id),
+  def dereference_for_resolving_inboxes(database, transport, %URI{} = actor_id) do
+    with {:ok, m} <- apply(database, :dereference, [transport, actor_id]),
          {:ok, %{properties: properties} = actor} <-
-           Fedi.Streams.JSONResolver.resolve(json_body) do
+           Fedi.Streams.JSONResolver.resolve(m) do
       # Attempt to see if the 'actor' is really some sort of type that has
       # an 'items' or 'orderedItems' property.
       ["items", "orderedItems"]
@@ -578,12 +639,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Takes a prepared Activity and send it to specific
   recipients on behalf of an actor.
   """
-  def deliver_to_recipients(context, %URI{} = box_iri, activity, recipients)
+  def deliver_to_recipients(
+        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        activity,
+        recipients
+      )
       when is_list(recipients) do
     with {:ok, m} <- Fedi.Streams.Serializer.serialize(activity),
-         {:ok, json_body} <- Jason.encode(m),
-         transport <- HTTPSignatureTransport.new(context, box_iri) do
-      HTTPSignatureTransport.batch_deliver(transport, json_body, recipients)
+         {:ok, json_body} <- Jason.encode(m) do
+      apply(database, :batch_deliver, [inbox_iri, app_agent, json_body, recipients])
     end
   end
 
@@ -596,24 +660,27 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Returns true when the activity is novel.
   """
   def add_to_inbox_if_new(%{database: database} = _context, %URI{} = inbox_iri, activity) do
-    with %URI{} = id <- Utils.get_json_ld_id(activity),
-         {:ok, false} <- apply(database, :inbox_contains, [inbox_iri, id]) do
-      # It is a new id, acquire the inbox.
-      update_inbox = fn inbox ->
-        oi =
-          Utils.get_ordered_items(inbox) ||
-            Utils.new_ordered_items()
-
-        oi = Fedi.Streams.PropertyIterator.prepend_iri(oi, id)
-        Utils.set_ordered_items(inbox, oi)
-      end
-
-      apply(database, :update_inbox, [inbox_iri, update_inbox])
+    with {:get_id, %URI{} = id} <- {:get_id, Utils.get_json_ld_id(activity)},
+         {:exists, {:ok, false}} <- {:exists, apply(database, :inbox_contains, [inbox_iri, id])},
+         # It is a new id
+         # Persist the activity
+         {:create, {:ok, {activity, _json}}} <-
+           {:create, apply(database, :create, [activity])},
+         # Persist a reference to the activity in the inbox
+         # Then return the the list of 'orderedItems'.
+         {:database, {:ok, _ordered_collection_page}} <-
+           {:database, apply(database, :update_inbox, [inbox_iri, %{create: [activity]}])} do
+      {:ok, true}
     else
       # If the inbox already contains the URL, early exit.
-      {:ok, true} -> {:ok, false}
-      {:error, reason} -> {:error, reason}
-      nil -> {:error, "Activity does not have an id"}
+      {:exists, {:ok, true}} ->
+        {:ok, false}
+
+      {:get_id, _} ->
+        {:error, "Activity does not have an id"}
+
+      {_, {:error, reason}} ->
+        {:error, reason}
     end
   end
 
@@ -629,8 +696,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
   def has_inbox_forwarding_values(
-        %{database: database} = context,
-        %URI{} = inbox_iri,
+        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database} = context,
         val,
         max_depth,
         curr_depth
@@ -662,11 +728,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
         # We must dereference the types
         true ->
-          derefed_types = dereference_iris(context, iris, inbox_iri)
+          derefed_types = dereference_iris(context, iris)
           # Recurse
           owns_one_type =
             Enum.find(types ++ derefed_types, fn next_val ->
-              has_inbox_forwarding_values(context, inbox_iri, next_val, max_depth, curr_depth + 1)
+              has_inbox_forwarding_values(context, next_val, max_depth, curr_depth + 1)
             end)
 
           case owns_one_type do
@@ -707,12 +773,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   # Recursion preparation: Try fetching the IRIs so we can recurse into them.
-  def dereference_iris(context, iris, inbox_iri) do
+  def dereference_iris(
+        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        iris
+      ) do
     Enum.reduce(iris, [], fn iri, acc ->
-      with transport <- HTTPSignatureTransport.new(context, inbox_iri),
-           # Dereferencing the IRI.
-           {:ok, json_body} <- HTTPSignatureTransport.dereference(transport, iri),
-           {:ok, type} <- Fedi.Streams.JSONResolver.resolve(json_body) do
+      # Dereferencing the IRI.
+      with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+           {:ok, type} <- Fedi.Streams.JSONResolver.resolve(m) do
         [type | acc]
       else
         # Do not fail the entire process if the data is missing.
@@ -732,5 +800,38 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       {:error, reason} -> {:error, reason}
       value -> {:error, "Database did not return a URI: #{inspect(value)}"}
     end
+  end
+
+  def wrap_for_social_api(context, outbox_iri, raw_json) do
+    app_agent = Fedi.Application.app_agent()
+
+    struct(context,
+      data:
+        Map.merge(context.data || %{}, %{
+          outbox_iri: outbox_iri,
+          raw_activity: raw_json,
+          undeliverable: false,
+          app_agent: app_agent
+        })
+    )
+  end
+
+  def wrap_for_federated_protocol(context, inbox_iri) do
+    on_follow =
+      case Actor.delegate(context, :s2s, :on_follow, []) do
+        {:ok, value} when is_atom(value) -> value
+        _ -> :do_nothing
+      end
+
+    app_agent = Fedi.Application.app_agent()
+
+    struct(context,
+      data:
+        Map.merge(context.data || %{}, %{
+          inbox_iri: inbox_iri,
+          on_follow: on_follow,
+          app_agent: app_agent
+        })
+    )
   end
 end

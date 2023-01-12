@@ -79,7 +79,7 @@ defmodule Fedi.Streams.Utils do
   #   member: %Fedi.ActivityStreams.Type.Note{
   #     alias: "",
   #     properties: %{
-  #       "id" => %Fedi.JSON.LD.Property.Id{xsd_any_uri_member: %URI{...}},
+  #       "id" => %Fedi.JSONLD.Property.Id{xsd_any_uri_member: %URI{...}},
   #     }
   #   }
   # }
@@ -98,7 +98,7 @@ defmodule Fedi.Streams.Utils do
   def get_json_ld_id(%{properties: properties}) when is_map(properties) do
     # A type with properties
     case Map.get(properties, "id") do
-      %Fedi.JSON.LD.Property.Id{xsd_any_uri_member: %URI{} = id} ->
+      %Fedi.JSONLD.Property.Id{xsd_any_uri_member: %URI{} = id} ->
         id
 
       _ ->
@@ -116,8 +116,7 @@ defmodule Fedi.Streams.Utils do
   end
 
   def set_json_ld_id(%{properties: properties} = prop, %URI{} = id) when is_map(properties) do
-    {:ok,
-     struct(prop, properties: Map.put(properties, "id", Fedi.JSON.LD.Property.Id.new_id(id)))}
+    {:ok, struct(prop, properties: Map.put(properties, "id", Fedi.JSONLD.Property.Id.new_id(id)))}
   end
 
   def set_json_ld_id(_, %URI{} = _id) do
@@ -131,9 +130,9 @@ defmodule Fedi.Streams.Utils do
 
   def get_json_ld_type(%{properties: properties}) when is_map(properties) do
     # A type with properties
-    with %Fedi.JSON.LD.Property.Type{
+    with %Fedi.JSONLD.Property.Type{
            values: [
-             %Fedi.JSON.LD.Property.TypeIterator{
+             %Fedi.JSONLD.Property.TypeIterator{
                has_string_member?: true,
                xsd_string_member: type
              }
@@ -160,7 +159,7 @@ defmodule Fedi.Streams.Utils do
   def set_json_ld_type(%{properties: properties} = prop, type) when is_map(properties) do
     {:ok,
      struct(prop,
-       properties: Map.put(properties, "type", Fedi.JSON.LD.Property.Type.new_type(type))
+       properties: Map.put(properties, "type", Fedi.JSONLD.Property.Type.new_type(type))
      )}
   end
 

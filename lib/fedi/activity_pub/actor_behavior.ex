@@ -17,7 +17,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   implementation is completely provided out of the box.
   """
 
-  @type actor() :: Fedi.ActivityPub.Actor.context()
+  @type context() :: Fedi.ActivityPub.Actor.context()
 
   @doc """
   inbox_forwarding delegates inbox forwarding logic when a POST request
@@ -39,7 +39,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_inbox.
   """
-  @callback inbox_forwarding(actor :: actor(), inbox_iri :: URI.t(), activity :: term()) ::
+  @callback inbox_forwarding(context :: context(), inbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
 
   @doc """
@@ -64,7 +64,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   for this narrow and specific use case.
   """
   @callback post_outbox(
-              actor :: actor(),
+              context :: context(),
               activity :: term(),
               outbox_iri :: URI.t(),
               raw_json :: map()
@@ -79,7 +79,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback add_new_ids(actor :: actor(), activity :: term()) ::
+  @callback add_new_ids(context :: context(), activity :: term()) ::
               {:ok, activity :: term()} | {:error, term()}
 
   @doc """
@@ -93,7 +93,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
-  @callback deliver(actor :: actor(), outbox :: URI.t(), activity :: term()) ::
+  @callback deliver(context :: context(), outbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
 
   @doc """
@@ -102,6 +102,6 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   Only called if the Social API is enabled.
   """
-  @callback wrap_in_create(actor :: actor(), value :: term(), outbox_iri :: URI.t()) ::
+  @callback wrap_in_create(context :: context(), value :: term(), outbox_iri :: URI.t()) ::
               {:ok, create :: term()} | {:error, term()}
 end

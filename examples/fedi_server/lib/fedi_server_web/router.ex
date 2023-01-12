@@ -6,6 +6,10 @@ defmodule FediServerWeb.Router do
     plug(:set_actor)
   end
 
+  pipeline :well_known do
+    plug(:accepts, ["json", "jrd+json", "xml", "xrd+xml"])
+  end
+
   scope "/", FediServerWeb do
     pipe_through(:api)
 
@@ -15,6 +19,14 @@ defmodule FediServerWeb.Router do
     post("/users/:nickname/inbox", InboxController, :post_inbox)
     get("/users/:nickname/outbox", OutboxController, :get_outbox)
     post("/users/:nickname/outbox", OutboxController, :post_outbox)
+  end
+
+  scope "/.well-known", FediServerWeb do
+    pipe_through(:well_known)
+
+    get("/host-meta", WebFinger.WebFingerController, :host_meta)
+    get("/webfinger", WebFinger.WebFingerController, :webfinger)
+    # get("/nodeinfo", Nodeinfo.NodeinfoController, :schemas)
   end
 
   def set_actor(conn, _opts) do

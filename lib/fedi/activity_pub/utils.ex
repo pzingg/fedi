@@ -3,7 +3,6 @@ defmodule Fedi.ActivityPub.Utils do
 
   require Logger
 
-  alias Fedi.ActivityPub.HTTPSignatureTransport
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
@@ -563,7 +562,7 @@ defmodule Fedi.ActivityPub.Utils do
         now \\ nil
       ) do
     # id property
-    id_prop = Fedi.JSON.LD.Property.Id.new_id(id)
+    id_prop = Fedi.JSONLD.Property.Id.new_id(id)
 
     # formerType property
     type_name = Fedi.Streams.BaseType.get_type_name(as_type)
@@ -635,8 +634,13 @@ defmodule Fedi.ActivityPub.Utils do
   Returns :ok if the actors on types in
   the 'object' property are all listed in the 'actor' property.
   """
-  def object_actors_match_activity_actors?(context, box_iri, activity) do
-    with {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
+  def object_actors_match_activity_actors?(
+        %{data: %{app_agent: app_agent} = context_data, database: database},
+        activity
+      ) do
+    with {:wrapped_data, %URI{} = box_iri} <-
+           {:wrapped_data, get_box_iri(context_data)},
+         {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
          {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %P.Actor{values: _} = actor_prop} when is_list(values) <-
@@ -647,9 +651,8 @@ defmodule Fedi.ActivityPub.Utils do
         with {:object_id, %URI{} = iri} <- {:object_id, to_id(prop)},
              # Attempt to dereference the IRI, regardless whether it is a
              # type or IRI
-             transport <- HTTPSignatureTransport.new(context, box_iri),
-             {:ok, json_body} <- HTTPSignatureTransport.dereference(transport, iri),
-             {:ok, actor_type} <- Fedi.Streams.JSONResolver.resolve(json_body),
+             {:ok, m} <- apply(database, :dereference, [box_iri, app_agent, iri]),
+             {:ok, actor_type} <- Fedi.Streams.JSONResolver.resolve(m),
              {:object_actor, %{values: _} = object_actor_prop} when is_list(values) <-
                {:object_actor, Utils.get_actor(actor_type)},
              {:ok, object_actor_ids} <- get_ids(object_actor_prop),
@@ -669,12 +672,17 @@ defmodule Fedi.ActivityPub.Utils do
       end)
     else
       {:error, reason} -> {:error, reason}
+      {:wrapped_data, _} -> {:error, "No in or outbox available for dereferencing"}
       {:activity_id, _} -> {:error, "No id in activity"}
       {:activity_object, _} -> {:error, "No objects in activity"}
       {:activity_actor, _} -> {:error, "No actor in activity"}
       {:actor_ids, _} -> {:error, "No id in activity's actor"}
     end
   end
+
+  def get_box_iri(%{inbox_iri: inbox_iri}), do: inbox_iri
+  def get_box_iri(%{outbox_iri: outbox_iri}), do: outbox_iri
+  def get_box_iri(_), do: nil
 
   @doc """
   Implements the logic of adding object ids to a target Collection or

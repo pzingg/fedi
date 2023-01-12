@@ -1,7 +1,11 @@
-defmodule Fedi.ActivityPub.DatabaseContext do
+defmodule Fedi.ActivityPub.DatabaseApi do
   @moduledoc """
   A behavior for a context around database operations.
   """
+
+  alias Fedi.ActivityPub.Actor
+
+  @type transport_params() :: Actor.c2s_data() | Actor.s2s_data()
 
   @doc """
   Returns true if the OrderedCollection at 'inbox'
@@ -62,12 +66,6 @@ defmodule Fedi.ActivityPub.DatabaseContext do
   """
   @callback inbox_for_actor(actor_iri :: URI.t()) ::
               {:ok, inbox_iri :: URI.t()} | {:error, term()}
-
-  @doc """
-  Returns the private key for a local actor.
-  """
-  @callback get_actor_private_key(actor_id :: URI.t()) ::
-              {:ok, String.t()} | {:error, term()}
 
   @doc """
   Returns true if the database has an entry for the specified
@@ -173,4 +171,60 @@ defmodule Fedi.ActivityPub.DatabaseContext do
   """
   @callback liked(actor_iri :: URI.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
+
+  @doc """
+  Returns a new HTTP Transport on behalf of a specific actor.
+
+  `actor_box_iri` will be either the inbox or outbox of an actor who is
+  attempting to do the dereferencing or delivery. Any authentication
+  scheme applied on the request must be based on this actor. The
+  request must contain some sort of credential of the user, such as a
+  HTTP Signature.
+
+  `app_agent` should be used by the Transport
+  implementation in the User-Agent, as well as the application-specific
+  user agent string. The gofedAgent will indicate this library's use as
+  well as the library's version number.
+
+  Any server-wide rate-limiting that needs to occur should happen in a
+  Transport implementation. This factory function allows this to be
+  created, so peer servers are not DOS'd.
+
+  Any retry logic should also be handled by the Transport
+  implementation.
+  """
+  @callback new_transport(box_iri :: URI.t(), app_agent :: String.t()) ::
+              {:ok, term()} | {:error, term()}
+
+  @callback dereference(transport :: term(), iri :: URI.t()) ::
+              {:ok, map()} | {:error, term()}
+
+  @callback dereference(box_iri :: URI.t(), app_agent :: String.t(), iri :: URI.t()) ::
+              {:ok, map()} | {:error, term()}
+
+  @callback deliver(transport :: term(), json_body :: String.t(), iri :: URI.t()) ::
+              :ok | {:error, term()}
+
+  @callback deliver(
+              box_iri :: URI.t(),
+              app_agent :: String.t(),
+              json_body :: String.t(),
+              iri :: URI.t()
+            ) ::
+              :ok | {:error, term()}
+
+  @callback batch_deliver(
+              transport :: term(),
+              json_body :: String.t(),
+              recipients :: list()
+            ) ::
+              :ok | {:error, term()}
+
+  @callback batch_deliver(
+              box_iri :: URI.t(),
+              app_agent :: String.t(),
+              json_body :: String.t(),
+              recipients :: list()
+            ) ::
+              :ok | {:error, term()}
 end

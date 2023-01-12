@@ -1,4 +1,4 @@
-defmodule Fedi.ActivityPub.SocialResolver do
+defmodule Fedi.ActivityPub.SocialActivityApi do
   @moduledoc """
   These callbacks are called when a new activity is created in
   the Social API.
@@ -28,27 +28,7 @@ defmodule Fedi.ActivityPub.SocialResolver do
     block: 2
   ]
 
-  @typedoc """
-  Wrapped data passed in the actor's data element for the Social API.
-  """
-  @type c2s_data() :: %{
-          outbox_iri: URI.t(),
-          raw_activity: map(),
-          undeliverable: boolean()
-        }
-
-  @type context() :: %{
-          common: module(),
-          c2s: module() | nil,
-          s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
-          fallback: module() | nil,
-          database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
-          data: c2s_data()
-        }
+  @type context() :: Fedi.ActivityPub.Actor.c2s_context()
 
   @doc """
   Handles additional side effects for the Create ActivityStreams

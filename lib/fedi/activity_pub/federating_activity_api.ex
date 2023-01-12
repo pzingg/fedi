@@ -1,4 +1,4 @@
-defmodule Fedi.ActivityPub.FederatingResolver do
+defmodule Fedi.ActivityPub.FederatingActivityApi do
   @moduledoc """
   These callbacks are called when a new activity is created in
   the Federated Protocol.
@@ -29,26 +29,7 @@ defmodule Fedi.ActivityPub.FederatingResolver do
     block: 2
   ]
 
-  @typedoc """
-  Wrapped data passed in the actor's data element for the Federated Protocol.
-  """
-  @type s2s_data() :: %{
-          inbox_iri: URI.t(),
-          on_follow: :do_nothing | :automatically_accept | :automatically_reject
-        }
-
-  @type context() :: %{
-          common: module(),
-          c2s: module() | nil,
-          s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
-          fallback: module() | nil,
-          database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
-          data: s2s_data()
-        }
+  @type context() :: Actor.s2s_context()
 
   @doc """
   Create handles additional side effects for the Create ActivityStreams

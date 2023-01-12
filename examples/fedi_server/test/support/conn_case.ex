@@ -22,6 +22,7 @@ defmodule FediServerWeb.ConnCase do
       # Import conveniences for testing with connections
       import Plug.Conn
       import Phoenix.ConnTest
+      import FediServer.FixturesHelper
       import FediServerWeb.ConnCase
 
       alias FediServerWeb.Router.Helpers, as: Routes

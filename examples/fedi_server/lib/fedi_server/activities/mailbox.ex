@@ -3,11 +3,12 @@ defmodule FediServer.Activities.Mailbox do
   import Ecto.Changeset
 
   # :outgoing is true for Outbox, false for Inbox
+  # :activity_id is the ap_id (IRI) for the Activity
   # :type is type of the Activity
   # :status is "new", "pending", "processed", "deleted"
   @timestamps_opts [type: :utc_datetime]
   schema "mailboxes" do
-    field(:activity_id, Ecto.ULID)
+    field(:activity_id, :string)
     field(:outgoing, :boolean)
     field(:type, :string)
     field(:owner, :string)

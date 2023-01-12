@@ -1,7 +1,9 @@
-defmodule Fedi.JSON.LD do
+defmodule Fedi.JSONLD do
   @moduledoc """
-  JSON.LD vocabulary.
+  JSONLD vocabulary.
   """
+
+  @namespace_mod "JSONLD"
 
   @all_properties ["id", "type"]
 
@@ -12,7 +14,7 @@ defmodule Fedi.JSON.LD do
     |> Enum.map(fn prop_name ->
       {initial, rest} = String.split_at(prop_name, 1)
       cap = String.upcase(initial)
-      {prop_name, Module.concat([Fedi, JSON, LD, Property, cap <> rest])}
+      {prop_name, Module.concat(["Fedi", @namespace_mod, "Property", cap <> rest])}
     end)
   end
 

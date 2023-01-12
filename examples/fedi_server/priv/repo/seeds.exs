@@ -11,13 +11,13 @@
 # and so on) as they will fail if something goes wrong.
 
 alias FediServer.Repo
+alias FediServer.Activities
 alias FediServer.Activities.User
 
-user_id = URI.parse("https://mastodon.cloud/users/pzingg")
-app_agent = Application.fetch_env!(:fedi_server, :user_agent)
-%User{} = user = User.parse_federated_user(user_id, app_agent)
+{:ok, contents} = Path.join(:code.priv_dir(:fedi_server), "pzingg.json") |> File.read()
+{:ok, data} = Jason.decode(contents)
 
-user
+User.new_from_masto_data(data)
 |> User.changeset()
 |> Repo.insert!()
 

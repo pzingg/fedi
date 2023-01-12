@@ -22,7 +22,7 @@ defmodule Fedi.Toot do
                  |> Enum.map(fn prop_name ->
                    {initial, rest} = String.split_at(prop_name, 1)
                    cap = String.upcase(initial)
-                   {prop_name, Module.concat([Fedi, @namespace_mod, Property, cap <> rest])}
+                   {prop_name, Module.concat(["Fedi", @namespace_mod, "Property", cap <> rest])}
                  end)
 
   def properties(), do: @property_info

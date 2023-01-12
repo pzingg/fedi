@@ -28,18 +28,18 @@ defmodule Fedi.Streams do
   end
 
   def properties(:activity_streams) do
-    Fedi.JSON.LD.properties() ++
+    Fedi.JSONLD.properties() ++
       Fedi.ActivityStreams.properties()
   end
 
   def properties(:toot) do
-    Fedi.JSON.LD.properties() ++
+    Fedi.JSONLD.properties() ++
       Fedi.ActivityStreams.properties() ++
       Fedi.Toot.properties()
   end
 
   def properties(:w3_id_security_v1) do
-    Fedi.JSON.LD.properties() ++
+    Fedi.JSONLD.properties() ++
       Fedi.ActivityStreams.properties()
   end
 

@@ -3,7 +3,7 @@ defmodule FediServer.Repo.Migrations.AddMailboxes do
 
   def change do
     create table(:mailboxes) do
-      add :activity_id, :binary_id, null: false
+      add :activity_id, :string, null: false
       add :outgoing, :boolean, null: false, default: false
       add :type, :string, null: false
       add :owner, :string, null: false

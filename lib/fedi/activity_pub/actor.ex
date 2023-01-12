@@ -17,8 +17,8 @@ defmodule Fedi.ActivityPub.Actor do
     :s2s_resolver,
     :fallback,
     :database,
-    :enable_social_protocol,
-    :enable_federated_protocol,
+    :social_api_enabled?,
+    :federated_protocol_enabled?,
     :data
   ]
 
@@ -30,12 +30,67 @@ defmodule Fedi.ActivityPub.Actor do
           s2s_resolver: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
           data: term()
         }
 
-  # Same as above but just a map
+  @type on_follow() :: :do_nothing | :automatically_accept | :automatically_reject
+
+  @typedoc """
+  Wrapped data passed in the actor's data element for the Social API.
+  """
+  @type c2s_data() :: %{
+          outbox_iri: URI.t(),
+          raw_activity: map(),
+          undeliverable: boolean(),
+          app_agent: String.t()
+        }
+
+  @typedoc """
+  Context for Social API callbacks.
+  """
+  @type c2s_context() :: %{
+          common: module(),
+          c2s: module() | nil,
+          s2s: module() | nil,
+          c2s_resolver: module() | nil,
+          s2s_resolver: module() | nil,
+          fallback: module() | nil,
+          database: module() | nil,
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
+          data: c2s_data()
+        }
+
+  @typedoc """
+  Wrapped data passed in the actor's data element for the Federated Protocol.
+  """
+  @type s2s_data() :: %{
+          inbox_iri: URI.t(),
+          on_follow: on_follow(),
+          app_agent: String.t()
+        }
+
+  @typedoc """
+  Context for Federated Protocol callbacks.
+  """
+  @type s2s_context() :: %{
+          common: module(),
+          c2s: module() | nil,
+          s2s: module() | nil,
+          c2s_resolver: module() | nil,
+          s2s_resolver: module() | nil,
+          fallback: module() | nil,
+          database: module() | nil,
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
+          data: s2s_data()
+        }
+
+  @typedoc """
+  Generic context.
+  """
   @type context() :: %{
           common: module(),
           c2s: module() | nil,
@@ -44,9 +99,9 @@ defmodule Fedi.ActivityPub.Actor do
           s2s_resolver: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
-          enable_social_protocol: boolean(),
-          enable_federated_protocol: boolean(),
-          data: term()
+          social_api_enabled?: boolean(),
+          federated_protocol_enabled?: boolean(),
+          data: c2s_data() | s2s_data()
         }
 
   def new_custom_actor(common, opts \\ []) do
@@ -84,8 +139,8 @@ defmodule Fedi.ActivityPub.Actor do
       c2s_resolver: c2s_resolver,
       s2s_resolver: s2s_resolver,
       fallback: fallback,
-      enable_social_protocol: !is_nil(c2s),
-      enable_federated_protocol: !is_nil(s2s),
+      social_api_enabled?: !is_nil(c2s),
+      federated_protocol_enabled?: !is_nil(s2s),
       data: Keyword.get(opts, :data)
     )
   end
@@ -284,14 +339,14 @@ defmodule Fedi.ActivityPub.Actor do
   identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
   def handle_post_inbox(
-        %{enable_federated_protocol: enable_federated_protocol} = context,
+        %{federated_protocol_enabled?: federated_protocol_enabled?} = context,
         %Plug.Conn{} = conn,
         scheme \\ "https"
       ) do
     with {:is_activity_pub_post, true} <-
            {:is_activity_pub_post, Utils.is_activity_pub_post(conn)},
          {:protocol_enabled, true} <-
-           {:protocol_enabled, enable_federated_protocol},
+           {:protocol_enabled, federated_protocol_enabled?},
          # Check the peer request is authentic.
          {:authenticated, {:ok, {conn, true}}} <-
            {:authenticated, main_delegate(context, :s2s, :authenticate_post_inbox, [conn])},
@@ -313,19 +368,19 @@ defmodule Fedi.ActivityPub.Actor do
          # Check authorization of the activity.
          {:authorized, {:ok, {conn, true}}} <-
            {:authorized, main_delegate(context, :s2s, :authorize_post_inbox, [conn, activity])},
-         inbox_id <- Utils.request_id(conn, scheme),
+         inbox_iri <- Utils.request_id(conn, scheme),
 
          # Post the activity to the actor's inbox and trigger side effects for
          # that particular Activity type. It is up to the delegate to resolve
          # the given map.
-         {:post_inbox, {:ok, {conn, true}}} <-
-           {:post_inbox, main_delegate(context, :s2s, :post_inbox, [conn, inbox_id, activity])},
+         {:post_inbox, {:ok, conn}} <-
+           {:post_inbox, main_delegate(context, :s2s, :post_inbox, [conn, inbox_iri, activity])},
 
          # Our side effects are complete, now delegate determining whether to
          # do inbox forwarding, as well as the action to do it.
          {:inbox_forwarding, :ok} <-
            {:inbox_forwarding,
-            main_delegate(context, :s2s, :inbox_forwarding, [inbox_id, activity])} do
+            main_delegate(context, :s2s, :inbox_forwarding, [inbox_iri, activity])} do
       # Request has been processed. Begin responding to the request.
       # Simply respond with an OK status to the peer.
       {:ok, Plug.Conn.send_resp(conn, :ok, "OK")}
@@ -451,14 +506,14 @@ defmodule Fedi.ActivityPub.Actor do
   identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
   def handle_post_outbox(
-        %{enable_social_protocol: enable_social_protocol} = actor,
+        %{social_api_enabled?: social_api_enabled?} = actor,
         %Plug.Conn{} = conn,
         scheme \\ "https"
       ) do
     with {:is_activity_pub_post, true} <-
            {:is_activity_pub_post, Utils.is_activity_pub_post(conn)},
          {:protocol_enabled, true} <-
-           {:protocol_enabled, enable_social_protocol},
+           {:protocol_enabled, social_api_enabled?},
          # Check the peer request is authentic.
          {:authenticated, {:ok, {conn, true}}} <-
            {:authenticated, main_delegate(actor, :c2s, :authenticate_post_outbox, [conn])},
@@ -620,7 +675,7 @@ defmodule Fedi.ActivityPub.Actor do
   Send is programmatically accessible if the federated protocol is enabled.
   """
   def send(
-        %{enable_federated_protocol: true} = actor,
+        %{federated_protocol_enabled?: true} = actor,
         outbox,
         as_value
       ) do
@@ -634,8 +689,8 @@ defmodule Fedi.ActivityPub.Actor do
   Note: `m` may be nil.
   """
   def deliver(
-        %{enable_federated_protocol: enable_federated_protocol} = actor,
-        %URI{} = outbox,
+        %{federated_protocol_enabled?: federated_protocol_enabled?} = actor,
+        %URI{} = outbox_iri,
         as_value,
         m
       )
@@ -643,7 +698,7 @@ defmodule Fedi.ActivityPub.Actor do
     # If the value is not an Activity or type extending from Activity, then
     # we need to wrap it in a Create Activity.
     with {:ensure_activity, {:ok, activity}} <-
-           {:ensure_activity, ensure_activity(actor, as_value, outbox)},
+           {:ensure_activity, ensure_activity(actor, as_value, outbox_iri)},
          # At this point, this should be a safe conversion. If this error is
          # triggered, then there is either a bug in the delegation of
          # WrapInCreate, behavior is not lining up in the generated ExtendedBy
@@ -662,14 +717,14 @@ defmodule Fedi.ActivityPub.Actor do
          {:serialized, {:ok, m}} <-
            {:serialized, ensure_serialized(m, activity)},
          {:deliverable, {:ok, deliverable}} <-
-           {:deliverable, main_delegate(actor, :c2s, :post_outbox, [activity, outbox, m])} do
+           {:deliverable, main_delegate(actor, :c2s, :post_outbox, [activity, outbox_iri, m])} do
       # Request has been processed and all side effects internal to this
       # application server have finished. Begin side effects affecting other
       # servers and/or the client who sent this request.
       # If we are federating and the type is a deliverable one, then deliver
       # the activity to federating peers.
-      if enable_federated_protocol && deliverable do
-        main_delegate(actor, :s2s, :deliver, [outbox, activity])
+      if federated_protocol_enabled? && deliverable do
+        main_delegate(actor, :s2s, :deliver, [outbox_iri, activity])
       else
         :ok
       end

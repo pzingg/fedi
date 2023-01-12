@@ -24,6 +24,7 @@ defmodule FediServer.DataCase do
       import Ecto.Changeset
       import Ecto.Query
       import FediServer.DataCase
+      import FediServer.FixturesHelper
     end
   end
 
