@@ -19,7 +19,7 @@ defmodule FediServer.ActivitiesTest do
   describe "Activities callbacks" do
     test "fails to get Alyssa from an empty database" do
       assert {:error, "Not found"} =
-               "http://example.com/users/alyssa"
+               "https://example.com/users/alyssa"
                |> URI.parse()
                |> Activities.get()
     end
@@ -28,12 +28,12 @@ defmodule FediServer.ActivitiesTest do
       _users = FediServer.FixturesHelper.user_fixtures()
 
       assert {:ok, alyssa} =
-               "http://example.com/users/alyssa"
+               "https://example.com/users/alyssa"
                |> URI.parse()
                |> Activities.get()
 
       assert alyssa.__struct__ == Fedi.ActivityStreams.Type.Person
-      assert Utils.get_json_ld_id(alyssa) |> URI.to_string() == "http://example.com/users/alyssa"
+      assert Utils.get_json_ld_id(alyssa) |> URI.to_string() == "https://example.com/users/alyssa"
     end
   end
 end

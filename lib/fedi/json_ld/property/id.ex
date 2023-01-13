@@ -62,6 +62,6 @@ defmodule Fedi.JSONLD.Property.Id do
   # clear ensures no value of this property is set. Calling
   # is_xsd_any_uri afterwards will return false.
   def clear(%__MODULE__{} = prop) do
-    %__MODULE__{prop | unknown: nil, xsd_any_uri_member: nil}
+    %__MODULE__{prop | unknown: %{}, xsd_any_uri_member: nil}
   end
 end

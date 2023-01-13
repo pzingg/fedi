@@ -34,7 +34,7 @@ defmodule FediServerWeb.InboxController do
   def post_inbox(conn, %{"nickname" => nickname} = params) do
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.handle_post_inbox(actor, conn, Atom.to_string(conn.scheme)) do
+    case Fedi.ActivityPub.Actor.handle_post_inbox(actor, conn) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("post_inbox #{nickname} state #{actor_state}")

@@ -1038,10 +1038,28 @@ defmodule Fedi.ActivityPub.Utils do
 
   @doc """
   Forms an ActivityPub id based on the HTTP request.
+
+  Specifying an `:endpoint_url` with a given scheme, host, and port in the
+  Application configuration allows for retrieving ActivityStreams content with
+  identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
-  def request_id(%Plug.Conn{host: host, port: port, request_path: path}, scheme) do
-    # FIXME Why does Phoenix.Test.Adapter insert "www." prefix?
-    host = String.replace_leading(host, "www.", "")
-    %URI{scheme: scheme, host: host, port: port, path: path}
+  def request_id(
+        %Plug.Conn{request_path: path, query_string: query},
+        endpoint_url \\ nil
+      ) do
+    # NOTE: The Phoenix.Test.Adapter inserts a "www." prefix in conn.host and
+    # changes conn.scheme from "https" to "http", so we need to use the endpoint_url
+    # argument to fix things.
+    endpoint_url = endpoint_url || Fedi.Application.endpoint_url()
+    endpoint_uri = URI.parse(endpoint_url)
+
+    query =
+      if query == "" do
+        nil
+      else
+        query
+      end
+
+    %URI{endpoint_uri | path: path, query: query}
   end
 end

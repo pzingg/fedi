@@ -457,7 +457,7 @@ defmodule Fedi.Streams.BaseProperty do
     {:error, "#{inspect(prop)} does not have values or mapped_values lists"}
   end
 
-  def do_serialize_values(values) do
+  def do_serialize_values(values) when is_list(values) do
     result =
       Enum.reduce_while(values, [], fn it, acc ->
         case serialize(it) do
@@ -470,8 +470,8 @@ defmodule Fedi.Streams.BaseProperty do
       {:error, reason} -> {:error, reason}
       # Shortcut: if serializing one value, don't return an array -- pretty sure other Fediverse software would choke on a "type" value with array, for example.
       [] -> {:ok, nil}
-      [v] -> {:ok, v}
-      l -> {:ok, Enum.reverse(l)}
+      [single_value] -> {:ok, single_value}
+      value_list when is_list(value_list) -> {:ok, Enum.reverse(value_list)}
     end
   end
 

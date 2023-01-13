@@ -25,4 +25,8 @@ defmodule Fedi.Application do
   def app_agent() do
     Application.get_env(:fedi, :user_agent, "(elixir-fedi-0.1.0)")
   end
+
+  def endpoint_url() do
+    Application.get_env(:fedi, :endpoint_url, "https://example.com/")
+  end
 end

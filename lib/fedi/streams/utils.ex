@@ -243,13 +243,7 @@ defmodule Fedi.Streams.Utils do
     end
   end
 
-  def has_href?(%{__struct__: _module}) do
-    # Logger.error("has_href? returning false for #{alias_module(module)}")
-    false
-  end
-
-  def has_href?(other) do
-    Logger.error("has_href? returning false for #{inspect(other)}")
+  def has_href?(_other) do
     false
   end
 

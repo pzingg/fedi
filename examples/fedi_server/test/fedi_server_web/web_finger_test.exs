@@ -60,10 +60,10 @@ defmodule FediServerWeb.WebFingerTest do
 
     assert data ==
              %{
-               "aliases" => ["http://example.com/users/alyssa"],
+               "aliases" => ["https://example.com/users/alyssa"],
                "links" => [
                  %{
-                   "href" => "http://example.com/users/alyssa",
+                   "href" => "https://example.com/users/alyssa",
                    "rel" => "self",
                    "type" => "application/activity+json"
                  }

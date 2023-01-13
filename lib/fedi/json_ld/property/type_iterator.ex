@@ -72,7 +72,7 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
   def clear(%__MODULE__{} = prop) do
     %__MODULE__{
       prop
-      | unknown: nil,
+      | unknown: %{},
         xsd_any_uri_member: nil,
         xsd_string_member: nil,
         has_string_member?: false

@@ -22,8 +22,8 @@ defmodule Fedi.ActivityPubTest do
 
         case category do
           :actors -> {:error, "Cannot make new id for actors"}
-          :activities -> {:ok, URI.parse("http://example.com/activities/#{ulid}")}
-          _ -> {:ok, URI.parse("http://example.com/objects/#{ulid}")}
+          :activities -> {:ok, URI.parse("https://example.com/activities/#{ulid}")}
+          _ -> {:ok, URI.parse("https://example.com/objects/#{ulid}")}
         end
       end
     end

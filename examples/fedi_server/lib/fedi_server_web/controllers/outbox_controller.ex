@@ -34,7 +34,7 @@ defmodule FediServerWeb.OutboxController do
   def post_outbox(conn, %{"nickname" => nickname} = params) do
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
-    case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn, Atom.to_string(conn.scheme)) do
+    case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn) do
       {:ok, processed_conn} ->
         if actor_state = processed_conn.private[:actor_state] do
           Logger.error("post_outbox #{nickname} state #{actor_state}")

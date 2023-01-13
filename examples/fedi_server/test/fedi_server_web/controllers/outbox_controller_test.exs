@@ -1,6 +1,8 @@
 defmodule FediServerWeb.OutboxControllerTest do
   use FediServerWeb.ConnCase, async: false
 
+  import FediServer.FixturesHelper
+
   require Logger
 
   setup do
@@ -39,17 +41,21 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "GET /users/alyssa/outbox", %{conn: conn} do
+    _ = user_fixtures()
+
     conn =
       conn
       |> Plug.Conn.put_req_header("accept", "application/activity+json")
       |> get("/users/alyssa/outbox")
 
-    json = response(conn, 200)
-    assert Jason.decode!(json) == FediServerWeb.CommonCallbacks.mock_ordered_collection_json()
+    assert json_body = response(conn, 200)
+    assert json_body =~ "/users/alyssa/outbox?page=true"
   end
 
   # FIXME Use Tesla.Mock to resolve remote user https://chatty.example/users/ben
   test "POST /users/alyssa/outbox", %{conn: conn} do
+    _ = user_fixtures()
+
     activity = """
     {
       "@context": "https://www.w3.org/ns/activitystreams",

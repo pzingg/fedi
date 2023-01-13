@@ -3,54 +3,12 @@ defmodule FediServerWeb.CommonCallbacks do
   Provides all the Common logic for our example.
   """
 
+  require Logger
+
+  alias Fedi.ActivityPub.Utils, as: APUtils
+  alias FediServer.Activities
+
   @behaviour Fedi.ActivityPub.CommonApi
-
-  @mock_ordered_collection_json """
-  {
-    "@context": "https://www.w3.org/ns/activitystreams",
-    "id": "http://example.org/users/sally?page=1",
-    "orderedItems": [
-    {
-      "type": "Create",
-      "id": "http://example.org/users/sally/1/activity",
-      "actor": "http://example.org/users/sally",
-      "to": "https://www.w3.org/ns/activitystreams#Public",
-      "object": {
-        "name": "A Simple Note",
-        "type": "Note",
-        "id": "http://example.org/users/sally/1",
-        "to": "https://www.w3.org/ns/activitystreams#Public",
-        "attributedTo": "http://example.org/users/sally"
-      }
-    },
-    {
-      "type": "Create",
-      "id": "http://example.org/users/sally/2/activity",
-      "actor": "http://example.org/users/sally",
-      "to": "https://www.w3.org/ns/activitystreams#Public",
-      "object":
-      {
-        "name": "Another Simple Note",
-        "type": "Note",
-        "id": "http://example.org/users/sally/2",
-        "to": "https://www.w3.org/ns/activitystreams#Public",
-        "attributedTo": "http://example.org/users/sally"
-      }
-    }
-    ],
-    "partOf": "http://example.org/users/sally",
-    "summary": "Page 1 of Sally's notes",
-    "type": "OrderedCollectionPage"
-  }
-  """
-
-  @mock_ordered_collection_page Fedi.Streams.JSONResolver.resolve(@mock_ordered_collection_json)
-
-  ### Implementation
-
-  def mock_ordered_collection_json() do
-    Jason.decode!(@mock_ordered_collection_json)
-  end
 
   @doc """
   Delegates the authentication of a GET to an inbox.
@@ -88,8 +46,9 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
   """
   def get_inbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
-    with {:ok, oc} <- @mock_ordered_collection_page do
+    inbox_iri = APUtils.request_id(conn)
+
+    with {:ok, oc} <- Activities.get_inbox(inbox_iri) do
       {:ok, {conn, oc}}
     end
   end
@@ -130,8 +89,9 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
   """
   def get_outbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
-    with {:ok, oc} <- @mock_ordered_collection_page do
+    outbox_iri = APUtils.request_id(conn)
+
+    with {:ok, oc} <- Activities.get_outbox(outbox_iri) do
       {:ok, {conn, oc}}
     end
   end

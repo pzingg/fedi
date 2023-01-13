@@ -5,17 +5,17 @@ defmodule Fedi.Streams.Serializer do
 
   def serialize(%{__struct__: module} = object) do
     try do
-      module = Code.ensure_compiled!(module)
-      result = apply(module, :serialize, [object])
-      # Logger.error("serialized: #{inspect(result)}")
-      result
+      Code.ensure_compiled!(module)
+      |> apply(:serialize, [object])
     rescue
       e ->
-        {:error, "Serializer exception: #{inspect(e)}"}
+        Logger.error("Serializer exception #{inspect(e)} for #{inspect(object)}")
+        {:error, "Internal system error"}
     end
   end
 
   def serialize(object) do
-    {:error, "Cannot serialize non-struct #{inspect(object)}"}
+    Logger.error("Cannot serialize non-struct #{inspect(object)}")
+    {:error, "Internal system error"}
   end
 end

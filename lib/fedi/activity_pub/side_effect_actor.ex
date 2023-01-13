@@ -211,7 +211,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
           # then no need to do inbox forwarding. We have nothing to forward to.
           if Enum.empty?(col_iris) do
-            Logger.error("No inbox fowarding needed: no collections in recipients")
+            Logger.debug("No inbox fowarding needed: no collections in recipients")
             :ok
           else
             # Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
@@ -242,21 +242,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
             end
           end
         else
-          # We have seen the activity before
-          {:exists, {:ok, true}} ->
-            Logger.error("No inbox forwarding needed: #{URI.to_string(id)} has been seen")
-            :ok
-
           {:error, reason} ->
             Logger.error("Inbox forwarding error for #{URI.to_string(id)}: #{reason}")
             {:error, reason}
 
-          {step, {:error, reason}} ->
-            Logger.error(
-              "Inbox forwarding error for #{URI.to_string(id)} at step #{step}: #{reason}"
-            )
-
-            {:error, "Internal system error"}
+          # We have seen the activity before
+          {:exists, {:ok, _}} ->
+            Logger.debug("No inbox forwarding needed: #{URI.to_string(id)} has been seen")
+            :ok
         end
 
       nil ->
@@ -506,7 +499,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           # found in the db, to make a complete list of target IRIs
           case found_inboxes ++ remote_inboxes do
             [] ->
-              Logger.error("No non-public recipients")
+              Logger.debug("No non-public recipients")
               {:error, "No non-public recipients"}
 
             targets ->
@@ -517,12 +510,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
                    {:get_inbox, %URI{} = ignore} <- {:get_inbox, APUtils.get_inbox(this_actor)} do
                 case dedupe_iris(targets, [ignore]) do
                   [] ->
-                    Logger.error("No external recipients")
+                    Logger.debug("No external recipients")
                     {:error, "No external recipients"}
 
                   recipients ->
                     activity = APUtils.strip_hidden_recipients(activity)
-                    # Logger.error("prepare stripped activity #{inspect(activity)}")
                     {:ok, context, activity, recipients}
                 end
               else
@@ -715,8 +707,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         curr_depth
       )
       when is_struct(val) do
-    Logger.error("has_inbox_ inbox_iri #{URI.to_string(inbox_iri)}")
-    Logger.error("has_inbox_ c.box_iri #{URI.to_string(box_iri)}")
+    Logger.error("hi_fowarding_values inbox_iri #{URI.to_string(inbox_iri)}")
+    Logger.error("hi_fowarding_values c.box_iri #{URI.to_string(box_iri)}")
     # Stop recurring if we are exceeding the maximum depth and the maximum
     # is a positive number.
     if max_depth > 0 && curr_depth >= max_depth do

@@ -174,9 +174,19 @@ defmodule Fedi.Streams.BaseType do
       m ->
         # Begin: Serialize unknown properties, like "@context"
         m =
-          Enum.reduce(unknown, m, fn {k, v}, acc ->
-            Map.put_new(acc, k, v)
-          end)
+          case unknown do
+            nil ->
+              m
+
+            unk when is_map(unk) ->
+              Enum.reduce(unknown, m, fn {k, v}, acc ->
+                Map.put_new(acc, k, v)
+              end)
+
+            _ ->
+              Logger.error("#{type_name}.unknown is not a map: #{inspect(unknown)}")
+              m
+          end
 
         # End: Serialize unknown properties
 

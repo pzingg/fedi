@@ -20,8 +20,10 @@ config :fedi_server, FediServer.Repo,
 # We don't run a server during test. If one is required,
 # you can enable the server option below.
 config :fedi_server, FediServerWeb.Endpoint,
-  url: [host: "example.com", port: 80, scheme: "http"],
+  # FIXME: "https" is ignored!
+  url: [host: "example.com", port: 443, scheme: "https"],
   http: [ip: {127, 0, 0, 1}, port: 4002],
+  # https: [ip: {127, 0, 0, 1}, port: 4002],
   secret_key_base: "6+nWwcs/eTsZkAhTLCV5FiFJOAf3zAZOKUIjFi/J2fPsgvYHO7Vp0kHgJRDeIfd8",
   server: false
 

@@ -477,7 +477,7 @@ defmodule FediServer.Activities do
     |> Repo.all()
   end
 
-  def get_mailbox_page(%URI{} = actor_iri, outgoing) do
+  def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing) do
     actor = URI.to_string(actor_iri)
 
     result =
@@ -495,8 +495,40 @@ defmodule FediServer.Activities do
       Enum.map(result, &mailbox_to_ordered_item(&1))
       |> Enum.filter(fn iter -> !is_nil(iter) end)
 
-    ordered_items = %P.OrderedItems{alias: "", values: ordered_item_iters}
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: %{"orderedItems" => ordered_items}}}
+    mailbox_path =
+      if outgoing do
+        actor_path <> "/outbox"
+      else
+        actor_path <> "/inbox"
+      end
+
+    page_id = %URI{actor_iri | path: mailbox_path <> "?page=true"}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
+
+    coll_id = %URI{actor_iri | path: mailbox_path}
+    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
+
+    ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
+
+    properties = %{
+      "id" => id_prop,
+      "partOf" => part_of_prop,
+      "orderedItems" => ordered_items_prop
+    }
+
+    properties =
+      case result do
+        [] ->
+          properties
+
+        [first | _] ->
+          max_id = Map.get(first, "id")
+          next_id = %URI{actor_iri | path: mailbox_path <> "?max_id=#{max_id}\u0026page=true"}
+          next_prop = %P.Next{alias: "", iri: next_id}
+          Map.put(properties, "next", next_prop)
+      end
+
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
   def mailbox_to_ordered_item(activity_json) do
@@ -513,16 +545,11 @@ defmodule FediServer.Activities do
     local?(iri) && String.ends_with?(path, suffix)
   end
 
-  def local?(%URI{scheme: scheme, host: host, port: port} = iri) do
-    our_url = FediServerWeb.Endpoint.url()
+  def local?(%URI{} = iri) do
+    endpoint_url = Fedi.Application.endpoint_url()
+    test_url = %URI{iri | path: "/", query: nil} |> URI.to_string()
 
-    case URI.parse(our_url) do
-      %URI{scheme: ^scheme, host: ^host, port: ^port} ->
-        true
-
-      _ ->
-        false
-    end
+    endpoint_url == test_url
   end
 
   @doc """

@@ -22,8 +22,8 @@ User.new_from_masto_data(data)
 |> Repo.insert!()
 
 %User{
-  ap_id: "http://example.com/users/alyssa",
-  inbox: "http://example.com/users/alyssa/inbox",
+  ap_id: "https://example.com/users/alyssa",
+  inbox: "https://example.com/users/alyssa/inbox",
   name: "Alyssa Activa",
   nickname: "alyssa",
   email: "alyssa@example.com",
