@@ -48,34 +48,32 @@ defmodule Fedi.Streams.JSONResolver do
   end
 
   def get_type_and_context(m) do
-    case m["type"] do
-      nil ->
+    with {:type, type_value} when is_binary(type_value) <- {:type, m["type"]},
+         {:context, raw_context} when not is_nil(raw_context) <- {:context, m["@context"]} do
+      alias_map = List.wrap(raw_context) |> to_alias_map()
+
+      {:ok,
+       %{
+         alias_map: alias_map,
+         type: type_value,
+         activity_streams: alias_prefix(alias_map, "www.w3.org/ns/activitystreams"),
+         security_v1: alias_prefix(alias_map, "w3id.org/security/v1"),
+         mastodon: alias_prefix(alias_map, "joinmastodon.org/ns")
+       }}
+    else
+      {:type, _} ->
         {:error,
          {:err_unmatched_type,
-          "cannot determine ActivityStreams type: 'type' property is missing"}}
+          "Cannot determine ActivityStreams type: 'type' property is missing"}}
 
-      type_value ->
-        case m["@context"] do
-          nil ->
-            {:error,
-             {:err_unmatched_type, "cannot determine ActivityStreams type: '@context' is missing"}}
-
-          raw_context ->
-            alias_map = to_alias_map(raw_context)
-
-            {:ok,
-             %{
-               alias_map: alias_map,
-               type: type_value,
-               activity_streams: alias_prefix(alias_map, "www.w3.org/ns/activitystreams"),
-               security_v1: alias_prefix(alias_map, "w3id.org/security/v1"),
-               mastodon: alias_prefix(alias_map, "joinmastodon.org/ns")
-             }}
-        end
+      {:context, _} ->
+        {:error,
+         {:err_unmatched_type, "Cannot determine ActivityStreams type: '@context' is missing"}}
     end
   end
 
-  def alias_prefix(alias_map, host_and_path) do
+  def alias_prefix(alias_map, host_and_path)
+      when is_map(alias_map) and is_binary(host_and_path) do
     case Map.get(alias_map, "http://" <> host_and_path, "") do
       "" ->
         case Map.get(alias_map, "https://" <> host_and_path, "") do
@@ -91,28 +89,34 @@ defmodule Fedi.Streams.JSONResolver do
   @doc """
   to_alias_map converts a JSONLD context into a map of vocabulary name to alias.
   """
-  def to_alias_map(i) when is_list(i) or is_map(i) do
+  def to_alias_map(i) when is_list(i) do
     # Recursively apply.
-    Enum.map(i, &to_alias_map/1)
+    alias_map_elem(i, []) |> Map.new()
   end
 
-  def to_alias_map(i) when is_binary(i) do
+  def alias_map_elem(i, acc) when is_list(i) or is_map(i) do
+    Enum.reduce(i, acc, fn v, acc1 -> alias_map_elem(v, acc1) end)
+  end
+
+  def alias_map_elem(i, acc) when is_binary(i) do
     # Single entry, no alias.
     case http_and_https(i) do
       {:ok, http, https} ->
-        %{http => "", https => ""}
+        [{http, ""} | [{https, ""} | acc]]
 
       _ ->
-        %{i => ""}
+        [{i, ""} | acc]
     end
   end
 
-  def to_alias_map({k, val}) when is_binary(k) do
-    # Handle string aliases.
-    %{k => val}
+  def alias_map_elem({k, v}, acc) do
+    [{k, v} | acc]
   end
 
-  def to_alias_map(_), do: %{}
+  def alias_map_elem(other, acc) do
+    Logger.error("Can't understand @context element #{inspect(other)}")
+    acc
+  end
 
   def http_and_https(str) do
     cond do

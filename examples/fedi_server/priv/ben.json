@@ -1,0 +1,82 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    "https://w3id.org/security/v1",
+    {
+      "manuallyApprovesFollowers": "as:manuallyApprovesFollowers",
+      "toot": "http://joinmastodon.org/ns#",
+      "featured": { "@id": "toot:featured", "@type": "@id" },
+      "featuredTags": { "@id": "toot:featuredTags", "@type": "@id" },
+      "alsoKnownAs": { "@id": "as:alsoKnownAs", "@type": "@id" },
+      "movedTo": { "@id": "as:movedTo", "@type": "@id" },
+      "schema": "http://schema.org#",
+      "PropertyValue": "schema:PropertyValue",
+      "value": "schema:value",
+      "IdentityProof": "toot:IdentityProof",
+      "discoverable": "toot:discoverable",
+      "Device": "toot:Device",
+      "Ed25519Signature": "toot:Ed25519Signature",
+      "Ed25519Key": "toot:Ed25519Key",
+      "Curve25519Key": "toot:Curve25519Key",
+      "EncryptedMessage": "toot:EncryptedMessage",
+      "publicKeyBase64": "toot:publicKeyBase64",
+      "deviceId": "toot:deviceId",
+      "claim": { "@type": "@id", "@id": "toot:claim" },
+      "fingerprintKey": { "@type": "@id", "@id": "toot:fingerprintKey" },
+      "identityKey": { "@type": "@id", "@id": "toot:identityKey" },
+      "devices": { "@type": "@id", "@id": "toot:devices" },
+      "messageFranking": "toot:messageFranking",
+      "messageType": "toot:messageType",
+      "cipherText": "toot:cipherText",
+      "suspended": "toot:suspended",
+      "Emoji": "toot:Emoji",
+      "focalPoint": { "@container": "@list", "@id": "toot:focalPoint" },
+      "Hashtag": "as:Hashtag"
+    }
+  ],
+  "id": "https://chatty.example/users/ben",
+  "type": "Person",
+  "following": "https://chatty.example/users/ben/following",
+  "followers": "https://chatty.example/users/ben/followers",
+  "inbox": "https://chatty.example/users/ben/inbox",
+  "outbox": "https://chatty.example/users/ben/outbox",
+  "featured": "https://chatty.example/users/ben/collections/featured",
+  "featuredTags": "https://chatty.example/users/ben/collections/tags",
+  "preferredUsername": "ben",
+  "name": "Chatty Ben",
+  "url": "https://chatty.example/@ben",
+  "manuallyApprovesFollowers": false,
+  "discoverable": true,
+  "published": "2017-04-07T00:00:00Z",
+  "devices": "https://chatty.example/users/ben/collections/devices",
+  "publicKey": {
+    "id": "https://chatty.example/users/ben#main-key",
+    "owner": "https://chatty.example/users/ben",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw7lr8vWJLMfdjebD+fOG\nYS6V19rf6zsKW8oXgRrbkq1cprDBeimvx/uKx/uTyu+Yn7WWOlyAhq4VXBCbohe6\n4qUxVXELddz37/BLB0eNm1imbaR6Ja0EF8Oa8Uqcgi6GAUOh9uu2CAzXR26nAXYi\nKT63XcPVM3fzCMgaOkL3QKP6cAs4qWgrurNxDmAVK98eYe3S5OuR/X6Je7l7DC0A\nHJvtp9N2CPXyPRdpQtGMFkcQZPtahAGrcLQUQqyUxRoUnRdiMQM+9kXnzONJhODa\nKjp8MlcDdsYvpaaBbug1lFoUq4h45+LFsCDVBFb1b2shKbnU3VyDbiAk9sm1kPg1\nXwIDAQAB\n-----END PUBLIC KEY-----\n"
+  },
+  "tag": [
+    {
+      "id": "https://chatty.example/emojis/20689",
+      "type": "Emoji",
+      "name": ":verified:",
+      "updated": "2018-08-09T20:45:57Z",
+      "icon": {
+        "type": "Image",
+        "mediaType": "image/png",
+        "url": "https://media.chatty.example/custom_emojis/images/000/020/689/original/e6e27ab922bb6ddc.png"
+      }
+    }
+  ],
+  "attachment": [],
+  "endpoints": { "sharedInbox": "https://chatty.example/inbox" },
+  "icon": {
+    "type": "Image",
+    "mediaType": "image/jpeg",
+    "url": "https://media.chatty.example/accounts/avatars/000/018/356/original/8fb7c58e48468071.jpg"
+  },
+  "image": {
+    "type": "Image",
+    "mediaType": "image/jpeg",
+    "url": "https://media.chatty.example/accounts/headers/000/018/356/original/49c0bc5770673923.jpg"
+  }
+}

@@ -1,5 +1,42 @@
 defmodule FediServerWeb.OutboxControllerTest do
-  use FediServerWeb.ConnCase
+  use FediServerWeb.ConnCase, async: false
+
+  require Logger
+
+  setup do
+    Tesla.Mock.mock_global(fn
+      # When we dereference ben
+      %{
+        method: :get,
+        url: "https://chatty.example/users/ben"
+      } ->
+        case Path.join(:code.priv_dir(:fedi_server), "ben.json") |> File.read() do
+          {:ok, contents} ->
+            %Tesla.Env{
+              status: 200,
+              body: contents,
+              headers: [{"content-type", "application/jrd+json; charset=utf-8"}]
+            }
+
+          _ ->
+            Logger.error("Failed to resolve ben")
+            %Tesla.Env{status: 404, body: "Not found"}
+        end
+
+      # When we deliver message to ben's inbox
+      %{
+        method: :post,
+        url: "https://chatty.example/users/ben/inbox"
+      } ->
+        %Tesla.Env{status: 201, body: "Created"}
+
+      %{method: method, url: url} = other ->
+        Logger.error("Unhandled #{method} #{url}")
+        %Tesla.Env{status: 404, body: "Not found"}
+    end)
+
+    :ok
+  end
 
   test "GET /users/alyssa/outbox", %{conn: conn} do
     conn =

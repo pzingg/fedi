@@ -38,8 +38,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :common,
     :c2s,
     :s2s,
-    :c2s_resolver,
-    :s2s_resolver,
+    :c2s_activity_handler,
+    :s2s_activity_handler,
     :fallback,
     :database,
     :social_api_enabled?,
@@ -51,8 +51,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -65,8 +65,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -78,8 +78,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     opts =
       Keyword.merge(
         [
-          c2s_resolver: Fedi.ActivityPub.SocialActivityHandler,
-          s2s_resolver: Fedi.ActivityPub.FederatingActivityHandler
+          c2s_activity_handler: Fedi.ActivityPub.SocialActivityHandler,
+          s2s_activity_handler: Fedi.ActivityPub.FederatingActivityHandler
         ],
         opts
       )
@@ -174,7 +174,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         if Actor.protocol_supported?(context, :s2s) do
           context = wrap_for_federated_protocol(context, inbox_iri)
 
-          case Actor.resolver_callback(context, :s2s, activity, top_level: true) do
+          case Actor.handle_activity(context, :s2s, activity, top_level: true) do
             {:error, reason} -> {:error, reason}
             _ -> {:ok, conn}
           end
@@ -191,63 +191,76 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Ref: [Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   """
-  # FIXME where is inbox_iri used?
   def inbox_forwarding(%{database: database} = context, %URI{} = inbox_iri, activity) do
-    Logger.error("SideEffectActor.inbox_forwarding #{URI.to_string(inbox_iri)}")
-
     # Ref: This is the first time the server has seen this Activity.
-    with {:get_id, %URI{} = id} <-
-           {:get_id, Utils.get_json_ld_id(activity)},
-         # See if we have seen the activity
-         {:exists, {:ok, false}} <-
-           {:exists, apply(database, :exists, [id])},
-         # Attempt to create the activity entry.
-         {:ok, _} <-
-           apply(database, :create, [activity]),
-         # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
-         {:ok, my_iris} <-
-           owned_recipients(database, activity),
-         # Finally, load our IRIs to determine if they are a Collection or
-         # OrderedCollection.
-         {:ok, {col_iris, cols, ocols}} <-
-           get_collection_types(database, my_iris) do
-      # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
-      # then no need to do inbox forwarding. We have nothing to forward to.
-      if Enum.empty?(col_iris) do
-        :ok
-      else
-        # Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
-        # The server SHOULD recurse through these values to look for linked objects
-        # owned by the server, and SHOULD set a maximum limit for recursion.
-
-        # This is only a boolean trigger: As soon as we get
-        # a hit that we own something, then we should do inbox forwarding.
-        with {:ok, max_depth} <-
-               Actor.delegate(context, :s2s, :max_inbox_forwarding_recursion_depth, []),
-             {:ok, owns_value} <-
-               has_inbox_forwarding_values(context, activity, max_depth, 0) do
-          # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
-          # values, then no need to do inbox forwarding.
-          if !owns_value do
+    case Utils.get_json_ld_id(activity) do
+      %URI{} = id ->
+        # See if we have seen the activity
+        with {:exists, {:ok, false}} <-
+               {:exists, apply(database, :exists, [id])},
+             # Attempt to create the activity entry.
+             {:ok, _} <-
+               apply(database, :create, [activity]),
+             # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
+             {:ok, my_iris} <-
+               owned_recipients(database, activity),
+             # Finally, load our IRIs to determine if they are a Collection or
+             # OrderedCollection.
+             {:ok, {col_iris, cols, ocols}} <-
+               get_collection_types(database, my_iris) do
+          # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
+          # then no need to do inbox forwarding. We have nothing to forward to.
+          if Enum.empty?(col_iris) do
+            Logger.error("No inbox fowarding needed: no collections in recipients")
             :ok
           else
-            # Do the inbox forwarding since the above conditions hold true. Support
-            # the behavior of letting the application filter out the resulting
-            # collections to be targeted.
-            with {:ok, recipients} <-
-                   get_collection_recipients(context, col_iris, cols, ocols, activity) do
-              deliver_to_recipients(context, activity, recipients)
-            end
+            # Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
+            # The server SHOULD recurse through these values to look for linked objects
+            # owned by the server, and SHOULD set a maximum limit for recursion.
 
-            # else {:error, reason}
+            # This is only a boolean trigger: As soon as we get
+            # a hit that we own something, then we should do inbox forwarding.
+            with {:ok, max_depth} <-
+                   Actor.delegate(context, :s2s, :max_inbox_forwarding_recursion_depth, []),
+                 {:ok, owns_value} <-
+                   has_inbox_forwarding_values(context, inbox_iri, activity, max_depth, 0) do
+              # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
+              # values, then no need to do inbox forwarding.
+              if !owns_value do
+                :ok
+              else
+                # Do the inbox forwarding since the above conditions hold true. Support
+                # the behavior of letting the application filter out the resulting
+                # collections to be targeted.
+                with {:ok, recipients} <-
+                       get_collection_recipients(context, col_iris, cols, ocols, activity) do
+                  deliver_to_recipients(context, activity, recipients)
+                end
+
+                # else {:error, reason}
+              end
+            end
           end
+        else
+          # We have seen the activity before
+          {:exists, {:ok, true}} ->
+            Logger.error("No inbox forwarding needed: #{URI.to_string(id)} has been seen")
+            :ok
+
+          {:error, reason} ->
+            Logger.error("Inbox forwarding error for #{URI.to_string(id)}: #{reason}")
+            {:error, reason}
+
+          {step, {:error, reason}} ->
+            Logger.error(
+              "Inbox forwarding error for #{URI.to_string(id)} at step #{step}: #{reason}"
+            )
+
+            {:error, "Internal system error"}
         end
-      end
-    else
-      # We have seen the activity before
-      {:exists, {:ok, true}} -> :ok
-      {:error, reason} -> {:error, reason}
-      {step, result} -> {:error, "Internal error at step #{step}: #{inspect(result)}"}
+
+      nil ->
+        {:error, "No id in activity"}
     end
   end
 
@@ -352,7 +365,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       if Actor.protocol_supported?(context, :c2s) do
         context = wrap_for_social_api(context, outbox_iri, raw_json)
 
-        case Actor.resolver_callback(context, :c2s, activity, top_level: true) do
+        case Actor.handle_activity(context, :c2s, activity, top_level: true) do
           {:ok, {new_actor, new_activity}} -> {new_actor, new_activity}
           _ -> {context, activity}
         end
@@ -386,8 +399,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Called if the Federated protocol is supported.
   """
   def deliver(context, outbox_iri, activity) do
-    with {:ok, wrapped_context, activity, recipients} <- prepare(context, outbox_iri, activity) do
-      deliver_to_recipients(wrapped_context, activity, recipients)
+    with {:ok, context, activity, recipients} <- prepare(context, outbox_iri, activity) do
+      wrap_for_federated_protocol(context, outbox_iri)
+      |> deliver_to_recipients(activity, recipients)
     end
   end
 
@@ -496,7 +510,6 @@ defmodule Fedi.ActivityPub.SideEffectActor do
               {:error, "No non-public recipients"}
 
             targets ->
-              Logger.error("prepare targets #{inspect(targets)}")
               # Verify the inbox on the sender.
               with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
                    {:ok, this_actor} <- apply(database, :get, [actor_iri]),
@@ -508,9 +521,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
                     {:error, "No external recipients"}
 
                   recipients ->
-                    Logger.error("prepare final recipients #{inspect(recipients)}")
                     activity = APUtils.strip_hidden_recipients(activity)
-                    Logger.error("prepare stripped activity #{inspect(activity)}")
+                    # Logger.error("prepare stripped activity #{inspect(activity)}")
                     {:ok, context, activity, recipients}
                 end
               else
@@ -640,7 +652,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   recipients on behalf of an actor.
   """
   def deliver_to_recipients(
-        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
         activity,
         recipients
       )
@@ -696,12 +708,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
   def has_inbox_forwarding_values(
-        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database} = context,
+        %{data: %{box_iri: box_iri, app_agent: _}, database: database} = context,
+        %URI{} = inbox_iri,
         val,
         max_depth,
         curr_depth
       )
       when is_struct(val) do
+    Logger.error("has_inbox_ inbox_iri #{URI.to_string(inbox_iri)}")
+    Logger.error("has_inbox_ c.box_iri #{URI.to_string(box_iri)}")
     # Stop recurring if we are exceeding the maximum depth and the maximum
     # is a positive number.
     if max_depth > 0 && curr_depth >= max_depth do
@@ -732,7 +747,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           # Recurse
           owns_one_type =
             Enum.find(types ++ derefed_types, fn next_val ->
-              has_inbox_forwarding_values(context, next_val, max_depth, curr_depth + 1)
+              has_inbox_forwarding_values(context, inbox_iri, next_val, max_depth, curr_depth + 1)
             end)
 
           case owns_one_type do
@@ -774,12 +789,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   # Recursion preparation: Try fetching the IRIs so we can recurse into them.
   def dereference_iris(
-        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: box_iri, app_agent: app_agent}, database: database},
         iris
       ) do
     Enum.reduce(iris, [], fn iri, acc ->
       # Dereferencing the IRI.
-      with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+      with {:ok, m} <- apply(database, :dereference, [box_iri, app_agent, iri]),
            {:ok, type} <- Fedi.Streams.JSONResolver.resolve(m) do
         [type | acc]
       else
@@ -802,21 +817,21 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     end
   end
 
-  def wrap_for_social_api(context, outbox_iri, raw_json) do
+  def wrap_for_social_api(context, box_iri, raw_json) do
     app_agent = Fedi.Application.app_agent()
 
     struct(context,
       data:
         Map.merge(context.data || %{}, %{
-          outbox_iri: outbox_iri,
+          box_iri: box_iri,
+          app_agent: app_agent,
           raw_activity: raw_json,
-          undeliverable: false,
-          app_agent: app_agent
+          undeliverable: false
         })
     )
   end
 
-  def wrap_for_federated_protocol(context, inbox_iri) do
+  def wrap_for_federated_protocol(context, box_iri) do
     on_follow =
       case Actor.delegate(context, :s2s, :on_follow, []) do
         {:ok, value} when is_atom(value) -> value
@@ -828,9 +843,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     struct(context,
       data:
         Map.merge(context.data || %{}, %{
-          inbox_iri: inbox_iri,
-          on_follow: on_follow,
-          app_agent: app_agent
+          box_iri: box_iri,
+          app_agent: app_agent,
+          on_follow: on_follow
         })
     )
   end

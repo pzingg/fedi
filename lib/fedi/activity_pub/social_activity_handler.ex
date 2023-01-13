@@ -95,7 +95,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           end)
           |> case do
             {:error, reason} -> {:error, reason}
-            _ -> Actor.resolver_callback(context, :c2s, activity)
+            _ -> Actor.handle_activity(context, :c2s, activity)
           end
 
         {:error, reason} ->
@@ -152,7 +152,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           {:error, reason}
 
         _ ->
-          Actor.resolver_callback(context, :c2s, activity)
+          Actor.handle_activity(context, :c2s, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -192,7 +192,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           {:error, reason}
 
         _ ->
-          Actor.resolver_callback(context, :c2s, activity)
+          Actor.handle_activity(context, :c2s, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -207,7 +207,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Follow activity"}
@@ -224,7 +224,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.add(context, object, target) do
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Add activity"}
@@ -242,7 +242,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.remove(context, object, target) do
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Remove activity"}
@@ -253,7 +253,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Like activity side effects.
   """
-  def like(%{database: database, data: %{outbox_iri: outbox_iri}} = context, activity)
+  def like(%{database: database, data: %{box_iri: outbox_iri}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
@@ -262,7 +262,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, object_ids} <- APUtils.get_ids(object),
          liked <- Utils.prepend_iris(liked, "items", object_ids),
          {:ok, _} <- apply(database, :update, [liked]) do
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Like activity"}
@@ -281,7 +281,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
       context_data = Map.put(context_data, :undeliverable, false)
       context = Map.put(context, :data, context_data)
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Undo activity"}
@@ -297,7 +297,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
            {:activity_object, Utils.get_object(activity)} do
       context_data = Map.put(context_data, :undeliverable, true)
       context = Map.put(context, :data, context_data)
-      Actor.resolver_callback(context, :c2s, activity)
+      Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Block activity"}

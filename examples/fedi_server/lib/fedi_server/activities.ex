@@ -384,7 +384,6 @@ defmodule FediServer.Activities do
 
   def new_transport(params, _) do
     Logger.error("Invalid params for transport #{inspect(params)}")
-    raise "new_transport invalid_params"
     {:error, "Must provide app_agent and either inbox_iri or outbox_iri"}
   end
 

@@ -94,7 +94,7 @@ defmodule FediServer.Activities.User do
       "url" => ap_id,
       "manuallyApprovesFollowers" => Keyword.get(opts, :locked?, false),
       "publicKey" => %{
-        "id" => "#{ap_id}/main-key",
+        "id" => "#{ap_id}#main-key",
         "owner" => ap_id,
         "publicKeyPem" => public_key
       },

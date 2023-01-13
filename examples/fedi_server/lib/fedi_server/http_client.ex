@@ -62,7 +62,7 @@ defmodule FediServer.HTTPClient do
   def credentialed(%User{ap_id: ap_id, keys: keys}, app_agent, opts \\ [])
       when is_binary(keys) and is_binary(app_agent) do
     with {:ok, private_key, _} <- keys_from_pem(keys) do
-      public_key_id = ap_id <> "/main-key"
+      public_key_id = ap_id <> "#main-key"
 
       {:ok,
        %__MODULE__{
@@ -94,7 +94,7 @@ defmodule FediServer.HTTPClient do
         %__MODULE__{private_key: private_key, public_key_id: public_key_id} = transport,
         %URI{host: host, path: path} = url
       )
-      when is_struct(private_key) and is_binary(public_key_id) do
+      when is_tuple(private_key) and is_binary(public_key_id) do
     date_str = Fedi.ActivityPub.Utils.date_header_value()
 
     headers_for_signature =
@@ -128,6 +128,7 @@ defmodule FediServer.HTTPClient do
 
       {:ok, %Tesla.Env{body: body} = env} ->
         if success?(env.status) do
+          # Logger.debug("GET #{opts[:url]} succeeded")
           {:ok, body}
         else
           msg = "GET #{opts[:url]} failed (#{env.status})"
@@ -138,7 +139,8 @@ defmodule FediServer.HTTPClient do
   end
 
   def dereference(%__MODULE__{} = _transport, %URI{} = url) do
-    {:error, "Can't dereference #{URI.to_string(url)}: no private key"}
+    Logger.error("Can't dereference #{URI.to_string(url)}: missing private key or public key id")
+    {:error, "Can't dereference #{URI.to_string(url)}: missing private key or public key id"}
   end
 
   @doc """
@@ -213,7 +215,7 @@ defmodule FediServer.HTTPClient do
       )
       when is_tuple(private_key) and is_binary(public_key_id) and is_binary(body) and
              is_list(recipients) do
-    # TODO async Task optimization
+    # TODO OPTIMIZE async task or Oban jobs
     errors =
       recipients
       |> Enum.map(&deliver(transport, body, &1))

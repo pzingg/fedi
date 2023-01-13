@@ -635,11 +635,11 @@ defmodule Fedi.ActivityPub.Utils do
   the 'object' property are all listed in the 'actor' property.
   """
   def object_actors_match_activity_actors?(
-        %{data: %{app_agent: app_agent} = context_data, database: database},
+        %{database: database} = context,
         activity
       ) do
-    with {:wrapped_data, %URI{} = box_iri} <-
-           {:wrapped_data, get_box_iri(context_data)},
+    with {:ok, box_iri, app_agent} <-
+           get_dereference_data(context),
          {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
          {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
@@ -672,17 +672,27 @@ defmodule Fedi.ActivityPub.Utils do
       end)
     else
       {:error, reason} -> {:error, reason}
-      {:wrapped_data, _} -> {:error, "No in or outbox available for dereferencing"}
       {:activity_id, _} -> {:error, "No id in activity"}
       {:activity_object, _} -> {:error, "No objects in activity"}
       {:activity_actor, _} -> {:error, "No actor in activity"}
       {:actor_ids, _} -> {:error, "No id in activity's actor"}
+      {_, {:error, reason}} -> {:error, reason}
     end
   end
 
-  def get_box_iri(%{inbox_iri: inbox_iri}), do: inbox_iri
-  def get_box_iri(%{outbox_iri: outbox_iri}), do: outbox_iri
-  def get_box_iri(_), do: nil
+  def get_dereference_data(%{data: %{box_iri: box_iri, app_agent: app_agent}}) do
+    {:ok, box_iri, app_agent}
+  end
+
+  def get_dereference_data(%{data: _} = context) do
+    Logger.error("No inbox or outbox in #{inspect(context)}")
+    {:error, "Internal system error"}
+  end
+
+  def get_dereference_data(context) do
+    Logger.error("No data in #{inspect(context)}")
+    {:error, "Internal system error"}
+  end
 
   @doc """
   Implements the logic of adding object ids to a target Collection or

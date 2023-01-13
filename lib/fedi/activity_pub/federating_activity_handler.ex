@@ -22,7 +22,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
            {:activity_object, Utils.get_object(activity)},
          {:ok, created} when is_list(created) <- create_objects(context, values),
          {:ok, _created} <- apply(database, :create, [activity]) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No objects in activity"}
@@ -30,7 +30,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def create_objects(
-        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
         values
       ) do
     Enum.reduce_while(values, [], fn
@@ -94,7 +94,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     with {:ok, %{values: values}} <- APUtils.objects_match_activity_origin?(activity),
          {:ok, _deleted} <- delete_objects(database, values),
          {:ok, _} <- apply(database, :delete, [activity]) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
     end
@@ -148,11 +148,11 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
               {:error, reason}
 
             _ ->
-              Actor.resolver_callback(context, :s2s, activity)
+              Actor.handle_activity(context, :s2s, activity)
           end
 
         _ ->
-          Actor.resolver_callback(context, :s2s, activity)
+          Actor.handle_activity(context, :s2s, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -183,7 +183,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def prepare_and_deliver_follow(
-        %{database: database, data: %{outbox_iri: outbox_iri}} = context,
+        %{database: database, data: %{box_iri: box_iri}} = context,
         follow,
         actor_iri,
         on_follow,
@@ -301,7 +301,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
             MapSet.subset?(MapSet.new(accept_actors), MapSet.new(follow_actors))},
          {:ok, _} <-
            update_collection(database, :following, actor_iri, accept_actors, alias_) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} ->
         {:error, reason}
@@ -318,12 +318,12 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
       {:activity_object, _} ->
         Logger.error("No object in Accept activity")
-        Actor.resolver_callback(context, :s2s, activity)
+        Actor.handle_activity(context, :s2s, activity)
     end
   end
 
   def find_follow(
-        %{data: %{inbox_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
         values,
         %URI{} = actor_iri
       ) do
@@ -373,7 +373,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Reject activity side effects.
   """
   def reject(context, activity) when is_struct(context) and is_struct(activity) do
-    Actor.resolver_callback(context, :s2s, activity)
+    Actor.handle_activity(context, :s2s, activity)
   end
 
   @doc """
@@ -386,7 +386,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.add(database, object, target) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Add activity"}
@@ -404,7 +404,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.remove(database, object, target) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Add activity"}
@@ -469,7 +469,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end)
       |> case do
         {:error, reason} -> {:error, reason}
-        _ -> Actor.resolver_callback(context, :s2s, activity)
+        _ -> Actor.handle_activity(context, :s2s, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -535,7 +535,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end)
       |> case do
         {:error, reason} -> {:error, reason}
-        _ -> Actor.resolver_callback(context, :s2s, activity)
+        _ -> Actor.handle_activity(context, :s2s, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -549,7 +549,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   """
   def undo(context, activity) when is_struct(activity) do
     with :ok <- APUtils.object_actors_match_activity_actors?(context, activity) do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
     end
@@ -562,7 +562,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      Actor.resolver_callback(context, :s2s, activity)
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> {:error, "No object in Block activity"}

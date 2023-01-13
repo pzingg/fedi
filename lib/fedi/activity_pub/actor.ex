@@ -13,8 +13,8 @@ defmodule Fedi.ActivityPub.Actor do
     :common,
     :c2s,
     :s2s,
-    :c2s_resolver,
-    :s2s_resolver,
+    :c2s_activity_handler,
+    :s2s_activity_handler,
     :fallback,
     :database,
     :social_api_enabled?,
@@ -26,8 +26,8 @@ defmodule Fedi.ActivityPub.Actor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -41,10 +41,10 @@ defmodule Fedi.ActivityPub.Actor do
   Wrapped data passed in the actor's data element for the Social API.
   """
   @type c2s_data() :: %{
-          outbox_iri: URI.t(),
+          box_iri: URI.t(),
+          app_agent: String.t(),
           raw_activity: map(),
-          undeliverable: boolean(),
-          app_agent: String.t()
+          undeliverable: boolean()
         }
 
   @typedoc """
@@ -54,8 +54,8 @@ defmodule Fedi.ActivityPub.Actor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -67,9 +67,9 @@ defmodule Fedi.ActivityPub.Actor do
   Wrapped data passed in the actor's data element for the Federated Protocol.
   """
   @type s2s_data() :: %{
-          inbox_iri: URI.t(),
-          on_follow: on_follow(),
-          app_agent: String.t()
+          box_iri: URI.t(),
+          app_agent: String.t(),
+          on_follow: on_follow()
         }
 
   @typedoc """
@@ -79,8 +79,8 @@ defmodule Fedi.ActivityPub.Actor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -95,8 +95,8 @@ defmodule Fedi.ActivityPub.Actor do
           common: module(),
           c2s: module() | nil,
           s2s: module() | nil,
-          c2s_resolver: module() | nil,
-          s2s_resolver: module() | nil,
+          c2s_activity_handler: module() | nil,
+          s2s_activity_handler: module() | nil,
           fallback: module() | nil,
           database: module() | nil,
           social_api_enabled?: boolean(),
@@ -111,8 +111,8 @@ defmodule Fedi.ActivityPub.Actor do
   def make_actor(module, common, opts) do
     c2s = Keyword.get(opts, :c2s)
     s2s = Keyword.get(opts, :s2s)
-    c2s_resolver = Keyword.get(opts, :c2s_resolver)
-    s2s_resolver = Keyword.get(opts, :s2s_resolver)
+    c2s_activity_handler = Keyword.get(opts, :c2s_activity_handler)
+    s2s_activity_handler = Keyword.get(opts, :s2s_activity_handler)
     database = Keyword.get(opts, :database)
     fallback = Keyword.get(opts, :fallback)
 
@@ -136,8 +136,8 @@ defmodule Fedi.ActivityPub.Actor do
       database: database,
       c2s: c2s,
       s2s: s2s,
-      c2s_resolver: c2s_resolver,
-      s2s_resolver: s2s_resolver,
+      c2s_activity_handler: c2s_activity_handler,
+      s2s_activity_handler: s2s_activity_handler,
       fallback: fallback,
       social_api_enabled?: !is_nil(c2s),
       federated_protocol_enabled?: !is_nil(s2s),
@@ -218,25 +218,29 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
-  def resolver_callback(context, which, activity, opts \\ [])
+  def handle_activity(context, which, activity, opts \\ [])
       when is_struct(context) and is_atom(which) and is_struct(activity) do
+    {callback_fn, _namespace} =
+      Fedi.Streams.BaseType.get_type_name(activity, atom: true, with_namespace: true)
+
     with top_level <-
            Keyword.get(opts, :top_level, false),
          {:module, callback_module} when not is_nil(callback_module) <-
-           {:module, get_resolver_module(context, which, top_level)},
-         {callback_fn, _namespace} <-
-           Fedi.Streams.BaseType.get_type_name(activity, atom: true, with_namespace: true),
+           {:module, get_activity_handler_module(context, which, top_level)},
          {:module_exists, :ok} <- {:module_exists, verify_module(callback_module)} do
       cond do
         function_exported?(callback_module, callback_fn, 2) ->
           apply(callback_module, callback_fn, [context, activity])
 
         function_exported?(callback_module, :default_callback, 2) ->
-          Logger.debug("Defaulting to #{alias_module(callback_module)}.default_callback")
+          Logger.debug(
+            "#{which} Activity handler #{callback_fn} defaulting to #{alias_module(callback_module)}.default_callback"
+          )
+
           apply(callback_module, :default_callback, [context, activity])
 
         true ->
-          Logger.error("No #{callback_fn} or default_callback")
+          Logger.error("#{which} Activity handler: no #{callback_fn} or default_callback")
           {:ok, {activity, context.data}}
       end
     else
@@ -244,24 +248,24 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, {activity, context.data}}
 
       {:module, _} ->
-        Logger.error("No resolver at #{which}")
-        {:error, "Invalid protocol #{which}"}
+        Logger.error("#{which} Activity handler not set")
+        {:error, "#{which} Activity handler not set"}
 
       {:module_exists, _} ->
-        Logger.error("Callback module for #{which} does not exist")
-        {:error, "Callback module for #{which} does not exist"}
+        Logger.error("#{which} Activity handler does not exist")
+        {:error, "#{which} Activity handler does not exist"}
     end
   end
 
-  defp get_resolver_module(context, which, true) do
+  defp get_activity_handler_module(context, which, true) do
     case which do
-      :c2s -> Map.get(context, :c2s_resolver)
-      :s2s -> Map.get(context, :s2s_resolver)
+      :c2s -> Map.get(context, :c2s_activity_handler)
+      :s2s -> Map.get(context, :s2s_activity_handler)
       _ -> nil
     end
   end
 
-  defp get_resolver_module(context, which, _) do
+  defp get_activity_handler_module(context, which, _) do
     case which do
       :c2s -> Map.get(context, :c2s)
       :s2s -> Map.get(context, :s2s)
@@ -532,13 +536,9 @@ defmodule Fedi.ActivityPub.Actor do
            {:request_body_hook,
             main_delegate(actor, :c2s, :post_outbox_request_body_hook, [conn, activity])},
 
-         # Check authorization of the activity.
-         {:authorized, {:ok, {conn, true}}} <-
-           {:authorized, main_delegate(actor, :c2s, :authorize_post_inbox, [conn, activity])},
-         outbox_id <- Utils.request_id(conn, scheme),
-
          # The HTTP request steps are complete, complete the rest of the outbox
          # and delivery process.
+         outbox_id <- Utils.request_id(conn, scheme),
          {:delivered, :ok} <-
            {:delivered, deliver(actor, outbox_id, activity, m)} do
       # Respond to the request with the new Activity's IRI location.
@@ -568,7 +568,10 @@ defmodule Fedi.ActivityPub.Actor do
       {:authenticated, {:ok, {conn, false}}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
 
-      # Respond with bad request -- we do not understand the type.
+      # We know it is a bad request if the object or
+      # target properties needed to be populated, but weren't.
+
+      # Send the rejection to the client.
       {:matched_type, {:error, {:err_unmatched_type, _reason}}} ->
         {:ok,
          Utils.send_text_resp(
@@ -578,6 +581,7 @@ defmodule Fedi.ActivityPub.Actor do
            :matched_type
          )}
 
+      # Send the rejection to the client.
       {:valid_activity, {:error, {:err_missing_id, _reason}}} ->
         {:ok,
          Utils.send_text_resp(
@@ -717,7 +721,7 @@ defmodule Fedi.ActivityPub.Actor do
          {:serialized, {:ok, m}} <-
            {:serialized, ensure_serialized(m, activity)},
          {:deliverable, {:ok, deliverable}} <-
-           {:deliverable, main_delegate(actor, :c2s, :post_outbox, [activity, outbox_iri, m])} do
+           {:deliverable, main_delegate(actor, :s2s, :post_outbox, [activity, outbox_iri, m])} do
       # Request has been processed and all side effects internal to this
       # application server have finished. Begin side effects affecting other
       # servers and/or the client who sent this request.
