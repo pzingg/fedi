@@ -15,7 +15,7 @@ defmodule Fedi.ActivityPubTest do
     end
 
     def new_id(value) do
-      with {:ok, {_type_name, category}} <- Utils.get_type_name_and_category(value) do
+      with {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
         id = Agent.get_and_update(__MODULE__, fn id -> {id, id + 1} end)
         last_four = Integer.to_string(id) |> String.pad_leading(4, "0")
         ulid = "01GP9EBWC2BTW0R98JJF2X" <> last_four

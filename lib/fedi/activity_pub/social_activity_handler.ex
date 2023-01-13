@@ -17,9 +17,24 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Create handles additional side effects for the Create ActivityStreams
   type.
 
-  The wrapping callback copies the actor(s) to the 'attributedTo'
+  The wrapping callback copies the actor(s) to the attributedTo
   property and copies recipients between the Create activity and all
   objects. It then saves the entry in the database.
+
+  Ref: [AP Section 6.1](https://w3.org/TR/activitypub/#client-addressing)
+  Clients submitting the following activities to an outbox MUST provide
+  the object property in the activity: Create, Update, Delete, Follow,
+  Add, Remove, Like, Block, Undo.
+
+  Ref: [AP Section 6.2](https://www.w3.org/TR/activitypub/#create-activity-outbox)
+  When a Create activity is posted, the actor of the activity SHOULD be
+  copied onto the object's attributedTo field.
+
+  A mismatch between addressing of the Create activity and its object is
+  likely to lead to confusion. As such, a server SHOULD copy any recipients
+  of the Create activity to its object upon initial distribution, and
+  likewise with copying recipients from the object to the wrapping Create
+  activity.
   """
   def create(
         %{database: database, data: context_data} = context,
@@ -103,8 +118,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Create activity"}
-      {:activity_actor, _} -> {:error, "No actor in Create activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
     end
   end
 
@@ -134,7 +149,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
                        end
                      end),
                    {:ok, new_type} <- Fedi.Streams.JSONResolver.resolve(m),
-                   {:ok, _} <- apply(database, :update, [new_type]) do
+                   {:ok, _updated, _raw_json} <- apply(database, :update, [new_type]) do
                 {:cont, acc}
               else
                 {:error, reason} -> {:halt, {:error, reason}}
@@ -156,12 +171,17 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Create activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
   @doc """
   Implements the social Delete activity side effects.
+
+  Ref: [AP Section 6.4](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
+  As a side effect, the server MAY replace the object with
+  a Tombstone of the object that will be displayed in activities which
+  reference the deleted object.
   """
   def delete(%{database: database} = context, activity)
       when is_struct(activity) do
@@ -173,8 +193,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           case APUtils.get_id(object_iter) do
             %URI{} = id ->
               with {:ok, as_type} <- apply(database, :get, [id]),
-                   {:ok, tomb} <- APUtils.to_tombstone(as_type, id),
-                   {:ok, _} <- apply(database, :update, [tomb]) do
+                   tomb <- APUtils.to_tombstone(as_type, id),
+                   {:ok, _updated, _raw_json} <- apply(database, :update, [tomb]) do
                 {:cont, acc}
               else
                 {:error, reason} -> {:halt, {:error, reason}}
@@ -196,7 +216,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Delete activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
@@ -210,12 +230,16 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Follow activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
   @doc """
   Implements the social Add activity side effects.
+
+  Ref: [AP Section 6.1](https://w3.org/TR/activitypub/#client-addressing)
+  Additionally, clients submitting the following activities to an outbox
+  MUST also provide the target property: Add, Remove.
   """
   def add(context, activity)
       when is_struct(context) and is_struct(activity) do
@@ -227,8 +251,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Add activity"}
-      {:activity_target, _} -> {:error, "No target in Add activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_target, _} -> Utils.err_target_required(activity: activity)
     end
   end
 
@@ -245,8 +269,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Remove activity"}
-      {:activity_target, _} -> {:error, "No target in Remove activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_target, _} -> Utils.err_target_required(activity: activity)
     end
   end
 
@@ -261,11 +285,11 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, liked} <- apply(database, :liked, actor_iri),
          {:ok, object_ids} <- APUtils.get_ids(object),
          liked <- Utils.prepend_iris(liked, "items", object_ids),
-         {:ok, _} <- apply(database, :update, [liked]) do
+         {:ok, _updated, _raw_json} <- apply(database, :update, [liked]) do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Like activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
@@ -284,8 +308,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Undo activity"}
-      {:activity_actor, _} -> {:error, "No actor in Undo activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
     end
   end
 
@@ -300,7 +324,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Block activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 end

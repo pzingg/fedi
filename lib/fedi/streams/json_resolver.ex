@@ -3,6 +3,8 @@ defmodule Fedi.Streams.JSONResolver do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+
   @doc """
   Determines the ActivityStreams type of the payload, then applies the
   first callback function whose signature accepts the ActivityStreams value's
@@ -63,12 +65,16 @@ defmodule Fedi.Streams.JSONResolver do
     else
       {:type, _} ->
         {:error,
-         {:err_unmatched_type,
-          "Cannot determine ActivityStreams type: 'type' property is missing"}}
+         Utils.err_unhandled_type(
+           "Cannot determine ActivityStreams type: 'type' property is missing",
+           json: m
+         )}
 
       {:context, _} ->
         {:error,
-         {:err_unmatched_type, "Cannot determine ActivityStreams type: '@context' is missing"}}
+         Utils.err_unhandled_type("Cannot determine ActivityStreams type: '@context' is missing",
+           json: m
+         )}
     end
   end
 

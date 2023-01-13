@@ -4,7 +4,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   order to implement the ActivityPub specification.
 
   Note that an implementation of this interface is implicitly provided in the
-  calls to new_actor, new_social_actor, and new_federating_actor.
+  calls to `SideEffectActor.new/2`.
 
   Implementing the ActorBehavior requires familiarity with the ActivityPub
   specification because it does not a strong enough abstraction for the client
@@ -12,7 +12,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   this interface and build a foot-gun that trashes the fediverse without being
   ActivityPub compliant. Please use with due consideration.
 
-  Alternatively, build an application that uses the parts of the pub library
+  Alternatively, build an application that uses the parts of the library
   that do not require implementing a ActorBehavior so that the ActivityPub
   implementation is completely provided out of the box.
   """
@@ -29,11 +29,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   forwarding, as well as actually conducting it if it determines it
   needs to.
 
-  As a side effect, inbox_forwarding must set the federated data in the
+  As a side effect, `inbox_forwarding/3` must set the federated data in the
   database, independently of the inbox, however it sees fit in order to
   determine whether it has seen the activity before.
 
-  The provided url is the inbox of the recipient of the Activity. The
+  The provided URI is the inbox of the recipient of the Activity. The
   Activity is examined for the information about who to inbox forward
   to.
 

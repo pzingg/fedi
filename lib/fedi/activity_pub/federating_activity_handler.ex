@@ -21,29 +21,30 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, created} when is_list(created) <- create_objects(context, values),
-         {:ok, _created} <- apply(database, :create, [activity]) do
+         {:ok, _created, _raw_json} <- apply(database, :create, [activity]) do
       Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No objects in activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
   def create_objects(
         %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
         values
-      ) do
+      )
+      when is_list(values) do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
         case apply(database, :create, [as_type]) do
-          {:ok, created} -> {:cont, [created | acc]}
+          {:ok, created, _raw_json} -> {:cont, [created | acc]}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
       %{iri: %URI{} = iri}, acc ->
         with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m),
-             {:ok, created} <- apply(database, :create, [as_type]) do
+             {:ok, created, _raw_json} <- apply(database, :create, [as_type]) do
           {:cont, [created | acc]}
         else
           {:error, reason} -> {:halt, {:error, reason}}
@@ -62,9 +63,13 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Update activity side effects.
   """
   def update(%{database: database} = _context, activity) when is_struct(activity) do
-    with {:ok, %{values: values}} <- APUtils.objects_match_activity_origin?(activity),
-         {:ok, _updated} <- update_objects(database, values) do
-      apply(database, :update, [activity])
+    with {:ok, %{values: values}} <-
+           APUtils.objects_match_activity_origin?(activity),
+         {:ok, _updated} <-
+           update_objects(database, values),
+         {:ok, updated, _raw_json} <-
+           apply(database, :update, [activity]) do
+      {:ok, updated}
     else
       {:error, reason} -> {:error, reason}
     end
@@ -74,7 +79,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
         case apply(database, :update, [as_type]) do
-          {:ok, updated} -> {:cont, [updated | acc]}
+          {:ok, updated, _raw_json} -> {:cont, [updated | acc]}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
@@ -156,7 +161,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Follow activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
@@ -244,19 +249,18 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def update_collection(database, collection, actor_iri, recipients, alias_) do
-    case apply(database, collection, [actor_iri]) do
+    with {:ok, %{properties: _} = coll} <- apply(database, collection, [actor_iri]),
+         # Prepend recipients to "items"
+         items_iters <-
+           Enum.map(recipients, fn iri ->
+             %P.ItemsIterator{alias: alias_, iri: iri}
+           end),
+         coll <- Utils.prepend_iters(coll, "items", items_iters),
+         {:ok, updated, _raw_json} <- apply(database, :update, [coll]) do
+      {:ok, updated}
+    else
       {:error, reason} ->
         {:error, reason}
-
-      {:ok, %{properties: _} = coll} ->
-        # Prepend recipients to "items"
-        items_iters =
-          Enum.map(recipients, fn iri ->
-            %P.ItemsIterator{alias: alias_, iri: iri}
-          end)
-
-        coll = Utils.prepend_iters(coll, "items", items_iters)
-        apply(database, :update, [coll])
     end
   end
 
@@ -389,8 +393,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Add activity"}
-      {:activity_target, _} -> {:error, "No target in Add activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_target, _} -> Utils.err_target_required(activity: activity)
     end
   end
 
@@ -407,8 +411,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Add activity"}
-      {:activity_target, _} -> {:error, "No target in Add activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_target, _} -> Utils.err_target_required(activity: activity)
     end
   end
 
@@ -456,7 +460,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           with col when is_struct(col) <- col,
                prop <- struct(prop, member: col),
                like <- struct(like, properties: Map.put(properties, "likes", prop)),
-               {:ok, _} <- apply(database, :update, [like]) do
+               {:ok, _updated, _raw_json} <- apply(database, :update, [like]) do
             {:cont, acc}
           else
             {:error, reason} -> {:halt, {:error, reason}}
@@ -473,8 +477,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> {:error, "No id in Like activity"}
-      {:activity_object, _} -> {:error, "No object in Like activity"}
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
@@ -522,7 +526,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           with col when is_struct(col) <- col,
                prop <- struct(prop, member: col),
                share <- struct(share, properties: Map.put(properties, "shares", prop)),
-               {:ok, _} <- apply(database, :update, [share]) do
+               {:ok, _updated, _raw_json} <- apply(database, :update, [share]) do
             {:cont, acc}
           else
             {:error, reason} -> {:halt, {:error, reason}}
@@ -539,8 +543,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> {:error, "No id in Announce activity"}
-      {:activity_object, _} -> {:error, "No object in Announce activity"}
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 
@@ -565,7 +569,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No object in Block activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
     end
   end
 end

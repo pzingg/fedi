@@ -3,19 +3,19 @@ defmodule Fedi.Streams.Serializer do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+
   def serialize(%{__struct__: module} = object) do
     try do
       Code.ensure_compiled!(module)
       |> apply(:serialize, [object])
     rescue
       e ->
-        Logger.error("Serializer exception #{inspect(e)} for #{inspect(object)}")
-        {:error, "Internal system error"}
+        {:error, Utils.err_serialization("Serializer exception", exception: e, object: object)}
     end
   end
 
   def serialize(object) do
-    Logger.error("Cannot serialize non-struct #{inspect(object)}")
-    {:error, "Internal system error"}
+    {:error, Utils.err_serialization("Object is not a struct", object: object)}
   end
 end

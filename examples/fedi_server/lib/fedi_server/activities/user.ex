@@ -79,19 +79,22 @@ defmodule FediServer.Activities.User do
     end
   end
 
+  @doc """
+  Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
+  """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
     %{
       "id" => ap_id,
       "type" => Keyword.get(opts, :actor_type, "Person"),
-      "following" => "#{ap_id}/following",
-      "followers" => "#{ap_id}/followers",
       "inbox" => "#{ap_id}/inbox",
       "outbox" => "#{ap_id}/outbox",
+      "following" => "#{ap_id}/following",
+      "followers" => "#{ap_id}/followers",
       "featured" => "#{ap_id}/collections/featured",
       "preferredUsername" => nickname,
+      "url" => ap_id,
       "name" => name,
       "summary" => Keyword.get(opts, :bio, name),
-      "url" => ap_id,
       "manuallyApprovesFollowers" => Keyword.get(opts, :locked?, false),
       "publicKey" => %{
         "id" => "#{ap_id}#main-key",
@@ -102,6 +105,7 @@ defmodule FediServer.Activities.User do
         "sharedInbox" => Routes.inbox_url(FediServerWeb.Endpoint, :get_shared_inbox)
       },
       "discoverable" => Keyword.get(opts, :discoverable?, false)
+      # "icon" => icon,
       # "attachment" => fields,
       # "tag" => emoji_tags,
       # "capabilities" => capabilities,

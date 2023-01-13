@@ -3,6 +3,7 @@ defmodule Fedi.ActivityPub.Utils do
 
   require Logger
 
+  alias Fedi.Streams.Error
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
@@ -10,28 +11,10 @@ defmodule Fedi.ActivityPub.Utils do
   @content_type_header "content-type"
   @accept_header "accept"
   @content_type_value "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\""
-  @public_activity_streams "https:www.w3.org/ns/activitystreams#Public"
+  @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
   @public_activity_streams_iri URI.parse(@public_activity_streams)
   @public_json_ld "Public"
   @public_json_ld_as "as:Public"
-
-  @doc """
-  err_object_reequired indicates the activity needs its object property
-  set. Can be returned by DelegateActor's PostInbox or PostOutbox so a
-  Bad Request response is set.
-  """
-  def err_object_required do
-    {:err_object_required, "Object property required on the provided activity"}
-  end
-
-  @doc """
-  err_target_required indicates the activity needs its target property
-  set. Can be returned by DelegateActor's PostInbox or PostOutbox so a
-  Bad Request response is set.
-  """
-  def err_target_required do
-    {:err_target_required, "Target property required on the provided activity"}
-  end
 
   @doc """
   activity_streams_media_types contains all of the accepted ActivityStreams media
@@ -57,6 +40,12 @@ defmodule Fedi.ActivityPub.Utils do
     |> Enum.reverse()
   end
 
+  @doc """
+  Ref: [AP Section 3.2](https://www.w3.org/TR/activitypub/#retrieving-objects)
+  The client MUST specify an Accept header with the application/ld+json;
+  profile="https://www.w3.org/ns/activitystreams" media type in order to
+  retrieve the activity.
+  """
   def is_activity_pub_media_type(%Plug.Conn{} = conn, which_header) do
     Plug.Conn.get_req_header(conn, which_header)
     |> header_is_activity_pub_media_type()
@@ -120,6 +109,8 @@ defmodule Fedi.ActivityPub.Utils do
   @doc """
   Determines if an IRI string is the Public collection as defined in
   the spec, including JSON-LD compliant collections.
+
+  Ref: [AP Section 5.6](https://www.w3.org/TR/activitypub/#public-addressing)
   """
   def public?(%URI{} = iri) do
     public?(URI.to_string(iri))
@@ -252,11 +243,11 @@ defmodule Fedi.ActivityPub.Utils do
   Obtains the 'inReplyTo', 'object', 'target', and 'tag' values on an
   ActivityStreams value.
 
-  Ref: [Section 7.1.2](https:#w3.org/TR/activitypub/#inbox-forwarding)
-  Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
+  Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
+  Ref: The values of inReplyTo, object, 'target' and/or 'tag' are objects owned by the server.
   """
   def get_inbox_forwarding_values(%{properties: properties} = _as_type) do
-    ["inReplyTo", "object", "target", "tag"]
+    ["object", "target", "inReplyTo", "tag"]
     |> Enum.reduce({[], []}, fn prop_name, {type_acc, iri_acc} = acc ->
       case Map.get(properties, prop_name) do
         %{values: values} when is_list(values) ->
@@ -288,8 +279,18 @@ defmodule Fedi.ActivityPub.Utils do
 
   @doc """
   Wraps the provided object in a Create activity.
-  This will copy over the 'to', 'bto', 'cc', 'bcc', and 'audience'
+  This will copy over the to, bto, cc, bcc, and audience
   properties. It will also copy over the published time if present.
+
+  Ref: [AP Section 6.2.1](https://www.w3.org/TR/activitypub/#object-without-create)
+  The server MUST accept a valid [ActivityStreams] object that isn't a
+  subtype of Activity in the POST request to the outbox. The server then
+  MUST attach this object as the object of a Create Activity. For
+  non-transient objects, the server MUST attach an id to both the
+  wrapping Create and its wrapped Object.
+
+  Any to, bto, cc, bcc, and audience properties specified on the object
+  MUST be copied over to the new Create activity by the server.
   """
   def wrap_in_create(%{properties: properties} = object, %URI{} = actor_iri)
       when is_map(properties) do
@@ -449,13 +450,21 @@ defmodule Fedi.ActivityPub.Utils do
     end)
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, body) do
+  def send_text_resp(%Plug.Conn{} = conn, status, %Error{} = error) do
+    send_text_resp(conn, status, Error.response_message(error))
+  end
+
+  def send_text_resp(%Plug.Conn{} = conn, status, body) when is_binary(body) do
     conn
     |> Plug.Conn.put_resp_header(@content_type_header, "text/plain")
     |> Plug.Conn.send_resp(status, body)
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, body, actor_state) do
+  def send_text_resp(%Plug.Conn{} = conn, status, %Error{} = error, actor_state) do
+    send_text_resp(conn, status, Error.response_message(error), actor_state)
+  end
+
+  def send_text_resp(%Plug.Conn{} = conn, status, body, actor_state) when is_binary(body) do
     conn
     |> Plug.Conn.put_private(:actor_state, actor_state)
     |> Plug.Conn.put_resp_header(@content_type_header, "text/plain")
@@ -498,7 +507,7 @@ defmodule Fedi.ActivityPub.Utils do
           {:ok, as_value, id}
 
         _ ->
-          {:error, {:err_missing_id, "Activity does not have an id"}}
+          {:error, Utils.err_id_required(value: as_value)}
       end
     else
       {:error, "#{as_value.__struct__} is not an Activity"}
@@ -625,8 +634,8 @@ defmodule Fedi.ActivityPub.Utils do
       end)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> {:error, "No objects in activity"}
-      {:activity_id, _} -> {:error, "No id in activity"}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
     end
   end
 
@@ -672,9 +681,9 @@ defmodule Fedi.ActivityPub.Utils do
       end)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> {:error, "No id in activity"}
-      {:activity_object, _} -> {:error, "No objects in activity"}
-      {:activity_actor, _} -> {:error, "No actor in activity"}
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
       {:actor_ids, _} -> {:error, "No id in activity's actor"}
       {_, {:error, reason}} -> {:error, reason}
     end
@@ -721,7 +730,7 @@ defmodule Fedi.ActivityPub.Utils do
             updated_value ->
               case apply(database, :update, [updated_value]) do
                 {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _} -> {:cont, acc}
+                {:ok, _updated, _raw_json} -> {:cont, acc}
               end
           end
         else
@@ -760,7 +769,7 @@ defmodule Fedi.ActivityPub.Utils do
             updated_value ->
               case apply(database, :update, [updated_value]) do
                 {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _} -> {:cont, acc}
+                {:ok, _updated, _raw_json} -> {:cont, acc}
               end
           end
         else
@@ -773,10 +782,20 @@ defmodule Fedi.ActivityPub.Utils do
   end
 
   @doc """
-  Ensures the Create activity and its object have the same 'to',
-  'bto', 'cc', 'bcc', and 'audience' properties. Copy the activity's recipients
+  Ensures the Create activity and its object have the same to,
+  bto, cc, bcc, and audience properties. Copy the activity's recipients
   to objects, and the objects to the activity, but does NOT copy objects'
   recipients to each other.
+
+  Ref: [AP Section 6.2](https://www.w3.org/TR/activitypub/#create-activity-outbox)
+  When a Create activity is posted, the actor of the activity SHOULD be
+  copied onto the object's attributedTo field.
+
+  A mismatch between addressing of the Create activity and its object is
+  likely to lead to confusion. As such, a server SHOULD copy any recipients
+  of the Create activity to its object upon initial distribution, and
+  likewise with copying recipients from the object to the wrapping Create
+  activity.
   """
   def normalize_recipients(activity) when is_struct(activity) do
     # Phase 0: Acquire all recipients on the activity.
@@ -858,7 +877,7 @@ defmodule Fedi.ActivityPub.Utils do
 
           {:ok, activity}
         else
-          {:activity_object, _} -> {:error, "No object in Create activity"}
+          {:activity_object, _} -> Utils.err_object_required(activity: activity)
         end
     end
   end
@@ -905,10 +924,16 @@ defmodule Fedi.ActivityPub.Utils do
   end
 
   @doc """
-  Removes "bto" and "bcc" from the activity and its object.
+  Removes bto and bcc properties from the activity and its object.
 
-  Note that this requirement of the specification is under "Section 6: Client
-  to Server Interactions", the Social API, and not the Federative API.
+  Note that this requirement of the specification is for the Social API,
+  and not the Federating Protocol.
+
+  Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
+  The server MUST remove the bto and/or bcc properties, if they exist,
+  from the ActivityStreams object before delivery, but MUST utilize the
+  addressing originally stored on the bto / bcc properties for determining
+  recipients in delivery.
   """
   def strip_hidden_recipients(%{properties: properties} = activity) do
     activity =
@@ -946,6 +971,19 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  @doc """
+  Gather all the recipients contained in an ActivityStreams type or
+  property, recursively.
+
+  `opts` can contain one of these boolean flags:
+  * `:to_only` - only gather "to" property values
+  * `:direct_only` - only gather "to", "cc" and "audience" values
+  * `:all` - gather "to", "bto", "cc", "bcc" and "audience" values
+
+  `opts` can also contain an `:empty_ok` boolean flag. If not
+  supplied or if false, `get_recpients/2` will return an error
+  if it cannot find any recipients.
+  """
   def get_recipients(prop_or_value, opts \\ [])
 
   def get_recipients(%{values: values} = _actor_or_object_prop, opts) do

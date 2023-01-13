@@ -3,6 +3,7 @@ defmodule Fedi.Streams.Utils do
 
   require Logger
 
+  alias Fedi.Streams.Error
   alias Fedi.W3IDSecurityV1.Property.{PublicKey, PublicKeyPem}
 
   # TODO ONTOLOGY
@@ -42,6 +43,59 @@ defmodule Fedi.Streams.Utils do
   @post_types ["Article", "Note"]
   @actor_types ["Application", "Group", "Organization", "Person", "Service"]
   @link_types ["Link", "Mention"]
+
+  ### Errors
+
+  @doc """
+  Indicates that the activity needs its actor property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_actor_required(data \\ []) do
+    Error.new(:actor_required, "Actor property required on the provided activity", false, data)
+  end
+
+  @doc """
+  Indicates that the activity needs its object property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_object_required(data \\ []) do
+    Error.new(:object_required, "Object property required on the provided activity", false, data)
+  end
+
+  @doc """
+  Indicates that the activity needs its target property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_target_required(data \\ []) do
+    Error.new(:target_required, "Target property required on the provided activity", false, data)
+  end
+
+  @doc """
+  Indicates that the activity needs its id property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_id_required(data \\ []) do
+    Error.new(:id_required, "Id property required on the provided Activity", false, data)
+  end
+
+  @doc """
+  Indicates that an ActivityStreams value has a type that is not
+  handled by the JSONResolver.
+  """
+  def err_unhandled_type(message, data \\ []) do
+    Error.new(:unhandled_type, message, false, data)
+  end
+
+  @doc """
+  Indicates that an exception was raised during serialization.
+  """
+  def err_serialization(message, data \\ []) do
+    Error.new(:serialization, message, true, data)
+  end
 
   def capitalize(str) do
     {head, rest} = String.split_at(str, 1)

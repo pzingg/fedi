@@ -150,7 +150,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           {:error, reason}
       end
     else
-      {:activity_actor, _} -> {:error, "No Actor in posting activity"}
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
     end
   end
 
@@ -189,7 +189,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Sets the federated data in the database.
 
-  Ref: [Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
+  Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   """
   def inbox_forwarding(%{database: database} = context, %URI{} = inbox_iri, activity) do
     # Ref: This is the first time the server has seen this Activity.
@@ -199,7 +199,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         with {:exists, {:ok, false}} <-
                {:exists, apply(database, :exists, [id])},
              # Attempt to create the activity entry.
-             {:ok, _} <-
+             {:ok, _created, _raw_json} <-
                apply(database, :create, [activity]),
              # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
              {:ok, my_iris} <-
@@ -260,6 +260,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   @doc """
   Finds all IRIs of 'to', 'cc', or 'audience' that are owned by this server.
   We need to find all of them so that forwarding can properly occur.
+
+  Ref: [AP Section 7.1.1](https://www.w3.org/TR/activitypub/#outbox-delivery)
+  When objects are received in the outbox (for servers which support both
+  Client to Server interactions and Server to Server Interactions), the
+  server MUST target and deliver to:
+
+  The to, bto, cc, bcc or audience fields if their values are individuals
+  or Collections owned by the actor.
   """
   def owned_recipients(database, activity) do
     with {:ok, recipients} <- APUtils.get_recipients(activity, which: :direct_only) do
@@ -306,14 +314,25 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       end
     end)
     |> case do
-      {:error, reason} -> {:error, reason}
-      result -> {:ok, result}
+      {:error, reason} ->
+        {:error, reason}
+
+      {col_iris, cols, ocols} ->
+        {:ok, col_iris, cols, ocols}
     end
   end
 
   @doc """
   Filter the list of collection ids, then gather the ids contained
   within the collections.
+
+  Ref: [AP Section 7.1.1](https://www.w3.org/TR/activitypub/#outbox-delivery)
+  When objects are received in the outbox (for servers which support both
+  Client to Server interactions and Server to Server Interactions), the
+  server MUST target and deliver to:
+
+  The to, bto, cc, bcc or audience fields if their values are individuals
+  or Collections owned by the actor.
   """
   def get_collection_recipients(context, col_iris, cols, ocols, activity) do
     case Actor.delegate(context, :s2s, :filter_forwarding, [col_iris, activity]) do
@@ -366,12 +385,23 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         {context, activity}
       end
 
-    add_to_outbox(context, outbox_iri, activity)
+    with {:ok, _activity, context_data} <- add_to_outbox(context, outbox_iri, activity) do
+      case context_data do
+        %{undeliverable: undeliverable} ->
+          {:ok, !undeliverable}
+
+        _ ->
+          Logger.error("No context data returned from add_to_outbox - won't deliver!")
+          {:ok, false}
+      end
+    end
   end
 
   @doc """
   Creates new 'id' entries on an activity and its objects if it is a
   Create activity.
+
+
   """
   def add_new_ids(context, activity) do
     with {:ok, activity} <- set_object_id(context, activity),
@@ -403,7 +433,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def wrap_in_create(%{database: database} = _context, activity, %URI{} = outbox_iri) do
     with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]) do
-      APUtils.wrap_in_create(activity, actor_iri)
+      {:ok, APUtils.wrap_in_create(activity, actor_iri)}
     end
   end
 
@@ -412,23 +442,26 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   @doc """
   Adds the activity to the outbox and creates the activity in the
   internal database as its own entry.
+
+  Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
+  The server MUST then add this new Activity to the outbox collection.
   """
   def add_to_outbox(%{database: database} = context, %URI{} = outbox_iri, activity) do
-    with {:get_id, %URI{} = _id} <- {:get_id, Utils.get_json_ld_id(activity)},
+    with {:activity_id, %URI{} = _id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
-         {:create, {:ok, activity, _json}} <-
-           {:create, apply(database, :create, [activity])},
+         {:ok, activity, _raw_json} <-
+           apply(database, :create, [activity]),
          # Persist a reference to the activity in the outbox
          # Then return the the list of 'orderedItems'.
-         {:database, {:ok, _ordered_collection_page}} <-
-           {:database, apply(database, :update_outbox, [outbox_iri, %{create: [activity]}])} do
+         {:ok, _ordered_collection_page} <-
+           apply(database, :update_outbox, [outbox_iri, %{create: [activity]}]) do
       {:ok, activity, context.data}
     else
-      {:get_id, _} ->
-        {:error, "Activity does not have an id"}
-
-      {_, {:error, reason}} ->
+      {:error, reason} ->
         {:error, reason}
+
+      {:activity_id, _} ->
+        {:error, Utils.err_id_required(activity: activity)}
     end
   end
 
@@ -664,27 +697,27 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Returns true when the activity is novel.
   """
   def add_to_inbox_if_new(%{database: database} = _context, %URI{} = inbox_iri, activity) do
-    with {:get_id, %URI{} = id} <- {:get_id, Utils.get_json_ld_id(activity)},
+    with {:activity_id, %URI{} = id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          {:exists, {:ok, false}} <- {:exists, apply(database, :inbox_contains, [inbox_iri, id])},
          # It is a new id
          # Persist the activity
-         {:create, {:ok, activity, _json}} <-
-           {:create, apply(database, :create, [activity])},
+         {:ok, activity, _raw_json} <-
+           apply(database, :create, [activity]),
          # Persist a reference to the activity in the inbox
          # Then return the the list of 'orderedItems'.
-         {:database, {:ok, _ordered_collection_page}} <-
-           {:database, apply(database, :update_inbox, [inbox_iri, %{create: [activity]}])} do
+         {:ok, _ordered_collection_page} <-
+           apply(database, :update_inbox, [inbox_iri, %{create: [activity]}]) do
       {:ok, true}
     else
+      {:error, reason} ->
+        {:error, reason}
+
       # If the inbox already contains the URL, early exit.
-      {:exists, {:ok, true}} ->
+      {:exists, {:ok, _}} ->
         {:ok, false}
 
-      {:get_id, _} ->
-        {:error, "Activity does not have an id"}
-
-      {_, {:error, reason}} ->
-        {:error, reason}
+      {:activity_id, _} ->
+        {:error, Utils.err_id_required(activity: activity)}
     end
   end
 
@@ -695,7 +728,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Recursion may be limited by providing a 'max_depth' greater than zero. A
   value of zero or a negative number will result in infinite recursion.
 
-  Ref: [Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
+  Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   Ref: The server SHOULD recurse through these values to look for linked objects
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
@@ -799,6 +832,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   @doc """
   Gets a new id from the database and then sets it on the object.
+
+  Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
+  If an Activity is submitted with a value in the id property,
+  servers MUST ignore this and generate a new id for the Activity.
   """
   def set_object_id(%{database: database} = _context, object) do
     with {:ok, %URI{} = id} <- apply(database, :new_id, [object]) do

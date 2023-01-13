@@ -6,6 +6,7 @@ defmodule Fedi.ActivityPub.Actor do
   require Logger
 
   alias Fedi.Streams.JSONResolver
+  alias Fedi.Streams.Error
   alias Fedi.ActivityPub.Utils, as: APUtils
 
   @enforce_keys [:common]
@@ -344,7 +345,7 @@ defmodule Fedi.ActivityPub.Actor do
   identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
   def handle_post_inbox(
-        %{database: database, federated_protocol_enabled?: federated_protocol_enabled?} = context,
+        %{federated_protocol_enabled?: federated_protocol_enabled?} = context,
         %Plug.Conn{} = conn
       ) do
     with {:is_activity_pub_post, true} <-
@@ -410,7 +411,7 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
 
       # Respond with bad request -- we do not understand the type.
-      {:matched_type, {:error, {:err_unmatched_type, _reason}}} ->
+      {:matched_type, {:error, %Error{code: :unhandled_type}}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
@@ -419,7 +420,7 @@ defmodule Fedi.ActivityPub.Actor do
            :matched_type
          )}
 
-      {:valid_activity, {:error, {:err_missing_id, _reason}}} ->
+      {:valid_activity, {:error, %Error{code: :missing_id}}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
@@ -434,7 +435,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Special case: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
-      {:post_inbox, {:error, {:err_object_required, _reason}}} ->
+      {:post_inbox, {:error, %Error{code: :object_required}}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
@@ -443,7 +444,7 @@ defmodule Fedi.ActivityPub.Actor do
            :post_inbox
          )}
 
-      {:post_inbox, {:error, {:err_target_required, _reason}}} ->
+      {:post_inbox, {:error, %Error{code: :target_required}}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
@@ -539,6 +540,10 @@ defmodule Fedi.ActivityPub.Actor do
          {:delivered, :ok} <-
            {:delivered, deliver(actor, outbox_id, activity, m)} do
       # Respond to the request with the new Activity's IRI location.
+      #
+      # Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
+      # Servers MUST return a 201 Created HTTP code, and unless the activity
+      # is transient, MUST include the new id in the Location header.
       location = URI.to_string(activity_id)
 
       {:ok,
@@ -553,8 +558,11 @@ defmodule Fedi.ActivityPub.Actor do
       {:is_activity_pub_post, _} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_post)}
 
-      # If the Federated Protocol is not enabled, then this endpoint is not
-      # enabled.
+      # If the Social API is not enabled, then this endpoint is not enabled.
+      #
+      # Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
+      # Attempts to submit objects to servers not implementing client to
+      # server support SHOULD result in a 405 Method Not Allowed response.
       {:protocol_enabled, _} ->
         {:ok,
          APUtils.send_text_resp(
@@ -572,22 +580,22 @@ defmodule Fedi.ActivityPub.Actor do
       # target properties needed to be populated, but weren't.
 
       # Send the rejection to the client.
-      {:matched_type, {:error, {:err_unmatched_type, _reason}}} ->
+      {:matched_type, {:error, %Error{code: :unhandled_type} = error}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
            :bad_request,
-           "Bad request",
+           error,
            :matched_type
          )}
 
       # Send the rejection to the client.
-      {:valid_activity, {:error, {:err_missing_id, _reason}}} ->
+      {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
            :bad_request,
-           "Bad request",
+           error,
            :valid_activity
          )}
 
@@ -597,21 +605,21 @@ defmodule Fedi.ActivityPub.Actor do
       # Special case: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
-      {:delivered, {:error, {:err_object_required, _reason}}} ->
+      {:delivered, {:error, %Error{code: :object_required} = error}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
            :bad_request,
-           "Bad request",
+           error,
            :delivered
          )}
 
-      {:delivered, {:error, {:err_target_required, _reason}}} ->
+      {:delivered, {:error, %Error{code: :target_required} = error}} ->
         {:ok,
          APUtils.send_text_resp(
            conn,
            :bad_request,
-           "Bad request",
+           error,
            :delivered
          )}
     end
@@ -735,7 +743,18 @@ defmodule Fedi.ActivityPub.Actor do
     end
   end
 
-  defp ensure_activity(actor, as_value, outbox) when is_struct(as_value) do
+  @doc """
+  Verifies that the value is an Activity type, and wraps the
+  Activity in a Create activity if it isn't.
+
+  Ref: [AP Section 6.2.1](https://www.w3.org/TR/activitypub/#object-without-create)
+  The server MUST accept a valid [ActivityStreams] object that isn't a
+  subtype of Activity in the POST request to the outbox. The server then
+  MUST attach this object as the object of a Create Activity. For
+  non-transient objects, the server MUST attach an id to both the
+  wrapping Create and its wrapped Object.
+  """
+  def ensure_activity(actor, as_value, outbox) when is_struct(as_value) do
     if APUtils.is_or_extends?(as_value, "Activity") do
       {:ok, as_value}
     else
