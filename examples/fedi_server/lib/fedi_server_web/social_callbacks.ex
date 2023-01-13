@@ -120,7 +120,7 @@ defmodule FediServerWeb.SocialCallbacks do
   to be processed.
   """
   def authenticate_post_outbox(context, %Plug.Conn{} = conn) do
-    {:ok, {conn, true}}
+    {:ok, conn, true}
   end
 
   @doc """

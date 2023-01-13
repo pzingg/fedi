@@ -141,10 +141,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       # Determine if the actor(s) sending this request are blocked.
       case Actor.delegate(context, :s2s, :blocked, [actor_ids]) do
         {:ok, unauthorized} ->
-          {:ok, {conn, !unauthorized}}
+          {:ok, conn, !unauthorized}
 
         {:error, :callback_not_found} ->
-          {:ok, {conn, true}}
+          {:ok, conn, true}
 
         {:error, reason} ->
           {:error, reason}
@@ -206,7 +206,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
                owned_recipients(database, activity),
              # Finally, load our IRIs to determine if they are a Collection or
              # OrderedCollection.
-             {:ok, {col_iris, cols, ocols}} <-
+             {:ok, col_iris, cols, ocols} <-
                get_collection_types(database, my_iris) do
           # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
           # then no need to do inbox forwarding. We have nothing to forward to.
@@ -359,7 +359,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         context = wrap_for_social_api(context, outbox_iri, raw_json)
 
         case Actor.handle_activity(context, :c2s, activity, top_level: true) do
-          {:ok, {new_actor, new_activity}} -> {new_actor, new_activity}
+          {:ok, new_actor, new_activity} -> {new_actor, new_activity}
           _ -> {context, activity}
         end
       else
@@ -416,13 +416,13 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def add_to_outbox(%{database: database} = context, %URI{} = outbox_iri, activity) do
     with {:get_id, %URI{} = _id} <- {:get_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
-         {:create, {:ok, {activity, _json}}} <-
+         {:create, {:ok, activity, _json}} <-
            {:create, apply(database, :create, [activity])},
          # Persist a reference to the activity in the outbox
          # Then return the the list of 'orderedItems'.
          {:database, {:ok, _ordered_collection_page}} <-
            {:database, apply(database, :update_outbox, [outbox_iri, %{create: [activity]}])} do
-      {:ok, {activity, context.data}}
+      {:ok, activity, context.data}
     else
       {:get_id, _} ->
         {:error, "Activity does not have an id"}
@@ -668,7 +668,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          {:exists, {:ok, false}} <- {:exists, apply(database, :inbox_contains, [inbox_iri, id])},
          # It is a new id
          # Persist the activity
-         {:create, {:ok, {activity, _json}}} <-
+         {:create, {:ok, activity, _json}} <-
            {:create, apply(database, :create, [activity])},
          # Persist a reference to the activity in the inbox
          # Then return the the list of 'orderedItems'.
@@ -809,6 +809,19 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     end
   end
 
+  @doc """
+  Adds the side channel data to the context for Social API
+  activity handlers.
+
+  * `box_iri` is the outbox IRI that is handling this callback.
+  * `app_agent` is the User-Agent string that will be used for
+    dereferencing.
+  * `raw_activity` is the JSON map literal received when deserializing the
+    request body.
+  * `undeliverable` is an out param, indicating if the handled activity
+    should not be delivered to a peer. Its provided default value will always
+    be used when a custom function is called.
+  """
   def wrap_for_social_api(context, box_iri, raw_json) do
     app_agent = Fedi.Application.app_agent()
 
@@ -823,6 +836,23 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     )
   end
 
+  @doc """
+  Adds the side channel data to the context for Federated Protocol
+  activity handlers.
+
+  * `box_iri` is the inbox IRI that is handling this callback.
+  * `app_agent` is the User-Agent string that will be used for
+    dereferencing.
+  * `on_follow` specifies which of the different default
+    actions that the library can provide when receiving a Follow Activity
+    from a peer, one of the following values:
+  * `:do_nothing` does not take any action when a Follow Activity
+    is received.
+  * `:automatically_accept` triggers the side effect of sending an
+    Accept of this Follow request in response.
+  * `:automatically_reject` triggers the side effect of sending a
+    Reject of this Follow request in response.
+  """
   def wrap_for_federated_protocol(context, box_iri) do
     on_follow =
       case Actor.delegate(context, :s2s, :on_follow, []) do

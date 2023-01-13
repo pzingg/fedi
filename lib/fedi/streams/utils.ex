@@ -169,8 +169,8 @@ defmodule Fedi.Streams.Utils do
 
   def get_id_type_name_and_category(as_value) do
     with %URI{} = id = get_json_ld_id(as_value),
-         {:ok, {type_name, category}} <- get_type_name_and_category(as_value) do
-      {:ok, {id, type_name, category}}
+         {:ok, type_name, category} <- get_type_name_and_category(as_value) do
+      {:ok, id, type_name, category}
     else
       {:error, reason} -> {:error, reason}
       _ -> {:error, "No id in value"}
@@ -180,7 +180,7 @@ defmodule Fedi.Streams.Utils do
   def get_type_name_and_category(as_value) do
     case get_json_ld_type(as_value) do
       type_name when is_binary(type_name) ->
-        {:ok, {type_name, get_type_category(type_name)}}
+        {:ok, type_name, get_type_category(type_name)}
 
       _ ->
         {:error, "No type in value"}

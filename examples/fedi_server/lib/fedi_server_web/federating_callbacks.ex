@@ -61,7 +61,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   """
   def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
     # TODO IMPL
-    {:ok, {conn, true}}
+    {:ok, conn, true}
   end
 
   @doc """
@@ -86,7 +86,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   def authorize_post_inbox(context, %Plug.Conn{} = conn) do
     # TODO IMPL
-    {:ok, {conn, true}}
+    {:ok, conn, true}
   end
 
   @doc """

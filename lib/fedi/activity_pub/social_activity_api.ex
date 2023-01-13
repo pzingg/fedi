@@ -39,7 +39,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   objects. It then saves the entry in the database.
   """
   @callback create(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Handles additional side effects for the Update ActivityStreams
@@ -50,7 +50,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   the stored objects as well.
   """
   @callback update(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Delete handles additional side effects for the Delete ActivityStreams
@@ -60,7 +60,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   database.
   """
   @callback delete(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Follow handles additional side effects for the Follow ActivityStreams
@@ -70,7 +70,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   'object' entry, but otherwise has no default side effect.
   """
   @callback follow(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Add handles additional side effects for the Add ActivityStreams
@@ -81,7 +81,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   server.
   """
   @callback add(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Remove handles additional side effects for the Remove ActivityStreams
@@ -92,7 +92,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   server.
   """
   @callback remove(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Like handles additional side effects for the Like ActivityStreams
@@ -102,7 +102,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   "liked" collection of this actor.
   """
   @callback like(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Undo handles additional side effects for the Undo ActivityStreams
@@ -117,7 +117,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   reversal of activities that are being undone.
   """
   @callback undo(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
   Block handles additional side effects for the Block ActivityStreams
@@ -132,5 +132,5 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   Social API.
   """
   @callback block(actor :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 end

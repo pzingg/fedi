@@ -241,11 +241,11 @@ defmodule Fedi.ActivityPub.Actor do
 
         true ->
           Logger.error("#{which} Activity handler: no #{callback_fn} or default_callback")
-          {:ok, {activity, context.data}}
+          {:ok, activity, context.data}
       end
     else
       :pass ->
-        {:ok, {activity, context.data}}
+        {:ok, activity, context.data}
 
       {:module, _} ->
         Logger.error("#{which} Activity handler not set")
@@ -352,16 +352,16 @@ defmodule Fedi.ActivityPub.Actor do
          {:protocol_enabled, true} <-
            {:protocol_enabled, federated_protocol_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, {conn, true}}} <-
+         {:authenticated, {:ok, conn, true}} <-
            {:authenticated, main_delegate(context, :s2s, :authenticate_post_inbox, [conn])},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
          # activities.
-         {:ok, {conn, m}} <-
+         {:ok, conn, m} <-
            APUtils.decode_json_body(conn),
          {:matched_type, {:ok, as_value}} <-
            {:matched_type, JSONResolver.resolve(m)},
-         {:valid_activity, {:ok, {activity, _activity_id}}} <-
+         {:valid_activity, {:ok, activity, _activity_id}} <-
            {:valid_activity, APUtils.valid_activity?(as_value)},
 
          # Allow server implementations to set context data with a hook.
@@ -369,7 +369,7 @@ defmodule Fedi.ActivityPub.Actor do
            main_delegate(context, :s2s, :post_inbox_request_body_hook, [conn, activity]),
 
          # Check authorization of the activity.
-         {:authorized, {:ok, {conn, true}}} <-
+         {:authorized, {:ok, conn, true}} <-
            {:authorized, main_delegate(context, :s2s, :authorize_post_inbox, [conn, activity])},
          inbox_iri <- APUtils.request_id(conn),
 
@@ -406,7 +406,7 @@ defmodule Fedi.ActivityPub.Actor do
          )}
 
       # Not authenticated
-      {:authenticated, {:ok, {conn, _}}} ->
+      {:authenticated, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
 
       # Respond with bad request -- we do not understand the type.
@@ -428,7 +428,7 @@ defmodule Fedi.ActivityPub.Actor do
            :valid_activity
          )}
 
-      {:authorized, {:ok, {conn, _}}} ->
+      {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
 
       # Special case: We know it is a bad request if the object or
@@ -464,11 +464,11 @@ defmodule Fedi.ActivityPub.Actor do
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, {conn, true}}} <-
+         {:authenticated, {:ok, conn, true}} <-
            {:authenticated, main_delegate(context, :common, :authenticate_get_inbox, [conn])},
 
          # Everything is good to begin processing the request.
-         {:ok, {conn, oc}} <-
+         {:ok, conn, oc} <-
            main_delegate(context, :common, :get_inbox, [conn]),
 
          # Deduplicate the 'orderedItems' property by id.
@@ -494,7 +494,7 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, {conn, _}}} ->
+      {:authenticated, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
     end
   end
@@ -517,16 +517,16 @@ defmodule Fedi.ActivityPub.Actor do
          {:protocol_enabled, true} <-
            {:protocol_enabled, social_api_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, {conn, true}}} <-
+         {:authenticated, {:ok, conn, true}} <-
            {:authenticated, main_delegate(actor, :c2s, :authenticate_post_outbox, [conn])},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
          # activities.
-         {:ok, {conn, m}} <-
+         {:ok, conn, m} <-
            APUtils.decode_json_body(conn),
          {:matched_type, {:ok, as_value}} <-
            {:matched_type, JSONResolver.resolve(m)},
-         {:valid_activity, {:ok, {activity, activity_id}}} <-
+         {:valid_activity, {:ok, activity, activity_id}} <-
            {:valid_activity, APUtils.valid_activity?(as_value)},
 
          # Allow server implementations to set context data with a hook.
@@ -565,7 +565,7 @@ defmodule Fedi.ActivityPub.Actor do
          )}
 
       # Not authenticated
-      {:authenticated, {:ok, {conn, _}}} ->
+      {:authenticated, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
 
       # We know it is a bad request if the object or
@@ -591,7 +591,7 @@ defmodule Fedi.ActivityPub.Actor do
            :valid_activity
          )}
 
-      {:authorized, {:ok, {conn, _}}} ->
+      {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
 
       # Special case: We know it is a bad request if the object or
@@ -627,11 +627,11 @@ defmodule Fedi.ActivityPub.Actor do
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, {conn, true}}} <-
+         {:authenticated, {:ok, conn, true}} <-
            {:authenticated, main_delegate(actor, :common, :authenticate_get_outbox, [conn])},
 
          # Everything is good to begin processing the request.
-         {:ok, {conn, oc}} <-
+         {:ok, conn, oc} <-
            main_delegate(actor, :common, :get_outbox, [conn]),
 
          # Request has been processed. Begin responding to the request.
@@ -653,7 +653,7 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, {conn, _}}} ->
+      {:authenticated, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
     end
   end

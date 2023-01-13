@@ -82,7 +82,7 @@ defmodule FediServer.Activities do
   """
   def actor_for_outbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/outbox"),
-         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+         {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
       {:ok, %URI{iri | path: "/users/#{nickname}"}}
     else
       false ->
@@ -100,7 +100,7 @@ defmodule FediServer.Activities do
   """
   def actor_for_inbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/inbox"),
-         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+         {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
       {:ok, %URI{iri | path: "/users/#{nickname}"}}
     else
       false ->
@@ -117,7 +117,7 @@ defmodule FediServer.Activities do
   """
   def outbox_for_inbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/inbox"),
-         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+         {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
       {:ok, %URI{iri | path: "/users/#{nickname}/outbox"}}
     else
       false ->
@@ -136,7 +136,7 @@ defmodule FediServer.Activities do
   """
   def inbox_for_actor(%URI{path: path} = iri) do
     with true <- local?(iri),
-         {:ok, {nickname, :actors}} <- parse_ulid_or_nickname(iri) do
+         {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
       {:ok, %URI{iri | path: "/users/#{nickname}/inbox"}}
     else
       false ->
@@ -213,11 +213,11 @@ defmodule FediServer.Activities do
            }) do
       case repo_insert(params.schema, params) do
         {:ok, object} ->
-          {:ok, {as_type, json_data}}
+          {:ok, as_type, json_data}
 
         {:error, %Ecto.Changeset{} = changeset} ->
           if unique_constraint_error(changeset) do
-            {:ok, {as_type, json_data}}
+            {:ok, as_type, json_data}
           else
             Logger.error("Create failed: #{describe_errors(changeset)}")
             {:error, "Internal database error"}
@@ -262,7 +262,7 @@ defmodule FediServer.Activities do
              data: json_data
            }),
          {:ok, object} <- repo_update(params.schema, params) do
-      {:ok, {as_type, json_data}}
+      {:ok, as_type, json_data}
     else
       {:get_actor, _} ->
         {:error, "Missing actor in activity"}
@@ -283,7 +283,7 @@ defmodule FediServer.Activities do
   API should call Update to create a Tombstone.
   """
   def delete(ap_id) do
-    with {:ok, {_ulid_or_nickname, schema}} <- parse_ulid_or_nickname(ap_id) do
+    with {:ok, _ulid_or_nickname, schema} <- parse_ulid_or_nickname(ap_id) do
       repo_delete(schema, ap_id)
     end
   end
@@ -329,7 +329,7 @@ defmodule FediServer.Activities do
   Used in social SideEffectActor post_inbox.
   """
   def new_id(value) do
-    with {:ok, {_type_name, category}} <- Utils.get_type_name_and_category(value) do
+    with {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
       ulid = Ecto.ULID.generate()
 
       case category do
@@ -582,10 +582,10 @@ defmodule FediServer.Activities do
 
   def parse_basic_params(as_type) do
     case Utils.get_id_type_name_and_category(as_type) do
-      {:ok, {ap_id, type_name, category}} ->
+      {:ok, ap_id, type_name, category} ->
         if local?(ap_id) do
           case parse_ulid_or_nickname(ap_id) do
-            {:ok, {ulid_or_nickname, schema}} ->
+            {:ok, ulid_or_nickname, schema} ->
               if schema == :actors do
                 {:ok,
                  %{
@@ -638,12 +638,12 @@ defmodule FediServer.Activities do
   def parse_ulid_or_nickname(%URI{path: path} = iri) do
     case Regex.run(@users_regex, path) do
       [_match, nickname, _suffix] ->
-        {:ok, {nickname, :actors}}
+        {:ok, nickname, :actors}
 
       _ ->
         case Regex.run(@objects_regex, path) do
           [_match, schema, ulid] ->
-            {:ok, {ulid, String.to_atom(schema)}}
+            {:ok, ulid, String.to_atom(schema)}
 
           _ ->
             {:error, "Missing schema or id in #{URI.to_string(iri)}"}

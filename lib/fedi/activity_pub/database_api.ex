@@ -93,7 +93,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   multiple times for the same ActivityStreams object.
   """
   @callback create(as_type :: struct()) ::
-              {:ok, {as_type :: struct(), json :: map() | nil}} | {:error, term()}
+              {:ok, as_type :: struct(), json :: map() | nil} | {:error, term()}
 
   @doc """
   Sets an existing entry to the database based on the value's id.

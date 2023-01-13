@@ -31,7 +31,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   to be processed.
   """
   @callback authenticate_get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
+              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
 
   @doc """
   Returns the OrderedCollection inbox of the actor for this
@@ -44,7 +44,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   API is enabled.
   """
   @callback get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), ordered_collection :: struct()}}
+              {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 
   @doc """
@@ -69,7 +69,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   to be processed.
   """
   @callback authenticate_get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
+              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
 
   @doc """
   Returns the OrderedCollection outbox of the actor for this
@@ -82,7 +82,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   API is enabled.
   """
   @callback get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), ordered_collection :: struct()}}
+              {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 
   @doc """

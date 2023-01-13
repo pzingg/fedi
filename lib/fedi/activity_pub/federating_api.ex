@@ -56,7 +56,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   to be processed.
   """
   @callback authenticate_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
+              {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
 
   @doc """
   Delegates the authorization of an activity that
@@ -78,7 +78,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   to be processed.
   """
   @callback authorize_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean()}} | {:error, term()}
+              {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
 
   @doc """
   Delegates the side effects of adding to the inbox and

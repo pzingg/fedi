@@ -271,7 +271,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
            apply(database, :actor_for_inbox, [inbox_iri]),
          # Determine if we are in a follow on the 'object' property.
          # TODO: Handle Accept multiple Follow.
-         {:ok, {_follow, follow_id}} <-
+         {:ok, _follow, follow_id} <-
            find_follow(context, values, actor_iri),
          # If we received an Accept whose 'object' is a Follow with an
          # Accept that we sent, add to the following collection.
@@ -334,7 +334,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
           case follow_is_me?(as_type, actor_iri) do
             {:error, reason} -> {:halt, {:error, reason}}
-            {:ok, %URI{} = follow_id} -> {:halt, {:ok, {as_type, follow_id}}}
+            {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
             _ -> {:cont, acc}
           end
         else
@@ -345,7 +345,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       %{member: as_type}, acc when is_struct(as_type) ->
         case follow_is_me?(as_type, actor_iri) do
           {:error, reason} -> {:halt, {:error, reason}}
-          {:ok, %URI{} = follow_id} -> {:halt, {:ok, {as_type, follow_id}}}
+          {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
           _ -> {:cont, acc}
         end
 

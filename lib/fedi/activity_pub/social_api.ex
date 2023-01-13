@@ -75,7 +75,7 @@ defmodule Fedi.ActivityPub.SocialApi do
   to be processed.
   """
   @callback authenticate_post_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, {response :: Plug.Conn.t(), authenticated :: boolean}} | {:error, term()}
+              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
 
   @doc """
   Sets new URL ids on the activity. It also does so for all
@@ -107,5 +107,5 @@ defmodule Fedi.ActivityPub.SocialApi do
   default_callback.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
-              {:ok, {activity :: struct(), undeliverable :: boolean()}} | {:error, term()}
+              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 end

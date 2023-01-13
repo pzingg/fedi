@@ -104,7 +104,7 @@ defmodule Fedi.ActivityPub.Utils do
   def decode_json_body(%Plug.Conn{} = conn) do
     with {:ok, body, conn} <- Plug.Conn.read_body(conn, length: 25_000_000),
          {:ok, json} <- Jason.decode(body) do
-      {:ok, {conn, json}}
+      {:ok, conn, json}
     else
       {:error, reason} ->
         {:error, reason}
@@ -495,7 +495,7 @@ defmodule Fedi.ActivityPub.Utils do
     if is_or_extends?(as_value, "Activity") do
       case Utils.get_json_ld_id(as_value) do
         %URI{} = id ->
-          {:ok, {as_value, id}}
+          {:ok, as_value, id}
 
         _ ->
           {:error, {:err_missing_id, "Activity does not have an id"}}

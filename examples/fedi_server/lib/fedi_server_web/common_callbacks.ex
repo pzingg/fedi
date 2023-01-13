@@ -32,7 +32,7 @@ defmodule FediServerWeb.CommonCallbacks do
   """
   def authenticate_get_inbox(context, %Plug.Conn{} = conn) do
     # TODO IMPL
-    {:ok, {conn, true}}
+    {:ok, conn, true}
   end
 
   @doc """
@@ -49,7 +49,7 @@ defmodule FediServerWeb.CommonCallbacks do
     inbox_iri = APUtils.request_id(conn)
 
     with {:ok, oc} <- Activities.get_inbox(inbox_iri) do
-      {:ok, {conn, oc}}
+      {:ok, conn, oc}
     end
   end
 
@@ -75,7 +75,7 @@ defmodule FediServerWeb.CommonCallbacks do
   """
   def authenticate_get_outbox(context, %Plug.Conn{} = conn) do
     # TODO IMPL
-    {:ok, {conn, true}}
+    {:ok, conn, true}
   end
 
   @doc """
@@ -92,7 +92,7 @@ defmodule FediServerWeb.CommonCallbacks do
     outbox_iri = APUtils.request_id(conn)
 
     with {:ok, oc} <- Activities.get_outbox(outbox_iri) do
-      {:ok, {conn, oc}}
+      {:ok, conn, oc}
     end
   end
 
