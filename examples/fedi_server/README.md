@@ -67,3 +67,11 @@ Ready to run in production? Please [check our deployment guides](https://hexdocs
   * Docs: https://hexdocs.pm/phoenix
   * Forum: https://elixirforum.com/c/phoenix-forum
   * Source: https://github.com/phoenixframework/phoenix
+
+## TODO
+
+Add `min_id`, `max_id`, and `page` query params for inbox and outbox
+controller "GET" handlers to control paged results.
+
+Modify database schema, add logic and controllers to support
+'followers' and 'following' collections.

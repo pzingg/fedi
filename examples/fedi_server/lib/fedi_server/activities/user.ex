@@ -83,6 +83,13 @@ defmodule FediServer.Activities.User do
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
+    endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+
+    shared_inbox_uri = %URI{
+      endpoint_uri
+      | path: Routes.inbox_path(FediServerWeb.Endpoint, :get_shared_inbox)
+    }
+
     %{
       "id" => ap_id,
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -101,7 +108,7 @@ defmodule FediServer.Activities.User do
         "publicKeyPem" => public_key
       },
       "endpoints" => %{
-        "sharedInbox" => Routes.inbox_url(FediServerWeb.Endpoint, :get_shared_inbox)
+        "sharedInbox" => URI.to_string(shared_inbox_uri)
       },
       "discoverable" => Keyword.get(opts, :discoverable?, false)
       # "featured" => "#{ap_id}/collections/featured",
