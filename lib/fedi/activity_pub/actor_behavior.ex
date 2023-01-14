@@ -19,6 +19,9 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   @type context() :: Fedi.ActivityPub.Actor.context()
 
+  # TODO IMPL
+  # Add missing SideEffectActor delegate callbacks
+
   @doc """
   inbox_forwarding delegates inbox forwarding logic when a POST request
   is received in the Actor's inbox.

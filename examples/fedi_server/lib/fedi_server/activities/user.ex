@@ -90,7 +90,6 @@ defmodule FediServer.Activities.User do
       "outbox" => "#{ap_id}/outbox",
       "following" => "#{ap_id}/following",
       "followers" => "#{ap_id}/followers",
-      "featured" => "#{ap_id}/collections/featured",
       "preferredUsername" => nickname,
       "url" => ap_id,
       "name" => name,
@@ -105,6 +104,7 @@ defmodule FediServer.Activities.User do
         "sharedInbox" => Routes.inbox_url(FediServerWeb.Endpoint, :get_shared_inbox)
       },
       "discoverable" => Keyword.get(opts, :discoverable?, false)
+      # "featured" => "#{ap_id}/collections/featured",
       # "icon" => icon,
       # "attachment" => fields,
       # "tag" => emoji_tags,

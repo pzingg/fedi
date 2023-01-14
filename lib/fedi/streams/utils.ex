@@ -227,7 +227,7 @@ defmodule Fedi.Streams.Utils do
       {:ok, id, type_name, category}
     else
       {:error, reason} -> {:error, reason}
-      _ -> {:error, "No id in value"}
+      _ -> {:error, Utils.err_id_required(value: as_value)}
     end
   end
 
@@ -237,7 +237,7 @@ defmodule Fedi.Streams.Utils do
         {:ok, type_name, get_type_category(type_name)}
 
       _ ->
-        {:error, "No type in value"}
+        {:error, Utils.err_type_required(value: as_value)}
     end
   end
 

@@ -629,7 +629,7 @@ defmodule Fedi.ActivityPub.Utils do
             end
 
           _ ->
-            {:halt, {:error, "No id in object"}}
+            {:halt, {:error, Utils.err_id_required(iters: values)}}
         end
       end)
     else
@@ -673,10 +673,10 @@ defmodule Fedi.ActivityPub.Utils do
           end
         else
           {:object_id, _} ->
-            {:halt, {:error, "No id in activity object"}}
+            {:halt, {:error, Utils.err_id_required(activity: activity)}}
 
           {:object_actor, _} ->
-            {:halt, {:error, "No actor in activity object"}}
+            {:halt, {:error, Utils.err_actor_required(activity: activity)}}
         end
       end)
     else

@@ -45,10 +45,10 @@ defmodule FediServerWeb.CommonCallbacks do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_inbox(context, %Plug.Conn{} = conn) do
+  def get_inbox(context, %Plug.Conn{} = conn, params) do
     inbox_iri = APUtils.request_id(conn)
 
-    with {:ok, oc} <- Activities.get_inbox(inbox_iri) do
+    with {:ok, oc} <- Activities.get_inbox(inbox_iri, params) do
       {:ok, conn, oc}
     end
   end
@@ -88,10 +88,10 @@ defmodule FediServerWeb.CommonCallbacks do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_outbox(context, %Plug.Conn{} = conn) do
+  def get_outbox(context, %Plug.Conn{} = conn, params) do
     outbox_iri = APUtils.request_id(conn)
 
-    with {:ok, oc} <- Activities.get_outbox(outbox_iri) do
+    with {:ok, oc} <- Activities.get_outbox(outbox_iri, params) do
       {:ok, conn, oc}
     end
   end

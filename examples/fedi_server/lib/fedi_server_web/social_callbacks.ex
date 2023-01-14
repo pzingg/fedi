@@ -12,11 +12,11 @@ defmodule FediServerWeb.SocialCallbacks do
 
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
 
-  defdelegate get_inbox(context, conn), to: CommonCallbacks
+  defdelegate get_inbox(context, conn, params), to: CommonCallbacks
 
   defdelegate authenticate_get_outbox(context, conn), to: CommonCallbacks
 
-  defdelegate get_outbox(context, conn), to: CommonCallbacks
+  defdelegate get_outbox(context, conn, params), to: CommonCallbacks
 
   defdelegate post_outbox(context, activity, outbox_iri, raw_json), to: CommonCallbacks
 

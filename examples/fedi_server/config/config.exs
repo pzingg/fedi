@@ -31,6 +31,18 @@ config :phoenix, :json_library, Jason
 # Configure Akkoma's http_signatures library
 config :http_signatures, adapter: Fedi.ActivityPub.HTTPSignatureTransport
 
+# Configure all the "Accept" types we will handle
+config :mime, :types, %{
+  "text/xml" => ["xml"],
+  "application/xml" => ["xml"],
+  "application/xrd+xml" => ["xrd+xml"],
+  "text/json" => ["xml"],
+  "application/json" => ["json"],
+  "application/ld+json" => ["json"],
+  "application/jrd+json" => ["jrd+json"],
+  "application/activity+json" => ["json"]
+}
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

@@ -43,7 +43,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback get_inbox(context :: context(), conn :: Plug.Conn.t(), params :: map()) ::
               {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 
@@ -81,7 +81,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  @callback get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback get_outbox(context :: context(), conn :: Plug.Conn.t(), params :: map()) ::
               {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 

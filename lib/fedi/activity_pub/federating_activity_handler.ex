@@ -37,15 +37,23 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
         case apply(database, :create, [as_type]) do
-          {:ok, created, _raw_json} -> {:cont, [created | acc]}
-          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, created, _raw_json} ->
+            {:cont, [created | acc]}
+
+          {:error, reason} ->
+            {:halt, {:error, reason}}
         end
 
       %{iri: %URI{} = iri}, acc ->
         with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
-             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m),
-             {:ok, created, _raw_json} <- apply(database, :create, [as_type]) do
-          {:cont, [created | acc]}
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
+          case apply(database, :create, [as_type]) do
+            {:ok, created, _raw_json} ->
+              {:cont, [created | acc]}
+
+            {:error, reason} ->
+              {:halt, {:error, reason}}
+          end
         else
           {:error, reason} -> {:halt, {:error, reason}}
         end
@@ -182,7 +190,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           end
 
         _ ->
-          {:halt, {:error, "No id in object"}}
+          {:halt, {:error, Utils.err_id_required(iters: actor_iters)}}
       end
     end)
   end

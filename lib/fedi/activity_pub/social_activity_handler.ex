@@ -102,7 +102,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
 
                 _ ->
                   Logger.error("No id in #{inspect(as_type)}")
-                  {:halt, {:error, "No id in type"}}
+                  {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
             _, _ ->
@@ -156,7 +156,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
               end
 
             _ ->
-              {:halt, {:error, "No id in object"}}
+              {:halt, {:error, Utils.err_id_required(object: object_type)}}
           end
 
         _non_type_iter, _acc ->
@@ -201,7 +201,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
               end
 
             _ ->
-              {:halt, {:error, "No id in object"}}
+              {:halt, {:error, Utils.err_id_required(object: object_type)}}
           end
 
         _non_type_iter, _acc ->

@@ -253,7 +253,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         end
 
       nil ->
-        {:error, "No id in activity"}
+        {:error, Utils.err_id_required(activity: activity)}
     end
   end
 
@@ -345,13 +345,13 @@ defmodule Fedi.ActivityPub.SideEffectActor do
             %{properties: %{"items" => prop}} = Map.get(cols, iri) ->
               case APUtils.to_id(prop) do
                 %URI{} = id -> {:cont, [id | acc]}
-                _ -> {:halt, {:error, "No id in type"}}
+                _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
             %{properties: %{"orderedItems" => prop}} = Map.get(ocols, iri) ->
               case APUtils.to_id(prop) do
                 %URI{} = id -> {:cont, [id | acc]}
-                _ -> {:halt, {:error, "No id in type"}}
+                _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
             true ->
@@ -840,9 +840,6 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def set_object_id(%{database: database} = _context, object) do
     with {:ok, %URI{} = id} <- apply(database, :new_id, [object]) do
       Utils.set_json_ld_id(object, id)
-    else
-      {:error, reason} -> {:error, reason}
-      value -> {:error, "Database did not return a URI: #{inspect(value)}"}
     end
   end
 

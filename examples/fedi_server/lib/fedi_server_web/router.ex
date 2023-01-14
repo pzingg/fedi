@@ -1,12 +1,21 @@
 defmodule FediServerWeb.Router do
   use FediServerWeb, :router
 
+  # Note: make sure to configure all these types in config.exs!
   pipeline :api do
     plug(:accepts, ["json"])
     plug(:set_actor)
   end
 
-  pipeline :well_known do
+  pipeline :xrd do
+    plug(:accepts, ["xml", "xrd+xml"])
+  end
+
+  pipeline :jrd do
+    plug(:accepts, ["json", "jrd+json"])
+  end
+
+  pipeline :webfinger do
     plug(:accepts, ["json", "jrd+json", "xml", "xrd+xml"])
   end
 
@@ -15,18 +24,31 @@ defmodule FediServerWeb.Router do
 
     get("/inbox", InboxController, :get_shared_inbox)
     post("/inbox", InboxController, :post_shared_inbox)
+    get("/users/:nickname", UsersController, :profile)
     get("/users/:nickname/inbox", InboxController, :get_inbox)
     post("/users/:nickname/inbox", InboxController, :post_inbox)
     get("/users/:nickname/outbox", OutboxController, :get_outbox)
     post("/users/:nickname/outbox", OutboxController, :post_outbox)
+    get("/users/:nickname/activities/:ulid", ActivitiesController, :activity)
+    get("/users/:nickname/objects/:ulid", ObjectsController, :object)
   end
 
   scope "/.well-known", FediServerWeb do
-    pipe_through(:well_known)
+    pipe_through(:webfinger)
 
-    get("/host-meta", WebFinger.WebFingerController, :host_meta)
-    get("/webfinger", WebFinger.WebFingerController, :webfinger)
-    # get("/nodeinfo", Nodeinfo.NodeinfoController, :schemas)
+    get("/webfinger", WellKnownController, :webfinger)
+  end
+
+  scope "/.well-known", FediServerWeb do
+    pipe_through(:jrd)
+
+    get("/nodeinfo", WellKnownController, :nodeinfo)
+  end
+
+  scope "/.well-known", FediServerWeb do
+    pipe_through(:xrd)
+
+    get("/host-meta", WellKnownController, :hostmeta)
   end
 
   def set_actor(conn, _opts) do

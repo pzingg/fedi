@@ -460,7 +460,7 @@ defmodule Fedi.ActivityPub.Actor do
   actor's inbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def handle_get_inbox(%{} = context, %Plug.Conn{} = conn) do
+  def handle_get_inbox(%{} = context, %Plug.Conn{} = conn, params \\ %{}) do
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
@@ -470,7 +470,7 @@ defmodule Fedi.ActivityPub.Actor do
 
          # Everything is good to begin processing the request.
          {:ok, conn, oc} <-
-           main_delegate(context, :common, :get_inbox, [conn]),
+           main_delegate(context, :common, :get_inbox, [conn, params]),
 
          # Deduplicate the 'orderedItems' property by id.
          {:ok, oc} <-
@@ -622,6 +622,15 @@ defmodule Fedi.ActivityPub.Actor do
            error,
            :delivered
          )}
+
+      {:delivered, {:error, _reason}} ->
+        {:ok,
+         APUtils.send_text_resp(
+           conn,
+           :internal_server_error,
+           "Internal server error",
+           :delivered
+         )}
     end
   end
 
@@ -630,7 +639,7 @@ defmodule Fedi.ActivityPub.Actor do
   actor's outbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def handle_get_outbox(%{} = actor, %Plug.Conn{} = conn) do
+  def handle_get_outbox(%{} = actor, %Plug.Conn{} = conn, params \\ %{}) do
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
@@ -640,7 +649,7 @@ defmodule Fedi.ActivityPub.Actor do
 
          # Everything is good to begin processing the request.
          {:ok, conn, oc} <-
-           main_delegate(actor, :common, :get_outbox, [conn]),
+           main_delegate(actor, :common, :get_outbox, [conn, params]),
 
          # Request has been processed. Begin responding to the request.
          # Serialize the OrderedCollection.

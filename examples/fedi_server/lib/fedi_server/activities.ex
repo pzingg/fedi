@@ -21,7 +21,7 @@ defmodule FediServer.Activities do
   alias FediServer.Repo
 
   @users_regex ~r/^\/users\/([^\/]+)($|\/.*)/
-  @objects_regex ~r/^\/([^\/]+)\/([A-Z0-9]+)$/
+  @objects_regex ~r/^\/users\/([^\/]+)\/([^\/]+)\/([A-Z0-9]+)$/
 
   @doc """
   Returns true if the OrderedCollection at 'inbox'
@@ -43,7 +43,7 @@ defmodule FediServer.Activities do
   Returns the first ordered collection page of the inbox at
   the specified IRI, for prepending new items.
   """
-  def get_inbox(%URI{} = inbox_iri) do
+  def get_inbox(%URI{} = inbox_iri, params) do
     with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
       get_mailbox_page(actor_iri, false)
     end
@@ -168,20 +168,19 @@ defmodule FediServer.Activities do
   Returns the database entry for the specified id.
   """
   def get(%URI{} = ap_id) do
-    [:actors, :objects, :activities]
-    |> Enum.reduce_while({:error, "Not found"}, fn schema, acc ->
+    with {:ok, _ulid_or_nickname, schema} <- parse_ulid_or_nickname(ap_id) do
       case repo_get_by_ap_id(schema, ap_id) do
         %{__struct__: _module, data: data} ->
-          {:halt, Fedi.Streams.JSONResolver.resolve_with_as_context(data)}
+          Fedi.Streams.JSONResolver.resolve_with_as_context(data)
 
         nil ->
-          {:cont, acc}
+          {:error, "Not found"}
 
         other ->
           Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
-          {:halt, {:error, "Internal database error"}}
+          {:error, "Internal database error"}
       end
-    end)
+    end
   end
 
   @doc """
@@ -231,6 +230,21 @@ defmodule FediServer.Activities do
         {:error, reason}
     end
   end
+
+  def dump_file(object, schema, ap_id) do
+    case URI.parse(ap_id) |> parse_ulid_or_nickname() do
+      {:ok, id, _schema} ->
+        path = "#{schema}-#{id}.exs"
+        Logger.error("dumping #{path}")
+        File.write(path, "#{inspect(Map.from_struct(object))}")
+
+      _ ->
+        Logger.error("couldn't parse #{ap_id}")
+        :ok
+    end
+  end
+
+  def dump_file(_), do: :ok
 
   def unique_constraint_error(changeset) do
     Enum.find(changeset.errors, fn {field, {_msg, opts}} ->
@@ -294,7 +308,7 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_outbox.
   """
-  def get_outbox(outbox_iri) do
+  def get_outbox(outbox_iri, params) do
     with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
       get_mailbox_page(actor_iri, true)
     end
@@ -329,14 +343,30 @@ defmodule FediServer.Activities do
   Used in social SideEffectActor post_inbox.
   """
   def new_id(value) do
-    with {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
+    # endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+
+    with {:get_actor, %URI{path: actor_path} = actor_iri} <-
+           {:get_actor, Utils.get_actor_or_attributed_to_iri(value)},
+         {:local_actor, true} <- {:local_actor, local?(actor_iri)},
+         {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
       ulid = Ecto.ULID.generate()
 
       case category do
         :actors -> {:error, "Cannot make new id for actors"}
-        :activities -> {:ok, URI.parse("http://example.com/activities/#{ulid}")}
-        _ -> {:ok, URI.parse("http://example.com/objects/#{ulid}")}
+        :activities -> {:ok, %URI{actor_iri | path: actor_path <> "/activities/#{ulid}"}}
+        _ -> {:ok, %URI{actor_iri | path: actor_path <> "/objects/#{ulid}"}}
       end
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:get_actor, _} ->
+        Logger.error("new_id, couldn't get actor for #{inspect(value)}")
+        {:error, Utils.err_actor_required(object: value)}
+
+      {:local_actor, _} ->
+        Logger.error("new_id, actor #{inspect(value)} is not ours")
+        {:error, "Internal system error"}
     end
   end
 
@@ -636,14 +666,14 @@ defmodule FediServer.Activities do
   Assumes iri is local.
   """
   def parse_ulid_or_nickname(%URI{path: path} = iri) do
-    case Regex.run(@users_regex, path) do
-      [_match, nickname, _suffix] ->
-        {:ok, nickname, :actors}
+    case Regex.run(@objects_regex, path) do
+      [_match, _nickname, schema, ulid] ->
+        {:ok, ulid, String.to_atom(schema)}
 
       _ ->
-        case Regex.run(@objects_regex, path) do
-          [_match, schema, ulid] ->
-            {:ok, ulid, String.to_atom(schema)}
+        case Regex.run(@users_regex, path) do
+          [_match, nickname, _suffix] ->
+            {:ok, nickname, :actors}
 
           _ ->
             {:error, "Missing schema or id in #{URI.to_string(iri)}"}
@@ -825,7 +855,9 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for delete #{other}"}
   end
 
-  def describe_errors(%Changeset{action: action, data: %{__struct__: module}, errors: errors}) do
+  def describe_errors(
+        %Changeset{action: action, data: %{__struct__: module}, errors: errors} = changeset
+      ) do
     error_str =
       Enum.map(errors, fn {field, _error_keywords} = error ->
         "#{inspect(error)}"
@@ -833,6 +865,7 @@ defmodule FediServer.Activities do
       end)
       |> Enum.join(", ")
 
-    "#{Utils.alias_module(module)} #{action} error on fields: #{error_str}"
+    "#{Utils.alias_module(module)} #{action} error: #{inspect(changeset)}"
+    # "#{Utils.alias_module(module)} #{action} error on fields: #{error_str}"
   end
 end
