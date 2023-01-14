@@ -105,16 +105,33 @@ defmodule Fedi.ActivityPub.Actor do
           data: c2s_data() | s2s_data()
         }
 
-  def new_custom_actor(common, opts \\ []) do
-    make_actor(__MODULE__, common, opts)
+  @doc """
+  Builds an `Actor` struct, plugging in modules for the delegates and
+  activity handlers.
+
+  * `common` - the Elixir module implementing the
+    `CommonApi` behaviour used by both the Social API and Federated Protocol.
+  * `database` - the Elixir module implementing the `DatabaseApi` behaviour.
+  * `opts` - Keyword list specifying the Elixir modules that implement the
+     Social API and Federated Protocols. `opts` uses these keys:
+  * `:c2s` (optional) - the Elixir module implementing the `SocialApi`
+     behaviour.
+  * `:c2s_activity_handler` (optional) - the Elixir module implementing the
+    `SocialActivityApi` behaviour for activity handlers.
+  * `:s2s` (optional) - the Elixir module implementing the `FederatingApi`
+     behaviour.
+  * `:s2s_activity_handler` (optional) - the Elixir module implementing the
+    `FederatingActivityApi` behaviour for activity handlers.
+  """
+  def new_custom_actor(common, database, opts \\ []) do
+    make_actor(__MODULE__, common, database, opts)
   end
 
-  def make_actor(module, common, opts) do
+  def make_actor(module, common, database, opts) do
     c2s = Keyword.get(opts, :c2s)
     s2s = Keyword.get(opts, :s2s)
     c2s_activity_handler = Keyword.get(opts, :c2s_activity_handler)
     s2s_activity_handler = Keyword.get(opts, :s2s_activity_handler)
-    database = Keyword.get(opts, :database)
     fallback = Keyword.get(opts, :fallback)
 
     [c2s, s2s, database, fallback]
@@ -339,10 +356,6 @@ defmodule Fedi.ActivityPub.Actor do
   Implements the generic algorithm for handling a POST request to an
   actor's inbox independent on an application. It relies on a delegate to
   implement application specific functionality.
-
-  Specifying an `:endpoint_url` with a given scheme, host, and port in the
-  Application configuration allows for retrieving ActivityStreams content with
-  identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
   def handle_post_inbox(
         %{federated_protocol_enabled?: federated_protocol_enabled?} = context,
@@ -399,7 +412,7 @@ defmodule Fedi.ActivityPub.Actor do
       # enabled.
       {:protocol_enabled, _} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :method_not_allowed,
            "Method not allowed",
@@ -413,7 +426,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Respond with bad request -- we do not understand the type.
       {:matched_type, {:error, %Error{code: :unhandled_type}}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            "Bad request",
@@ -422,7 +435,7 @@ defmodule Fedi.ActivityPub.Actor do
 
       {:valid_activity, {:error, %Error{code: :missing_id}}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            "Bad request",
@@ -437,7 +450,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Send the rejection to the peer.
       {:post_inbox, {:error, %Error{code: :object_required}}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            "Bad request",
@@ -446,7 +459,7 @@ defmodule Fedi.ActivityPub.Actor do
 
       {:post_inbox, {:error, %Error{code: :target_required}}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            "Bad request",
@@ -504,10 +517,6 @@ defmodule Fedi.ActivityPub.Actor do
   Implements the generic algorithm for handling a POST request to an
   actor's outbox independent on an application. It relies on a delegate to
   implement application specific functionality.
-
-  Specifying an `:endpoint_url` with a given scheme, host, and port in the
-  Application configuration allows for retrieving ActivityStreams content with
-  identifiers such as HTTP, HTTPS, or other protocol schemes.
   """
   def handle_post_outbox(
         %{social_api_enabled?: social_api_enabled?} = actor,
@@ -565,7 +574,7 @@ defmodule Fedi.ActivityPub.Actor do
       # server support SHOULD result in a 405 Method Not Allowed response.
       {:protocol_enabled, _} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :method_not_allowed,
            "Method not allowed",
@@ -582,7 +591,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Send the rejection to the client.
       {:matched_type, {:error, %Error{code: :unhandled_type} = error}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
@@ -592,7 +601,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Send the rejection to the client.
       {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
@@ -607,7 +616,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Send the rejection to the peer.
       {:delivered, {:error, %Error{code: :object_required} = error}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
@@ -616,7 +625,7 @@ defmodule Fedi.ActivityPub.Actor do
 
       {:delivered, {:error, %Error{code: :target_required} = error}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
@@ -625,7 +634,7 @@ defmodule Fedi.ActivityPub.Actor do
 
       {:delivered, {:error, _reason}} ->
         {:ok,
-         APUtils.send_text_resp(
+         APUtils.send_json_resp(
            conn,
            :internal_server_error,
            "Internal server error",
@@ -678,10 +687,10 @@ defmodule Fedi.ActivityPub.Actor do
   @doc """
   Sends a federated activity.
 
-  The provided url must be the outbox of the sender. All processing of
+  `outbox_iri` must be the outbox of the sender. All processing of
   the activity occurs similarly to the C2S flow:
-    - If t is not an Activity, it is wrapped in a Create activity.
-    - A new ID is generated for the activity.
+    - If `as_value` is not an Activity, it is wrapped in a Create activity.
+    - A new id is generated for the activity.
     - The activity is added to the specified outbox.
     - The activity is prepared and delivered to recipients.
 
@@ -690,19 +699,23 @@ defmodule Fedi.ActivityPub.Actor do
   method will guaranteed work for non-custom Actors. For custom actors,
   care should be used to not call this method if only C2S is supported.
 
-  Send is programmatically accessible if the federated protocol is enabled.
+  Send is programmatically accessible if the Federated Protocol is enabled.
   """
   def send(
         %{federated_protocol_enabled?: true} = actor,
-        outbox,
+        %URI{} = outbox_iri,
         as_value
-      ) do
-    deliver(actor, outbox, as_value, nil)
+      )
+      when is_struct(as_value) do
+    deliver(actor, outbox_iri, as_value, nil)
   end
 
   @doc """
   Delegates all outbox handling steps and optionally will federate the
-  activity if the federated protocol is enabled.
+  activity if the Federated Protocol is enabled.
+
+  * `outbox_iri` - the outbox of the sender.
+  * `m` - the map from the previously serialized Activity.
 
   Note: `m` may be nil.
   """

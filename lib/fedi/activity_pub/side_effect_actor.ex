@@ -1,27 +1,11 @@
 defmodule Fedi.ActivityPub.SideEffectActor do
   @moduledoc """
-  SideEffectActor handles the ActivityPub
-  implementation side effects, but requires a more opinionated application to
-  be written.
+  Handles the implementation side effects presented in the ActivityPub
+  specification, but requires a more opinionated application to be written.
 
-  Note that when using the SideEffectActor with an application that good-faith
+  Note that when using the `SideEffectActor` with an application that good-faith
   implements its required interfaces, the ActivityPub specification is
   guaranteed to be correctly followed.
-
-  These optional callbacks are directly delegated by the
-  Fedi.ActivityPub.Actor module to implementation modules:
-
-    * `authenticate_get_outbox/2` - :common
-    * `get_outbox/2` - :common
-    * `authenticate_get_inbox/2` - :common
-    * `get_inbox/2` - :common
-    * `authenticate_post_outbox/2` - :c2s
-    * `post_outbox_request_body_hook/3` - :c2s
-    * `authenticate_post_inbox/2` - :s2s
-    * `post_inbox_request_body_hook/3` - :s2s
-
-  See the `FediServerWeb.SocialCallbacks` module in the fedi_server
-  example application for an implementation.
   """
 
   @behaviour Fedi.ActivityPub.ActorBehavior
@@ -74,7 +58,25 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           data: term()
         }
 
-  def new(common, opts \\ []) do
+  @doc """
+  Builds a `SideEffectActor` struct, plugging in modules for the delegates and
+  activity handlers.
+
+  * `common` - the Elixir module implementing the
+    `CommonApi` behaviour used by both the Social API and Federated Protocol.
+  * `database` - the Elixir module implementing the `DatabaseApi` behaviour.
+  * `opts` - Keyword list specifying the Elixir modules that implement the
+     Social API and Federated Protocols. `opts` uses these keys:
+  * `:c2s` (optional) - the Elixir module implementing the `SocialApi`
+     behaviour.
+  * `:s2s` (optional) - the Elixir module implementing the `FederatingApi`
+     behaviour.
+
+  The `:c2s_activity_handler` and `:s2s_activity_handler` members
+  are set to the built-in values `SocialActivityHandler` and
+  `FederatingActivityHandler` respectively.
+  """
+  def new(common, database, opts \\ []) do
     opts =
       Keyword.merge(
         [
@@ -84,10 +86,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         opts
       )
 
-    Fedi.ActivityPub.Actor.make_actor(__MODULE__, common, opts)
+    Fedi.ActivityPub.Actor.make_actor(__MODULE__, common, database, opts)
   end
-
-  ### common delegations
 
   ### c2s delegations
 
@@ -98,13 +98,13 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not write a
+  post_outbox. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -120,8 +120,6 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def post_outbox_body_hook(context, %Plug.Conn{} = conn) do
     Actor.delegate(context, :c2s, :post_outbox_body_hook, [conn])
   end
-
-  ### s2s delegations
 
   ### SideEffectActor implementation
 
@@ -150,6 +148,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           {:error, reason}
       end
     else
+      {:error, reason} -> {:error, reason}
       {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
     end
   end
@@ -266,7 +265,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Client to Server interactions and Server to Server Interactions), the
   server MUST target and deliver to:
 
-  The to, bto, cc, bcc or audience fields if their values are individuals
+  The 'to', 'bto', 'cc', 'bcc' or 'audience' fields if their values are individuals
   or Collections owned by the actor.
   """
   def owned_recipients(database, activity) do
@@ -286,7 +285,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   @doc """
-  Loads the recipient iris and separates them into OrderedCollection and
+  Loads the recipient IRIs and separates them into OrderedCollection and
   Collection values.
   """
   def get_collection_types(database, iris) do
@@ -323,7 +322,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   @doc """
-  Filter the list of collection ids, then gather the ids contained
+  Filters the list of collection ids, and then gathers the ids contained
   within the collections.
 
   Ref: [AP Section 7.1.1](https://www.w3.org/TR/activitypub/#outbox-delivery)
@@ -331,7 +330,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Client to Server interactions and Server to Server Interactions), the
   server MUST target and deliver to:
 
-  The to, bto, cc, bcc or audience fields if their values are individuals
+  The 'to', 'bto', 'cc', 'bcc' or 'audience' fields if their values are individuals
   or Collections owned by the actor.
   """
   def get_collection_recipients(context, col_iris, cols, ocols, activity) do
@@ -387,6 +386,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
     with {:ok, _activity, context_data} <- add_to_outbox(context, outbox_iri, activity) do
       case context_data do
+        # QUESTION when is undeliverable ever changed?
         %{undeliverable: undeliverable} ->
           {:ok, !undeliverable}
 
@@ -400,8 +400,6 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   @doc """
   Creates new 'id' entries on an activity and its objects if it is a
   Create activity.
-
-
   """
   def add_new_ids(context, activity) do
     with {:ok, activity} <- set_object_id(context, activity),
@@ -419,7 +417,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Completes the peer-to-peer sending of a federated message to
   another server.
 
-  Called if the Federated protocol is supported.
+  Called if the Federated Protocol is supported.
   """
   def deliver(context, outbox_iri, activity) do
     with {:ok, context, activity, recipients} <- prepare(context, outbox_iri, activity) do
@@ -468,7 +466,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   @doc """
   Takes a deliverable object and returns a list of the proper recipient
   target URIs. Additionally, the deliverable object will have any hidden
-  hidden recipients ("bto" and "bcc") stripped from it.
+  hidden recipients ('bto' and 'bcc' properties) stripped from it.
 
   Only called if both the Social API and Federated Protocol are supported.
   """
@@ -605,8 +603,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         {:ok, actors}
       end
     else
-      # TODO: Determine if more logic is needed here for inaccessible
-      # collections owned by peer servers.
+      # TODO Determine if more logic is needed here for inaccessible
+      # collections owned by peer servers
       {actors, more} =
         Enum.reduce(actor_ids, {actors, []}, fn iri, {actor_acc, coll_acc} = acc ->
           case dereference_for_resolving_inboxes(database, transport, iri) do
@@ -639,8 +637,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   @doc """
-  Dereferences an IRI solely for finding an
-  actor's inbox IRI to deliver to.
+  Dereferences an IRI solely for finding an actor's inbox IRI to deliver to.
 
   The returned actor could be nil, if it wasn't an actor (ex: a Collection or
   OrderedCollection).
@@ -673,8 +670,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   @doc """
-  Takes a prepared Activity and send it to specific
-  recipients on behalf of an actor.
+  Takes a prepared Activity and send it to specific recipients on behalf
+  of an actor.
   """
   def deliver_to_recipients(
         %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
@@ -725,7 +722,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Given an ActivityStreams value, recursively examines ownership of the id or
   href and the ones on properties applicable to inbox forwarding.
 
-  Recursion may be limited by providing a 'max_depth' greater than zero. A
+  Recursion may be limited by providing a `max_depth` greater than zero. A
   value of zero or a negative number will result in infinite recursion.
 
   Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
@@ -740,8 +737,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         curr_depth
       )
       when is_struct(val) do
+    # QUESTION Are these two values always the same?
+    # Could we eliminate the inbox_iri argument?
     Logger.error("hi_fowarding_values inbox_iri #{URI.to_string(inbox_iri)}")
     Logger.error("hi_fowarding_values c.box_iri #{URI.to_string(box_iri)}")
+
     # Stop recurring if we are exceeding the maximum depth and the maximum
     # is a positive number.
     if max_depth > 0 && curr_depth >= max_depth do

@@ -28,10 +28,8 @@ defmodule ActivityStreams.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:plug_cowboy, "~> 2.6"},
-      {:json_ld, "~> 0.3"},
-      {:tesla, "~> 1.5"},
-      {:http_signatures, "~> 0.1.1"},
+      {:plug, "~> 1.14"},
+      {:jason, "~> 1.2"},
       {:timex, "~> 3.7"}
       # {:dep_from_hexpm, "~> 0.3.0"},
       # {:dep_from_git, git: "https://github.com/elixir-lang/my_dep.git", tag: "0.1.0"}

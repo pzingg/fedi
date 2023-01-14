@@ -35,7 +35,7 @@ defmodule FediServerWeb.SocialCallbacks do
 
   If an error is returned, it is passed back to the caller of
   post_inbox. In this case, the ActorBehavior implementation must not
-  write a response to the connection as is expected that the caller
+  send a response to the connection as is expected that the caller
   to post_inbox will do so when handling the error.
   """
   def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
@@ -57,7 +57,7 @@ defmodule FediServerWeb.SocialCallbacks do
 
   If an error is returned, it is passed back to the caller of
   post_outbox. In this case, the ActorBehavior implementation must not
-  write a response to the connection as is expected that the caller
+  send a response to the connection as is expected that the caller
   to post_outbox will do so when handling the error.
   """
   def post_outbox_request_body_hook(context, %Plug.Conn{} = conn, data) do
@@ -70,13 +70,13 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Federated Protocol is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the implementation must not write a
+  post_inbox. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -106,13 +106,13 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not write a
+  post_outbox. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then

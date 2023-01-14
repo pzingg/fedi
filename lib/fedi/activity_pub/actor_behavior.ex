@@ -19,11 +19,10 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   @type context() :: Fedi.ActivityPub.Actor.context()
 
-  # TODO IMPL
-  # Add missing SideEffectActor delegate callbacks
+  # TODO IMPL add missing SideEffectActor delegate callbacks
 
   @doc """
-  inbox_forwarding delegates inbox forwarding logic when a POST request
+  Delegates inbox forwarding logic when a POST request
   is received in the Actor's inbox.
 
   Only called if the Federated Protocol is enabled.
@@ -57,13 +56,13 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   general storage for independent retrieval, and not just within the
   actor's outbox.
 
-  If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
+  If the error is `:object_required` or `:target_required`, then a Bad
   Request status is sent in the response.
 
-  Note that 'raw_json' is an unfortunate consequence where an 'Update'
-  Activity is the only one that explicitly cares about 'null' values in
-  JSON. Since go-fed does not differentiate between 'null' values and
-  values that are simply not present, the 'raw_json' map is ONLY needed
+  Note that `raw_json` is an unfortunate consequence where an Update
+  Activity is the only one that explicitly cares about null values in
+  JSON. Since the library does not differentiate between null values and
+  values that are simply not present, the `raw_json` map is ONLY needed
   for this narrow and specific use case.
   """
   @callback post_outbox(
@@ -75,23 +74,23 @@ defmodule Fedi.ActivityPub.ActorBehavior do
               {:ok, deliverable :: boolean()} | {:error, term()}
 
   @doc """
-  add_new_ids sets new URL ids on the activity. It also does so for all
+  Sets new URL ids on the activity. It also does so for all
   'object' properties if the Activity is a Create type.
 
   Only called if the Social API is enabled.
 
-  If an error is returned, it is returned to the caller of post_outbox.
+  If an error is returned, it is returned to the caller of `post_outbox`.
   """
   @callback add_new_ids(context :: context(), activity :: term()) ::
               {:ok, activity :: term()} | {:error, term()}
 
   @doc """
-  deliver sends a federated message. Called only if federation is
+  Sends a federated message. Called only if federation is
   enabled.
 
   Called if the Federated Protocol is enabled.
 
-  The provided url is the outbox of the sender. The Activity contains
+  `outbox_iri` is the outbox of the sender. The Activity contains
   the information about the intended recipients.
 
   If an error is returned, it is returned to the caller of post_outbox.
@@ -100,8 +99,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
               :ok | {:error, term()}
 
   @doc """
-  wrap_in_create wraps the provided object in a Create ActivityStreams
-  activity. The provided URL is the actor's outbox endpoint.
+  Wraps the provided object in a Create ActivityStreams
+  activity. `outbox_iri` is the actor's outbox endpoint.
 
   Only called if the Social API is enabled.
   """

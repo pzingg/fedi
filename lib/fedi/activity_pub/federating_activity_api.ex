@@ -3,10 +3,10 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   These callbacks are called when a new activity is created in
   the Federated Protocol.
 
-  Note that certain types of callbacks will be 'wrapped' with default
+  Note that certain types of callbacks will be wrapped with default
   behaviors supported natively by the library.
 
-  For example, implementing a 'Create' callback
+  For example, implementing a `create/2` activity handler callback
   lets an application dependency inject
   additional behaviors they want to take place, including the default
   behavior supplied by this library. This is guaranteed to be compliant
@@ -21,7 +21,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
     update: 2,
     delete: 2,
     follow: 2,
-    on_follow: 2,
+    on_follow: 1,
     add: 2,
     remove: 2,
     like: 2,
@@ -30,10 +30,11 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   ]
 
   @type context() :: Actor.s2s_context()
+  @type on_follow() :: Actor.on_follow()
 
   @doc """
-  Create handles additional side effects for the Create ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Create ActivityStreams
+  type, specific to the application.
 
   The wrapping callback for the Federating Protocol ensures the
   'object' property is created in the database.
@@ -44,8 +45,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Update handles additional side effects for the Update ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Update ActivityStreams
+  type, specific to the application.
 
   The wrapping callback for the Federating Protocol ensures the
   'object' property is updated in the database.
@@ -57,8 +58,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Delete handles additional side effects for the Delete ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Delete ActivityStreams
+  type, specific to the application.
 
   Delete removes the federated entry from the database.
   """
@@ -66,28 +67,28 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Follow handles additional side effects for the Follow ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Follow ActivityStreams
+  type, specific to the application.
 
   The wrapping function can have one of several default behaviors,
-  depending on the value of the OnFollow setting.
+  depending on the value of the `on_follow` setting.
   """
   @callback follow(context :: context(), activity :: struct()) ::
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  OnFollow determines what action to take for this particular callback
-  if a Follow Activity is handled.
+  Determines what action to take for this particular callback
+  if a Follow activity is handled.
   """
-  @callback on_follow(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback on_follow(context :: context()) ::
+              {:ok, on_follow()} | {:error, term()}
 
   @doc """
-  Accept handles additional side effects for the Accept ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Accept ActivityStreams
+  type, specific to the application.
 
-  The wrapping function determines if this 'Accept' is in response to a
-  'Follow'. If so, then the 'actor' is added to the original 'actor's
+  The wrapping function determines if this Accept is in response to a
+  Follow activity. If so, then the 'actor' is added to the original 'actor's
   'following' collection.
 
   Otherwise, no side effects are done by go-fed.
@@ -96,11 +97,11 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Reject handles additional side effects for the Reject ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Reject ActivityStreams
+  type, specific to the application.
 
   The wrapping function has no default side effects. However, if this
-  'Reject' is in response to a 'Follow' then the client MUST NOT go
+  Reject is in response to a Follow then the client MUST NOT go
   forward with adding the 'actor' to the original 'actor's 'following'
   collection by the client application.
   """
@@ -108,8 +109,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Add handles additional side effects for the Add ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Add ActivityStreams
+  type, specific to the application.
 
   The wrapping function will add the 'object' IRIs to a specific
   'target' collection if the 'target' collection(s) live on this
@@ -119,8 +120,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Remove handles additional side effects for the Remove ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Remove ActivityStreams
+  type, specific to the application.
 
   The wrapping function will remove all 'object' IRIs from a specific
   'target' collection if the 'target' collection(s) live on this
@@ -130,28 +131,28 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Like handles additional side effects for the Like ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Like ActivityStreams
+  type, specific to the application.
 
-  The wrapping function will add the activity to the "likes" collection
+  The wrapping function will add the activity to the 'likes' collection
   on all 'object' targets owned by this server.
   """
   @callback like(context :: context(), activity :: struct()) ::
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Announce handles additional side effects for the Announce
-  ActivityStreams type, specific to the application using go-fed.
+  Handles additional side effects for the Announce
+  ActivityStreams type, specific to the application.
 
-  The wrapping function will add the activity to the "shares"
+  The wrapping function will add the activity to the 'shares'
   collection on all 'object' targets owned by this server.
   """
   @callback announce(context :: context(), activity :: struct()) ::
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Undo handles additional side effects for the Undo ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Undo ActivityStreams
+  type, specific to the application.
 
   The wrapping function ensures the 'actor' on the 'Undo'
   is be the same as the 'actor' on all Activities being undone.
@@ -165,8 +166,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Block handles additional side effects for the Block ActivityStreams
-  type, specific to the application using go-fed.
+  Handles additional side effects for the Block ActivityStreams
+  type, specific to the application.
 
   The wrapping function provides no default side effects. It simply
   calls the wrapped function. However, note that Blocks should not be

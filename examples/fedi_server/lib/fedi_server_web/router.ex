@@ -45,19 +45,30 @@ defmodule FediServerWeb.Router do
     get("/nodeinfo", WellKnownController, :nodeinfo)
   end
 
+  scope "/nodeinfo", FediServerWeb do
+    pipe_through(:jrd)
+
+    get("/:version", WellKnownController, :nodeinfo_version)
+  end
+
   scope "/.well-known", FediServerWeb do
     pipe_through(:xrd)
 
     get("/host-meta", WellKnownController, :hostmeta)
   end
 
+  @doc """
+  This plug attaches a configured `Fedi.ActivityPub.SideEffectActor`
+  struct to the connection. Controllers can extract the Actor by
+
+  """
   def set_actor(conn, _opts) do
     actor =
       Fedi.ActivityPub.SideEffectActor.new(
         FediServerWeb.SocialCallbacks,
+        FediServer.Activities,
         c2s: FediServerWeb.SocialCallbacks,
-        s2s: FediServerWeb.FederatingCallbacks,
-        database: FediServer.Activities
+        s2s: FediServerWeb.FederatingCallbacks
       )
 
     Plug.Conn.put_private(conn, :actor, actor)

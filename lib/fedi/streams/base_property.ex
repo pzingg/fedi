@@ -46,8 +46,8 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
+  # TODO ONTOLOGY Limit to allowed_types (domain and range)?
   def deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map) do
-    # TODO ONTOLOGY allowed_types?
     pipeline = %Pipeline{
       allowed_types: nil,
       alias: alias_,

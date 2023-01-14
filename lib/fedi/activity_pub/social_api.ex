@@ -1,30 +1,10 @@
 defmodule Fedi.ActivityPub.SocialApi do
   @moduledoc """
-  SocialApi contains behaviors an application needs to satisfy for the
+  Contains behaviors an application needs to satisfy for the
   full ActivityPub C2S implementation to be supported by this library.
 
   It is only required if the client application wants to support the client-to-
-  server, or social, protocol.
-
-  It is passed to the library as a dependency injection from the client
-  application.
-
-  Note that certain types of callbacks will be 'wrapped' with default
-  behaviors supported natively by the library. Other callbacks
-  compatible with streams.TypeResolver can be specified by 'other'.
-
-  For example, setting the 'Create' field in the SocialWrappedCallbacks
-  lets an application dependency inject additional behaviors they want
-  to take place, including the default behavior supplied by this
-  library. This is guaranteed to be compliant with the ActivityPub
-  Social protocol.
-
-  To override the default behavior, instead supply the function in
-  'other', which does not guarantee the application will be compliant
-  with the ActivityPub Social API.
-
-  Applications are not expected to handle every single ActivityStreams
-  type and extension. The unhandled ones are passed to DefaultCallback.
+  server protocol, or "Social API".
   """
 
   @type context() :: Fedi.ActivityPub.Actor.c2s_context()
@@ -43,9 +23,9 @@ defmodule Fedi.ActivityPub.SocialApi do
   strongly discouraged.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not
-  write a response to the connection as is expected that the caller
-  to post_outbox will do so when handling the error.
+  `post_outbox`. In this case, the implementation must not
+  send a response to the connection as is expected that the caller
+  to `post_outbox` will do so when handling the error.
   """
   @callback post_outbox_request_body_hook(
               context :: context(),
@@ -61,13 +41,13 @@ defmodule Fedi.ActivityPub.SocialApi do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not write a
+  post_outbox. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -91,7 +71,7 @@ defmodule Fedi.ActivityPub.SocialApi do
 
   @doc """
   Wraps the provided object in a Create ActivityStreams
-  activity. The provided URL is the actor's outbox endpoint.
+  activity. `outbox_iri` is the actor's outbox endpoint.
 
   Only called if the Social API is enabled.
   """

@@ -9,7 +9,25 @@ defmodule FediServerWeb.WellKnownControllerTest do
       |> Plug.Conn.put_req_header("accept", "application/json")
       |> get("/.well-known/nodeinfo")
 
+    assert response(conn, 200) =~ "https://example.com/nodeinfo/2.0"
+  end
+
+  test "GET /nodeinfo/2.0", %{conn: conn} do
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "application/json")
+      |> get("/nodeinfo/2.0")
+
     assert response(conn, 200) =~ "openRegistrations"
+  end
+
+  test "GET /nodeinfo/2.1", %{conn: conn} do
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "application/json")
+      |> get("/nodeinfo/2.1")
+
+    assert response(conn, 400) =~ "2.0"
   end
 
   test "GET /.well-known/host-meta", %{conn: conn} do

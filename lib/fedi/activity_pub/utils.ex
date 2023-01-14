@@ -450,24 +450,24 @@ defmodule Fedi.ActivityPub.Utils do
     end)
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, %Error{} = error) do
-    send_text_resp(conn, status, Error.response_message(error))
+  def send_json_resp(%Plug.Conn{} = conn, status, %Error{} = error) do
+    send_json_resp(conn, status, Error.response_message(error))
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, body) when is_binary(body) do
+  def send_json_resp(%Plug.Conn{} = conn, status, body) when is_binary(body) do
     conn
-    |> Plug.Conn.put_resp_header(@content_type_header, "text/plain")
+    |> Plug.Conn.put_resp_header(@content_type_header, "application/json")
     |> Plug.Conn.send_resp(status, body)
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, %Error{} = error, actor_state) do
-    send_text_resp(conn, status, Error.response_message(error), actor_state)
+  def send_json_resp(%Plug.Conn{} = conn, status, %Error{} = error, actor_state) do
+    send_json_resp(conn, status, Error.response_message(error), actor_state)
   end
 
-  def send_text_resp(%Plug.Conn{} = conn, status, body, actor_state) when is_binary(body) do
+  def send_json_resp(%Plug.Conn{} = conn, status, body, actor_state) when is_binary(body) do
     conn
     |> Plug.Conn.put_private(:actor_state, actor_state)
-    |> Plug.Conn.put_resp_header(@content_type_header, "text/plain")
+    |> Plug.Conn.put_resp_header(@content_type_header, "application/json")
     |> Plug.Conn.send_resp(status, body)
   end
 
@@ -480,13 +480,13 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  # TODO ONTOLOGY Change to one function call, `metadata(:is_or_extends?)`
   def is_or_extends?(as_value, type_name) do
     case get_type_meta(as_value) do
       nil ->
         false
 
       meta ->
-        # TODO ONTOLOGY one function call: Meta.is_or_extends?(type_name)
         if type_name == apply(meta, :type_name, []) do
           true
         else

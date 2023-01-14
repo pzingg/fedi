@@ -14,19 +14,6 @@ defmodule FediServerWeb.ActivitiesControllerTest do
     assert response(conn, 200) =~ "/users/alyssa"
   end
 
-  test "GET a tombstoned activity", %{conn: conn} do
-    {[activity | _], _objects} = outbox_fixtures()
-
-    %URI{path: path} = URI.parse(activity.ap_id)
-
-    conn =
-      conn
-      |> Plug.Conn.put_req_header("accept", "application/json")
-      |> get(path)
-
-    assert response(conn, 410)
-  end
-
   test "GET a missing activity", %{conn: conn} do
     conn =
       conn

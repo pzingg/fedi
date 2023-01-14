@@ -215,7 +215,7 @@ defmodule FediServer.HTTPClient do
       )
       when is_tuple(private_key) and is_binary(public_key_id) and is_binary(body) and
              is_list(recipients) do
-    # TODO OPTIMIZE async task or Oban jobs
+    # TODO Use async task or Oban jobs and wait (or don't wait) for multiple results
     errors =
       recipients
       |> Enum.map(&deliver(transport, body, &1))

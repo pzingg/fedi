@@ -12,8 +12,30 @@ defmodule FediServerWeb.WellKnownController do
   alias FediServerWeb.WebFinger
 
   def nodeinfo(%Plug.Conn{} = conn, _params) do
+    endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+
+    nodeinfo_version_url =
+      %URI{endpoint_uri | path: "/nodeinfo/2.0", query: nil} |> URI.to_string()
+
+    links_data = %{
+      links: [
+        %{
+          rel: "http://nodeinfo.diaspora.software/ns/schema/2.0",
+          href: nodeinfo_version_url
+        }
+      ]
+    }
+
+    body = Jason.encode!(links_data)
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, body)
+  end
+
+  def nodeinfo_version(%Plug.Conn{} = conn, %{"version" => vsn = "2.0"} = _params) do
     nodeinfo_data = %{
-      version: "2.0",
+      version: vsn,
       software: %{name: "fedi-server", version: "0.1.0"},
       protocols: ["activitypub"],
       usage: %{
@@ -32,6 +54,12 @@ defmodule FediServerWeb.WellKnownController do
     conn
     |> put_resp_content_type("application/json")
     |> send_resp(200, body)
+  end
+
+  def nodeinfo_version(%Plug.Conn{} = conn, _params) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(400, "Only version 2.0 is supported")
   end
 
   def hostmeta(%Plug.Conn{} = conn, _params) do

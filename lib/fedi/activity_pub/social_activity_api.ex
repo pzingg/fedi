@@ -6,11 +6,11 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   Note that certain types of callbacks will be 'wrapped' with default
   behaviors supported natively by the library.
 
-  For example, implementing a 'Create' callback
+  For example, implementing a `create/2` activity handler callback
   lets an application dependency inject
   additional behaviors they want to take place, including the default
   behavior supplied by this library. This is guaranteed to be compliant
-  with the ActivityPub Social APIl.
+  with the ActivityPub Social API.
 
   Applications are not expected to handle every single ActivityStreams
   type and extension. The unhandled ones are passed to `default_callback/2`.
@@ -53,7 +53,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Delete handles additional side effects for the Delete ActivityStreams
+  Handles additional side effects for the Delete ActivityStreams
   type.
 
   The wrapping callback replaces the object(s) with tombstones in the
@@ -63,7 +63,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Follow handles additional side effects for the Follow ActivityStreams
+  Handles additional side effects for the Follow ActivityStreams
   type.
 
   The wrapping callback only ensures the 'Follow' has at least one
@@ -73,7 +73,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Add handles additional side effects for the Add ActivityStreams
+  Handles additional side effects for the Add ActivityStreams
   type.
 
   The wrapping function will add the 'object' IRIs to a specific
@@ -84,7 +84,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Remove handles additional side effects for the Remove ActivityStreams
+  Handles additional side effects for the Remove ActivityStreams
   type.
 
   The wrapping function will remove all 'object' IRIs from a specific
@@ -95,7 +95,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Like handles additional side effects for the Like ActivityStreams
+  Handles additional side effects for the Like ActivityStreams
   type.
 
   The wrapping function will add the objects on the activity to the
@@ -105,7 +105,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Undo handles additional side effects for the Undo ActivityStreams
+  Handles additional side effects for the Undo ActivityStreams
   type.
 
   The wrapping function ensures the 'actor' on the 'Undo'
@@ -120,7 +120,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
               {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
 
   @doc """
-  Block handles additional side effects for the Block ActivityStreams
+  Handles additional side effects for the Block ActivityStreams
   type.
 
   The wrapping callback only ensures the 'Block' has at least one
@@ -128,7 +128,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   to the wrapped application function to properly enforce the new
   blocking behavior.
 
-  Note that go-fed does not federate 'Block' activities received in the
+  Note that the library does not federate 'Block' activities received in the
   Social API.
   """
   @callback block(actor :: context(), activity :: struct()) ::

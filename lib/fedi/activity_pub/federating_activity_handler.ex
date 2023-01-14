@@ -196,7 +196,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def prepare_and_deliver_follow(
-        %{database: database, data: %{box_iri: box_iri}} = context,
+        %{database: database, data: %{box_iri: _box_iri}} = context,
         follow,
         actor_iri,
         on_follow,
@@ -212,7 +212,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           %T.Reject{alias: alias_}
 
         _ ->
-          {:error, "Invalid OnFollow behavior #{on_follow}"}
+          {:error, "Invalid `on_follow` behavior #{on_follow}"}
       end
 
     # Set us as the 'actor'.
@@ -282,7 +282,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, actor_iri} <-
            apply(database, :actor_for_inbox, [inbox_iri]),
          # Determine if we are in a follow on the 'object' property.
-         # TODO: Handle Accept multiple Follow.
+         # TODO Handle Accept multiple Follow
          {:ok, _follow, follow_id} <-
            find_follow(context, values, actor_iri),
          # If we received an Accept whose 'object' is a Follow with an
@@ -294,7 +294,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
            {:activity_actor, Utils.get_actor(activity)},
          # This may be a duplicate check if we dereferenced the
          # Follow above.
-         # TODO: Separate this logic to avoid redundancy.
+         # TODO Separate this logic to avoid redundancy
          {:ok, follow} <-
            apply(database, :get, [follow_id]),
          # Ensure that we are one of the actors on the Follow.
@@ -318,19 +318,18 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       {:error, reason} ->
         {:error, reason}
 
-      {:activity_actor, _} ->
-        {:error, "No actor in Accept activity"}
-
       {:activity_object, _} ->
-        {:error, "No object in Follow activity"}
+        Utils.err_object_required(activity: activity)
+
+      {:activity_actor, _} ->
+        Utils.err_actor_required(activity: activity)
+
+      {:follow_object, _} ->
+        {:error, "No object in original Follow activity"}
 
       {:all_on_original, _} ->
         {:error,
          "Peer gave an Accept wrapping a Follow but was not an object in the original Follow"}
-
-      {:activity_object, _} ->
-        Logger.error("No object in Accept activity")
-        Actor.handle_activity(context, :s2s, activity)
     end
   end
 

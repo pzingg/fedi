@@ -464,7 +464,7 @@ defmodule FediServer.Activities do
   ### Implementation
 
   def update_mailbox(actor_iri, updates, outgoing) do
-    # TODO IMPL handle deletes, etc.
+    # TODO Handle deletes, etc.
     new_activities = Map.get(updates, :create)
 
     result =

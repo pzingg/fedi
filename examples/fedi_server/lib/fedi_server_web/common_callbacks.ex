@@ -17,13 +17,13 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  GetInbox. In this case, the implementation must not write a
+  `get_inbox`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -31,7 +31,8 @@ defmodule FediServerWeb.CommonCallbacks do
   to be processed.
   """
   def authenticate_get_inbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
+    # For this example we allow anyone to do anything.
+    # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
   end
 
@@ -60,13 +61,13 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  get_outbox. In this case, the implementation must not write a
+  get_outbox. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the connection in this
+  the implementation handles sending a response to the connection in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -74,7 +75,8 @@ defmodule FediServerWeb.CommonCallbacks do
   to be processed.
   """
   def authenticate_get_outbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
+    # For this example we allow anyone to do anything.
+    # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
   end
 
@@ -108,13 +110,13 @@ defmodule FediServerWeb.CommonCallbacks do
   general storage for independent retrieval, and not just within the
   actor's outbox.
 
-  If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
+  If the error is `:object_required` or `:target_required`, then a Bad
   Request status is sent in the response.
 
-  Note that 'raw_json' is an unfortunate consequence where an 'Update'
-  Activity is the only one that explicitly cares about 'null' values in
-  JSON. Since go-fed does not differentiate between 'null' values and
-  values that are simply not present, the 'raw_json' map is ONLY needed
+  Note that `raw_json` is an unfortunate consequence where an 'Update'
+  Activity is the only one that explicitly cares about null values in
+  JSON. Since the library does not differentiate between null values and
+  values that are simply not present, the `raw_json` map is ONLY needed
   for this narrow and specific use case.
   """
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do

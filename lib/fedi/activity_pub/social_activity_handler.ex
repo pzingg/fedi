@@ -14,10 +14,9 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   alias Fedi.ActivityStreams.Type, as: T
 
   @doc """
-  Create handles additional side effects for the Create ActivityStreams
-  type.
+  Implements the social Create activity side effects.
 
-  The wrapping callback copies the actor(s) to the attributedTo
+  The wrapping callback copies the actor(s) to the 'attributedTo'
   property and copies recipients between the Create activity and all
   objects. It then saves the entry in the database.
 
@@ -28,7 +27,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
 
   Ref: [AP Section 6.2](https://www.w3.org/TR/activitypub/#create-activity-outbox)
   When a Create activity is posted, the actor of the activity SHOULD be
-  copied onto the object's attributedTo field.
+  copied onto the object's 'attributedTo' field.
 
   A mismatch between addressing of the Create activity and its object is
   likely to lead to confusion. As such, a server SHOULD copy any recipients

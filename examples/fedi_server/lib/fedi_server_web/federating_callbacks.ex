@@ -32,9 +32,9 @@ defmodule FediServerWeb.FederatingCallbacks do
   strongly discouraged.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the DelegateActor implementation must not
-  write a response to the ResponseWriter as is expected that the caller
-  to PostInbox will do so when handling the error.
+  `post_inbox`. In this case, the implementation must not
+  send a response to `conn` as is expected that the caller
+  to `post_inbox` will do so when handling the error.
   """
   def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
     # TODO IMPL
@@ -46,13 +46,13 @@ defmodule FediServerWeb.FederatingCallbacks do
   inbox.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the implementation must not write a
-  response to the ResponseWriter as is expected that the client will
+  `post_inbox`. In this case, the implementation must not send a
+  response to `conn` as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the ResponseWriter in this
+  the implementation handles sending a response to `conn` in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -60,7 +60,8 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
+    # For this example we allow anyone to do anything.
+    # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
   end
 
@@ -71,13 +72,13 @@ defmodule FediServerWeb.FederatingCallbacks do
   Only called if the Federated Protocol is enabled.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the implementation must not write a
-  response to the ResponseWriter as is expected that the client will
+  `post_inbox`. In this case, the implementation must not send a
+  response to `conn` as is expected that the client will
   do so when handling the error. The 'authorized' is ignored.
 
   If no error is returned, but authorization fails, then authorized
   must be false and error nil. It is expected that the implementation
-  handles writing to the ResponseWriter in this case.
+  handles sending a response to `conn` in this case.
 
   Finally, if the authentication and authorization succeeds, then
   authorized must be true and error nil. The request will continue
@@ -85,7 +86,8 @@ defmodule FediServerWeb.FederatingCallbacks do
   """
 
   def authorize_post_inbox(context, %Plug.Conn{} = conn) do
-    # TODO IMPL
+    # For this example we allow anyone to do anything.
+    # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
   end
 
@@ -95,12 +97,12 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   Only called if the Federated Protocol is enabled.
 
-  As a side effect, PostInbox sets the federated data in the inbox, but
+  As a side effect, `post_inbox` sets the federated data in the inbox, but
   not on its own in the database, as InboxForwarding (which is called
   later) must decide whether it has seen this activity before in order
   to determine whether to do the forwarding algorithm.
 
-  If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
+  If the error is `:object_required` or `:target_required`, then a Bad
   Request status is sent in the response.
   """
   def post_inbox(context, %Plug.Conn{} = conn, %URI{} = inbox_iri, activity) do
@@ -126,7 +128,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   Activity is examined for the information about who to inbox forward
   to.
 
-  If an error is returned, it is returned to the caller of PostInbox.
+  If an error is returned, it is returned to the caller of `post_inbox`.
   """
 
   def inbox_fowarding(context, %URI{} = inbox_iri, activity) do
@@ -168,7 +170,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   being blocked or other application-specific logic.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox.
+  `post_inbox`.
 
   If no error is returned, but authentication or authorization fails,
   then blocked must be true and error nil. An http.StatusForbidden
@@ -179,7 +181,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   def blocked(context, actor_iris) when is_list(actor_iris) do
-    # TODO IMPL
+    # For this example we don't maintain block lists.
     {:ok, false}
   end
 
@@ -205,7 +207,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   end
 
   @doc """
-  FilterForwarding allows the implementation to apply business logic
+  Allows the implementation to apply business logic
   such as blocks, spam filtering, and so on to a list of potential
   Collections and OrderedCollections of recipients when inbox
   forwarding has been triggered.
@@ -214,7 +216,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   logic to be used, but the implementation must not modify it.
   """
   def filter_forwarding(context, recipients, activity) when is_list(recipients) do
-    # TODO IMPL
+    # For this example we don't maintain block lists or other filters.
     {:ok, recipients}
   end
 end

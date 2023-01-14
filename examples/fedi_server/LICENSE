@@ -191,6 +191,12 @@
    Original go-fed Go language implmentation Copyright (c) 2018, go-fed
    <https://github.com/go-fed/activity>, used under a BSD-3 licence.
 
+   Portions of this application were extracted from the Akkoma
+   Mastodon application, Copyright © 2017-2022 Pleroma Authors
+   <https://pleroma.social/>, Copyright © 2022 Akkoma Authors
+   <https://akkoma.social/>, used under The GNU Affero General Public
+   License Version 3. See
+
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
    You may obtain a copy of the License at

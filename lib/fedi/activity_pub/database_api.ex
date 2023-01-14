@@ -8,8 +8,8 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @type transport_params() :: Actor.c2s_data() | Actor.s2s_data()
 
   @doc """
-  Returns true if the OrderedCollection at 'inbox'
-  contains the specified 'id'.
+  Returns true if the OrderedCollection at `inbox`
+  contains the specified `id`.
   """
   @callback inbox_contains(inbox :: struct(), id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
@@ -27,7 +27,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   :create member of the the updates map prepended.
 
   Note that the new items must not be added
-  as independent database entries. Separate calls to Create will do that.
+  as independent database entries. Separate calls to `create/1` will do that.
   """
   @callback update_inbox(inbox_iri :: URI.t(), updates :: map()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -89,7 +89,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   enabled. The client may freely decide to store only the id instead of
   the entire value.
 
-  Under certain conditions and network activities, Create may be called
+  Under certain conditions and network activities, `create/1` may be called
   multiple times for the same ActivityStreams object.
   """
   @callback create(as_type :: struct()) ::
@@ -107,21 +107,17 @@ defmodule Fedi.ActivityPub.DatabaseApi do
               :ok | {:error, term()}
 
   @doc """
-  Delete removes the entry with the given id.
+  Removes the entry with the given id.
 
-  Delete is only called for federated objects. Deletes from the Social
-  Protocol instead call Update to create a Tombstone.
-
-  The library makes this call only after acquiring a lock first.
+  `delete` is only called for federated objects. Deletes from the Social
+  Protocol instead call `update/1` to create a Tombstone.
   """
   @callback delete(id :: URI.t()) ::
               :ok | {:error, term()}
 
   @doc """
-  GetOutbox returns the first ordered collection page of the outbox
+  Returns the first ordered collection page of the outbox
   at the specified IRI, for prepending new items.
-
-  The library makes this call only after acquiring a lock first.
   """
   @callback get_outbox(outbox_iri :: URI.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -129,10 +125,10 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Saves the first ordered collection page of the outbox at
   the specified IRI, with new items specified in the
-  :create member of the the updates map prepended.
+  `:create` member of the the updates map prepended.
 
   Note that the new items must not be added as independent
-  database entries. Separate calls to Create will do that.
+  database entries. Separate calls to `create/1` will do that.
   """
   @callback update_outbox(outbox_iri :: URI.t(), updates :: map()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -151,7 +147,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Obtains the Followers Collection for an actor with the given id.
 
-  If modified, the library will then call Update.
+  If modified, the library will then call `update/1`.
   """
   @callback followers(actor_iri :: URI.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -159,7 +155,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Obtains the Following Collection for an actor with the given id.
 
-  If modified, the library will then call Update.
+  If modified, the library will then call `update/1`.
   """
   @callback following(actor_iri :: URI.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -167,7 +163,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Obtains the Liked Collection for an actor with the given id.
 
-  If modified, the library will then call Update.
+  If modified, the library will then call `update/1`.
   """
   @callback liked(actor_iri :: URI.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
@@ -175,13 +171,13 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Returns a new HTTP Transport on behalf of a specific actor.
 
-  `actor_box_iri` will be either the inbox or outbox of an actor who is
+  `box_iri` will be either the inbox or outbox of an actor who is
   attempting to do the dereferencing or delivery. Any authentication
   scheme applied on the request must be based on this actor. The
   request must contain some sort of credential of the user, such as a
   HTTP Signature.
 
-  `app_agent` should be used by the Transport
+  `app_agent` is used by the Transport
   implementation in the User-Agent, as well as the application-specific
   user agent string. The gofedAgent will indicate this library's use as
   well as the library's version number.
@@ -196,15 +192,19 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @callback new_transport(box_iri :: URI.t(), app_agent :: String.t()) ::
               {:ok, term()} | {:error, term()}
 
+  # TODO DOC
   @callback dereference(transport :: term(), iri :: URI.t()) ::
               {:ok, map()} | {:error, term()}
 
+  # TODO DOC
   @callback dereference(box_iri :: URI.t(), app_agent :: String.t(), iri :: URI.t()) ::
               {:ok, map()} | {:error, term()}
 
+  # TODO DOC
   @callback deliver(transport :: term(), json_body :: String.t(), iri :: URI.t()) ::
               :ok | {:error, term()}
 
+  # TODO DOC
   @callback deliver(
               box_iri :: URI.t(),
               app_agent :: String.t(),
@@ -213,6 +213,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
             ) ::
               :ok | {:error, term()}
 
+  # TODO DOC
   @callback batch_deliver(
               transport :: term(),
               json_body :: String.t(),
@@ -220,6 +221,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
             ) ::
               :ok | {:error, term()}
 
+  # TODO DOC
   @callback batch_deliver(
               box_iri :: URI.t(),
               app_agent :: String.t(),

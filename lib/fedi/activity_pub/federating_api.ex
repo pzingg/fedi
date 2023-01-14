@@ -1,13 +1,10 @@
 defmodule Fedi.ActivityPub.FederatingApi do
   @moduledoc """
-  FederatingApi contains behaviors an application needs to satisfy for the
+  Contains behaviors an application needs to satisfy for the
   full ActivityPub S2S implementation to be supported by this library.
 
   It is only required if the client application wants to support the server-to-
   server, or federating, protocol.
-
-  It is passed to the library as a dependency injection from the client
-  application.
   """
 
   @type context() :: Fedi.ActivityPub.Actor.s2s_context()
@@ -26,9 +23,9 @@ defmodule Fedi.ActivityPub.FederatingApi do
   strongly discouraged.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the DelegateActor implementation must not
-  write a response to the ResponseWriter as is expected that the caller
-  to PostInbox will do so when handling the error.
+  `post_inbox`. In this case, the implementation must not
+  send a response to `conn` as is expected that the caller
+  to `post_inbox` will do so when handling the error.
   """
   @callback post_inbox_request_body_hook(
               context :: context(),
@@ -42,13 +39,13 @@ defmodule Fedi.ActivityPub.FederatingApi do
   inbox.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the implementation must not write a
-  response to the ResponseWriter as is expected that the client will
+  `post_inbox`. In this case, the implementation must not send a
+  response to `conn` as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
   If no error is returned, but authentication or authorization fails,
   then authenticated must be false and error nil. It is expected that
-  the implementation handles writing to the ResponseWriter in this
+  the implementation handles sending a response to `conn` in this
   case.
 
   Finally, if the authentication and authorization succeeds, then
@@ -65,13 +62,13 @@ defmodule Fedi.ActivityPub.FederatingApi do
   Only called if the Federated Protocol is enabled.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox. In this case, the implementation must not write a
-  response to the ResponseWriter as is expected that the client will
+  `post_inbox`. In this case, the implementation must not send a
+  response to `conn` as is expected that the client will
   do so when handling the error. The 'authorized' is ignored.
 
   If no error is returned, but authorization fails, then authorized
   must be false and error nil. It is expected that the implementation
-  handles writing to the ResponseWriter in this case.
+  handles sending a response to `conn` in this case.
 
   Finally, if the authentication and authorization succeeds, then
   authorized must be true and error nil. The request will continue
@@ -86,12 +83,12 @@ defmodule Fedi.ActivityPub.FederatingApi do
 
   Only called if the Federated Protocol is enabled.
 
-  As a side effect, PostInbox sets the federated data in the inbox, but
+  As a side effect, `post_inbox` sets the federated data in the inbox, but
   not on its own in the database, as InboxForwarding (which is called
   later) must decide whether it has seen this activity before in order
   to determine whether to do the forwarding algorithm.
 
-  If the error is ErrObjectRequired or ErrTargetRequired, then a Bad
+  If the error is `:object_required` or `:target_required`, then a Bad
   Request status is sent in the response.
   """
   @callback post_inbox(
@@ -116,23 +113,22 @@ defmodule Fedi.ActivityPub.FederatingApi do
   database, independently of the inbox, however it sees fit in order to
   determine whether it has seen the activity before.
 
-  The provided url is the inbox of the recipient of the Activity. The
+  `inbox_iri` is the inbox of the recipient of the Activity. The
   Activity is examined for the information about who to inbox forward
   to.
 
-  If an error is returned, it is returned to the caller of PostInbox.
+  If an error is returned, it is returned to the caller of `post_inbox`.
   """
 
   @callback inbox_fowarding(context :: context(), inbox_iri :: URI.t(), activity :: struct()) ::
               :ok | {:error, term()}
 
   @doc """
-  sends a federated message. Called only if federation is
-  enabled.
+  Sends a federated message.
 
-  Called if the Federated Protocol is enabled.
+  Only called if the Federated Protocol is enabled.
 
-  The provided url is the outbox of the sender. The Activity contains
+  `outbox_iri` is the outbox of the sender. The Activity contains
   the information about the intended recipients.
 
   If an error is returned, it is returned to the caller of PostOutbox.
@@ -152,12 +148,12 @@ defmodule Fedi.ActivityPub.FederatingApi do
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
-  Blocked should determine whether to permit a set of actors given by
+  Determines whether to permit a set of actors given by
   their ids are able to interact with this particular end user due to
   being blocked or other application-specific logic.
 
   If an error is returned, it is passed back to the caller of
-  PostInbox.
+  `post_inbox`.
 
   If no error is returned, but authentication or authorization fails,
   then blocked must be true and error nil. An http.StatusForbidden
@@ -171,7 +167,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
               {:ok, boolean()} | {:error, term()}
 
   @doc """
-  MaxInboxForwardingRecursionDepth determines how deep to search within
+  Determines how deep to search within
   an activity to determine if inbox forwarding needs to occur.
 
   Zero or negative numbers indicate infinite recursion.
@@ -179,7 +175,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   @callback max_inbox_forwarding_recursion_depth(context :: context()) :: {:ok, integer()}
 
   @doc """
-  MaxDeliveryRecursionDepth determines how deep to search within
+  Determines how deep to search within
   collections owned by peers when they are targeted to receive a
   delivery.
 
@@ -188,7 +184,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   @callback max_delivery_recursion_depth(context :: context()) :: {:ok, integer()}
 
   @doc """
-  FilterForwarding allows the implementation to apply business logic
+  Allows the implementation to apply business logic
   such as blocks, spam filtering, and so on to a list of potential
   Collections and OrderedCollections of recipients when inbox
   forwarding has been triggered.

@@ -54,7 +54,7 @@ defmodule FediServer.FixturesHelper do
   def outbox_fixtures() do
     _ = user_fixtures()
 
-    {:ok, object} =
+    {:ok, note} =
       %Object{
         id: "01GPQ4DCJTTY4BXYB3ZS989WCC",
         ap_id: "https://example.com/users/alyssa/objects/01GPQ4DCJTTY4BXYB3ZS989WCC",
@@ -76,7 +76,7 @@ defmodule FediServer.FixturesHelper do
       |> Object.changeset()
       |> Repo.insert(returning: true)
 
-    {:ok, create} =
+    {:ok, create1} =
       %Activity{
         id: "01GPQ4DCJTWE0TZ2GENB8BZMK5",
         ap_id: "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
@@ -111,24 +111,18 @@ defmodule FediServer.FixturesHelper do
       |> Activity.changeset()
       |> Repo.insert(returning: true)
 
-    # {"id", id_prop},
-    # {"formerType", former_type},
-    # {"published", published},
-    # {"updated", updated},
-    # {"deleted", deleted}
-
-    {:ok, tombstone_object} =
+    {:ok, _note2} =
       %Object{
-        id: "01GPQ4DCJTTY4BXYB3ZS989WCC",
-        ap_id: "https://example.com/users/alyssa/objects/01GPQ4DCJTTY4BXYB3ZS989WCC",
+        id: "01GPRE6K5J0ZCY63TAVM35D2SQ",
+        ap_id: "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
         type: "Note",
         actor: "https://example.com/users/alyssa",
         local: true,
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
           "attributedTo" => "https://example.com/users/alyssa",
-          "content" => "Say, did you finish reading that book I lent you?",
-          "id" => "https://example.com/users/alyssa/objects/01GPQ4DCJTTY4BXYB3ZS989WCC",
+          "content" => "That was a great read!",
+          "id" => "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
           "to" => [
             "https://www.w3.org/ns/activitystreams#Public",
             "https://chatty.example/users/ben"
@@ -139,10 +133,10 @@ defmodule FediServer.FixturesHelper do
       |> Object.changeset()
       |> Repo.insert(returning: true)
 
-    {:ok, tombstone_activity} =
+    {:ok, create2} =
       %Activity{
-        id: "01GPQ4DCJTWE0TZ2GENB8BZMK6",
-        ap_id: "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK6",
+        id: "01GPRE7X6JVPGKH3AW39K2YAJB",
+        ap_id: "https://example.com/users/alyssa/activities/01GPRE7X6JVPGKH3AW39K2YAJB",
         type: "Create",
         actor: "https://example.com/users/alyssa",
         recipients: [
@@ -153,18 +147,16 @@ defmodule FediServer.FixturesHelper do
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
           "actor" => "https://example.com/users/alyssa",
-          "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK6",
+          "id" => "https://example.com/users/alyssa/activities/01GPRE7X6JVPGKH3AW39K2YAJB",
           "object" => %{
-            "formerType" => "Note",
-            "deleted" => "GMT",
             "attributedTo" => "https://example.com/users/alyssa",
-            "content" => "Say, did you finish reading that book I lent you?",
-            "id" => "https://example.com/users/alyssa/objects/01GPQ4DCJTTY4BXYB3ZS989WCC",
+            "content" => "That was a great read!",
+            "id" => "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
             "to" => [
               "https://www.w3.org/ns/activitystreams#Public",
               "https://chatty.example/users/ben"
             ],
-            "type" => "Tombstone"
+            "type" => "Note"
           },
           "to" => [
             "https://www.w3.org/ns/activitystreams#Public",
@@ -176,6 +168,56 @@ defmodule FediServer.FixturesHelper do
       |> Activity.changeset()
       |> Repo.insert(returning: true)
 
-    {[create], [object]}
+    tombstone_params = %{
+      ap_id: "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
+      type: "Tombstone",
+      actor: "https://example.com/users/alyssa",
+      local: true,
+      data: %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
+        "formerType" => "Note",
+        "deleted" => "Sat, 14 Jan 2023 15:35:13 GMT",
+        "type" => "Tombstone"
+      }
+    }
+
+    {:ok, tombstone} =
+      %Object{id: "01GPRE6K5J0ZCY63TAVM35D2SQ"}
+      |> Object.changeset(tombstone_params)
+      |> Repo.update(returning: true)
+
+    {:ok, delete2} =
+      %Activity{
+        id: "01GPRETMR3D01FM26ZHRZVQYWZ",
+        ap_id: "https://example.com/users/alyssa/activities/01GPRETMR3D01FM26ZHRZVQYWZ",
+        type: "Delete",
+        actor: "https://example.com/users/alyssa",
+        recipients: [
+          "https://www.w3.org/ns/activitystreams#Public",
+          "https://chatty.example/users/ben"
+        ],
+        local: true,
+        data: %{
+          "@context" => "https://www.w3.org/ns/activitystreams",
+          "actor" => "https://example.com/users/alyssa",
+          "id" => "https://example.com/users/alyssa/activities/01GPRETMR3D01FM26ZHRZVQYWZ",
+          "object" => %{
+            "id" => "https://example.com/users/alyssa/objects/01GPRE6K5J0ZCY63TAVM35D2SQ",
+            "formerType" => "Note",
+            "deleted" => "Sat, 14 Jan 2023 15:35:13 GMT",
+            "type" => "Tombstone"
+          },
+          "to" => [
+            "https://www.w3.org/ns/activitystreams#Public",
+            "https://chatty.example/users/ben"
+          ],
+          "type" => "Delete"
+        }
+      }
+      |> Activity.changeset()
+      |> Repo.insert(returning: true)
+
+    {[create1, create2, delete2], [note, tombstone]}
   end
 end

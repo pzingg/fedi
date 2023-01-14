@@ -405,7 +405,7 @@ defmodule Fedi.Streams.PropertyIterator do
           child = apply(module, :json_ld_context, [v])
 
           # Since the Fedi.Streams.Literal maps in this function are determined at
-          # code-generation time, this loop should not overwrite an existing key with a
+          # code-generation time, this loop should not oversend an existing key with a
           # new value.
           Map.merge(acc, child)
 
