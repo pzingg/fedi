@@ -372,7 +372,7 @@ defmodule Fedi.Streams.Utils do
 
   def append_iris(value, _prop_name, []), do: value
 
-  def append_iris(%{alias: alias_, properties: properties} = value, prop_name, iris) do
+  def append_iris(%{alias: alias_, properties: _properties} = value, prop_name, iris) do
     iters = Enum.map(iris, fn iri -> new_iri_iter(prop_name, iri, alias_) end)
     append_iters(value, prop_name, iters)
   end
@@ -414,7 +414,7 @@ defmodule Fedi.Streams.Utils do
 
   def prepend_iris(value, _prop_name, []), do: value
 
-  def prepend_iris(%{alias: alias_, properties: properties} = value, prop_name, iris) do
+  def prepend_iris(%{alias: alias_, properties: _properties} = value, prop_name, iris) do
     iters = Enum.map(iris, fn iri -> new_iri_iter(prop_name, iri, alias_) end)
     prepend_iters(value, prop_name, iters)
   end
@@ -438,7 +438,7 @@ defmodule Fedi.Streams.Utils do
 
   def remove_iris(value, _prop_name, []), do: value
 
-  def remove_iris(%{alias: alias_, properties: properties} = value, prop_name, iris) do
+  def remove_iris(%{alias: _alias_, properties: properties} = value, prop_name, iris) do
     iri_strs = Enum.map(iris, &URI.to_string(&1))
 
     case Map.get(properties, prop_name) do

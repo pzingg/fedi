@@ -18,8 +18,8 @@ defmodule FediServer.Activities.Mailbox do
     timestamps()
   end
 
-  def changeset(activity, params \\ %{}) do
-    activity
+  def changeset(%__MODULE__{} = mailbox, params \\ %{}) do
+    mailbox
     |> cast(params, [:activity_id, :outgoing, :type, :owner, :local, :status])
     |> validate_required([:activity_id, :outgoing, :type, :owner, :local])
     |> unique_constraint([:outgoing, :owner, :activity_id])

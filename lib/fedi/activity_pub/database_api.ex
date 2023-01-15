@@ -18,7 +18,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   Returns the first ordered collection page of the inbox at
   the specified IRI, for prepending new items.
   """
-  @callback get_inbox(inbox_iri :: URI.t()) ::
+  @callback get_inbox(inbox_iri :: URI.t(), opts :: Keyword.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
@@ -119,7 +119,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   Returns the first ordered collection page of the outbox
   at the specified IRI, for prepending new items.
   """
-  @callback get_outbox(outbox_iri :: URI.t()) ::
+  @callback get_outbox(outbox_iri :: URI.t(), opts :: Keyword.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """

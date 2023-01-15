@@ -11,7 +11,6 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
-  alias Fedi.ActivityStreams.Type, as: T
 
   @doc """
   Implements the social Create activity side effects.

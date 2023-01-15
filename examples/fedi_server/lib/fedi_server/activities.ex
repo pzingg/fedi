@@ -43,7 +43,7 @@ defmodule FediServer.Activities do
   Returns the first ordered collection page of the inbox at
   the specified IRI, for prepending new items.
   """
-  def get_inbox(%URI{} = inbox_iri, params) do
+  def get_inbox(%URI{} = inbox_iri, opts \\ []) do
     with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
       get_mailbox_page(actor_iri, false)
     end
@@ -308,7 +308,7 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_outbox.
   """
-  def get_outbox(outbox_iri, params) do
+  def get_outbox(outbox_iri, opts \\ []) do
     with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
       get_mailbox_page(actor_iri, true)
     end
