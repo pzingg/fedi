@@ -23,10 +23,9 @@ defmodule FediServer.Activities.User do
   end
 
   @doc """
-  Use the data from a Fediverse server to
-  populate a User struct for a remote user.
+  Use the data from a Fediverse server to populate a User struct for a remote user.
   """
-  def new_from_masto_data(data) when is_map(data) do
+  def new_remote_user(data) when is_map(data) do
     %__MODULE__{
       ap_id: data["id"],
       inbox: data["inbox"],

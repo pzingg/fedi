@@ -235,9 +235,8 @@ defmodule FediServer.HTTPClient do
     end
   end
 
-  def fetch_masto_user(%__MODULE__{} = transport, %URI{path: path} = id) do
+  def fetch_masto_user(%__MODULE__{} = transport, id) do
     date_str = Fedi.ActivityPub.Utils.date_header_value()
-    json_url = %URI{id | path: path <> ".json"}
 
     headers = [
       {"accept", @accept_header_value},
@@ -248,7 +247,7 @@ defmodule FediServer.HTTPClient do
 
     opts = [
       method: :get,
-      url: URI.to_string(json_url),
+      url: URI.to_string(id),
       headers: headers
     ]
 

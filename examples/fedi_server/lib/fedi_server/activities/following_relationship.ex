@@ -9,11 +9,12 @@ defmodule FediServer.Activities.FollowingRelationship do
 
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: true}
+  @foreign_key_type Ecto.ULID
   schema "following_relationships" do
     field(:state, Ecto.Enum, values: [:pending, :accepted, :rejected])
 
-    belongs_to(:follower, User, type: Ecto.ULID)
-    belongs_to(:following, User, type: Ecto.ULID)
+    belongs_to(:follower, User)
+    belongs_to(:following, User)
 
     timestamps()
   end

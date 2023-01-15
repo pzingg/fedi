@@ -8,6 +8,10 @@ defmodule FediServerWeb.SocialCallbacks do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.Utils, as: APUtils
+  alias FediServer.Activities
+  alias FediServer.Activities.User
   alias FediServerWeb.CommonCallbacks
 
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
@@ -88,7 +92,7 @@ defmodule FediServerWeb.SocialCallbacks do
   end
 
   @doc """
-  add_new_ids sets new URL ids on the activity. It also does so for all
+  Sets new ids on the activity. It also does so for all
   'object' properties if the Activity is a Create type.
 
   Only called if the Social API is enabled.
@@ -96,8 +100,7 @@ defmodule FediServerWeb.SocialCallbacks do
   If an error is returned, it is returned to the caller of post_outbox.
   """
   def add_new_ids(context, activity) do
-    # NEED IMPL
-    {:ok, activity}
+    :pass
   end
 
   @doc """
@@ -124,14 +127,53 @@ defmodule FediServerWeb.SocialCallbacks do
   end
 
   @doc """
-  wrap_in_create wraps the provided object in a Create ActivityStreams
-  activity. The provided URL is the actor's outbox endpoint.
+  Wraps the provided object in a Create ActivityStreams
+  activity. `outbox_iri` is the actor's outbox endpoint.
 
   Only called if the Social API is enabled.
   """
   def wrap_in_create(context, value, %URI{} = outbox_iri) do
     # {:ok, create}
     {:error, "Unimplemented"}
+  end
+
+  ### Activity handlers
+
+  @doc """
+  Create a following relationship.
+  """
+  def follow(context, activity) do
+    with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
+         {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
+         {:follwer_id, %URI{} = follower_id} <- {:follwer_id, APUtils.to_id(actor)},
+         {:following_id, %URI{} = following_id} <- {:following_id, APUtils.to_id(object)},
+         {:ok, %User{} = follower} <- Activities.ensure_user(follower_id, true),
+         # Insert remote following user if not in db
+         {:ok, %User{} = following} <- Activities.ensure_user(following_id, false),
+         {:ok, relationship} <- Activities.follow(follower, following, :pending) do
+      Logger.error("Inserted new relationship")
+      {:ok, activity, false}
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.error("Insert error #{Activities.describe_errors(changeset)}")
+        {:error, "Internal database error"}
+
+      {:error, reason} ->
+        Logger.error("Follow error #{reason}")
+        {:error, reason}
+
+      {:activity_actor, _} ->
+        Utils.err_actor_required(activity: activity)
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: activity)
+
+      {:follower_id, _} ->
+        {:error, "No id in actor"}
+
+      {:following_id, _} ->
+        {:error, "No id in object"}
+    end
   end
 
   @doc """

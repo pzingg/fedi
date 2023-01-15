@@ -2,33 +2,38 @@ defmodule FediServer.FixturesHelper do
   @moduledoc false
 
   alias FediServer.Repo
+  alias FediServer.Activities
   alias FediServer.Activities.User
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
 
-  def user_fixtures() do
+  def user_fixtures(opts \\ []) do
     # Add a remote user
-    pzingg =
-      with {:ok, contents} <-
-             Path.join(:code.priv_dir(:fedi_server), "pzingg.json") |> File.read(),
+    {ben, ben_private_key_pem} =
+      with false <- Keyword.get(opts, :local_only, false),
+           {:ok, keys} <-
+             Path.join(:code.priv_dir(:fedi_server), "ben_private_key.pem") |> File.read(),
+           {:ok, contents} <-
+             Path.join(:code.priv_dir(:fedi_server), "ben.json") |> File.read(),
            {:ok, data} <-
              Jason.decode(contents),
            user <-
-             User.new_from_masto_data(data),
-           {:ok, _} <-
+             User.new_remote_user(data),
+           {:ok, user} <-
              User.changeset(user)
              |> Repo.insert(returning: true) do
-        user
+        {user, keys}
       else
         _ ->
-          nil
+          {nil, nil}
       end
 
     # Add a local user
     endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
 
     alyssa =
-      with user <- %User{
+      with false <- Keyword.get(opts, :remote_only, false),
+           user <- %User{
              ap_id: %URI{endpoint_uri | path: "/users/alyssa"} |> URI.to_string(),
              inbox: %URI{endpoint_uri | path: "/users/alyssa/inbox"} |> URI.to_string(),
              name: "Alyssa Activa",
@@ -37,7 +42,7 @@ defmodule FediServer.FixturesHelper do
              local: true,
              data: %{}
            },
-           {:ok, _} <-
+           {:ok, user} <-
              User.changeset(user)
              |> Repo.insert(returning: true) do
         user
@@ -46,8 +51,8 @@ defmodule FediServer.FixturesHelper do
           nil
       end
 
-    [{:pzingg, pzingg}, {:alyssa, alyssa}]
-    |> Enum.filter(fn {_k, v} -> !is_nil(v) end)
+    [{:ben, %{user: ben, keys: ben_private_key_pem}}, {:alyssa, %{user: alyssa}}]
+    |> Enum.filter(fn {_k, v} -> !is_nil(v.user) end)
     |> Map.new()
   end
 

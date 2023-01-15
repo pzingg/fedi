@@ -52,7 +52,7 @@
   "publicKey": {
     "id": "https://chatty.example/users/ben#main-key",
     "owner": "https://chatty.example/users/ben",
-    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw7lr8vWJLMfdjebD+fOG\nYS6V19rf6zsKW8oXgRrbkq1cprDBeimvx/uKx/uTyu+Yn7WWOlyAhq4VXBCbohe6\n4qUxVXELddz37/BLB0eNm1imbaR6Ja0EF8Oa8Uqcgi6GAUOh9uu2CAzXR26nAXYi\nKT63XcPVM3fzCMgaOkL3QKP6cAs4qWgrurNxDmAVK98eYe3S5OuR/X6Je7l7DC0A\nHJvtp9N2CPXyPRdpQtGMFkcQZPtahAGrcLQUQqyUxRoUnRdiMQM+9kXnzONJhODa\nKjp8MlcDdsYvpaaBbug1lFoUq4h45+LFsCDVBFb1b2shKbnU3VyDbiAk9sm1kPg1\nXwIDAQAB\n-----END PUBLIC KEY-----\n"
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxM7ZDq/+RFSjZECH7otJ\n++hHa1XDm+c5EE0zh5TNcb/kl0ng3d+Zm+ZtUdobA2vcD8MV7KKCKPfgDY0Vg+vt\n4U5FsxNlvSXCQjlzP8zD0NZefnRdkfD64DVBLba/pJrQVAP0oB1ebpFoNClOarvL\nuGQVRvh5efKs0XH2CZym/okrC1Xyo887YKYaoS/k3ABTr2Nybl/ib67UhaXf3C5a\nMk+CBehgiH8t2lxeTEgoEihojWRwuoq1E0uFcHnq9R/1kEmQMJXMrAYCqsM/5Zc7\nwZIWotBOIPp6oWQtDFLJCvyJVfbDXswk2a7n2w3gzy71VkWvfouapdNka2RWOgtd\n8wIDAQAB\n-----END PUBLIC KEY-----"
   },
   "tag": [
     {

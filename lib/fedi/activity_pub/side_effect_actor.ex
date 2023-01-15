@@ -403,12 +403,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def add_new_ids(context, activity) do
     with {:ok, activity} <- set_object_id(context, activity),
-         true <- APUtils.is_or_extends?(activity, "Create") do
+         {:is_create, true} <- {:is_create, APUtils.is_or_extends?(activity, "Create")} do
       APUtils.update_objects(activity, fn object ->
         set_object_id(context, object)
       end)
     else
-      false -> {:error, "Not a Create activity"}
+      {:is_create, _} -> {:ok, activity}
       {:error, reason} -> {:error, reason}
     end
   end

@@ -30,6 +30,7 @@ defmodule FediServer.Activities do
 
   Called from SideEffectActor post_inbox.
   """
+  @impl true
   def inbox_contains(%URI{} = inbox_iri, %URI{} = id) do
     with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
       contains? =
@@ -44,7 +45,8 @@ defmodule FediServer.Activities do
   Returns the first ordered collection page of the inbox at
   the specified IRI, for prepending new items.
   """
-  def get_inbox(%URI{} = inbox_iri, params) do
+  @impl true
+  def get_inbox(%URI{} = inbox_iri, opts \\ []) do
     with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
       get_mailbox_page(actor_iri, false)
     end
@@ -58,6 +60,7 @@ defmodule FediServer.Activities do
   Note that the new items must not be added
   as independent database entries. Separate calls to Create will do that.
   """
+  @impl true
   def update_inbox(%URI{} = inbox_iri, updates) when is_map(updates) do
     with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
       update_mailbox(actor_iri, updates, false)
@@ -72,6 +75,7 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor and Activity callbacks.
   """
+  @impl true
   def owns(%URI{} = id) do
     {:ok, local?(id)}
   end
@@ -81,6 +85,7 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor and `like` Activity callbacks.
   """
+  @impl true
   def actor_for_outbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/outbox"),
          {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
@@ -99,6 +104,7 @@ defmodule FediServer.Activities do
 
   Used in federated `accept` and `follow` Activity callbacks.
   """
+  @impl true
   def actor_for_inbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/inbox"),
          {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
@@ -116,6 +122,7 @@ defmodule FediServer.Activities do
   Fetches the corresponding actor's outbox IRI for the
   actor's inbox IRI.
   """
+  @impl true
   def outbox_for_inbox(%URI{path: path} = iri) do
     with true <- local?(iri, "/inbox"),
          {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
@@ -135,6 +142,7 @@ defmodule FediServer.Activities do
   It is acceptable to just return nil. In this case, the library will
   attempt to resolve the inbox of the actor by remote dereferencing instead.
   """
+  @impl true
   def inbox_for_actor(%URI{path: path} = iri) do
     with true <- local?(iri),
          {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
@@ -154,6 +162,7 @@ defmodule FediServer.Activities do
 
   Used in federated SideEffectActor.
   """
+  @impl true
   def exists(%URI{} = ap_id) do
     [:actors, :objects, :activities]
     |> Enum.reduce_while({:ok, false}, fn schema, acc ->
@@ -168,6 +177,7 @@ defmodule FediServer.Activities do
   @doc """
   Returns the database entry for the specified id.
   """
+  @impl true
   def get(%URI{} = ap_id) do
     with {:ok, _ulid_or_nickname, schema} <- parse_ulid_or_nickname(ap_id) do
       case repo_get_by_ap_id(schema, ap_id) do
@@ -196,6 +206,7 @@ defmodule FediServer.Activities do
   Under certain conditions and network activities, Create may be called
   multiple times for the same ActivityStreams object.
   """
+  @impl true
   def create(as_type) do
     with {:get_actor, %URI{} = actor_iri} <-
            {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
@@ -232,21 +243,6 @@ defmodule FediServer.Activities do
     end
   end
 
-  def dump_file(object, schema, ap_id) do
-    case URI.parse(ap_id) |> parse_ulid_or_nickname() do
-      {:ok, id, _schema} ->
-        path = "#{schema}-#{id}.exs"
-        Logger.error("dumping #{path}")
-        File.write(path, "#{inspect(Map.from_struct(object))}")
-
-      _ ->
-        Logger.error("couldn't parse #{ap_id}")
-        :ok
-    end
-  end
-
-  def dump_file(_), do: :ok
-
   def unique_constraint_error(changeset) do
     Enum.find(changeset.errors, fn {field, {_msg, opts}} ->
       opts[:constraint] == :unique
@@ -261,6 +257,7 @@ defmodule FediServer.Activities do
   enabled. The client may freely decide to store only the id instead of
   the entire value.
   """
+  @impl true
   def update(as_type) do
     Logger.error("update #{inspect(as_type)}")
 
@@ -299,6 +296,7 @@ defmodule FediServer.Activities do
   delete is only called for federated objects. Deletes from the Social
   API should call Update to create a Tombstone.
   """
+  @impl true
   def delete(ap_id) do
     with {:ok, _ulid_or_nickname, schema} <- parse_ulid_or_nickname(ap_id) do
       repo_delete(schema, ap_id)
@@ -311,7 +309,8 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_outbox.
   """
-  def get_outbox(outbox_iri, params) do
+  @impl true
+  def get_outbox(outbox_iri, opts \\ []) do
     with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
       get_mailbox_page(actor_iri, true)
     end
@@ -327,6 +326,7 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_outbox.
   """
+  @impl true
   def update_outbox(%URI{} = outbox_iri, updates) when is_map(updates) do
     with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
       update_mailbox(actor_iri, updates, false)
@@ -345,6 +345,7 @@ defmodule FediServer.Activities do
 
   Used in social SideEffectActor post_inbox.
   """
+  @impl true
   def new_id(value) do
     # endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
 
@@ -378,6 +379,7 @@ defmodule FediServer.Activities do
 
   If modified, the library will then call Update.
   """
+  @impl true
   def followers(actor_iri) do
     {:ok, OrderedCollectionPage.new()}
   end
@@ -387,6 +389,7 @@ defmodule FediServer.Activities do
 
   If modified, the library will then call Update.
   """
+  @impl true
   def following(actor_iri) do
     {:ok, OrderedCollectionPage.new()}
   end
@@ -396,6 +399,7 @@ defmodule FediServer.Activities do
 
   If modified, the library will then call Update.
   """
+  @impl true
   def liked(actor_iri) do
     {:ok, OrderedCollectionPage.new()}
   end
@@ -404,6 +408,7 @@ defmodule FediServer.Activities do
   Returns a `FediServer.HTTPClient` struct, with credentials built
   from the actor's inbox or outbox IRI.
   """
+  @impl true
   def new_transport(%URI{path: path} = box_iri, app_agent)
       when is_binary(app_agent) do
     actor_path =
@@ -430,21 +435,25 @@ defmodule FediServer.Activities do
     end
   end
 
+  @impl true
   def dereference(%FediServer.HTTPClient{} = client, %URI{} = iri) do
     FediServer.HTTPClient.dereference(client, iri)
   end
 
+  @impl true
   def dereference(%URI{} = box_iri, app_agent, %URI{} = iri) when is_binary(app_agent) do
     with {:ok, client} <- new_transport(box_iri, app_agent) do
       FediServer.HTTPClient.dereference(client, iri)
     end
   end
 
+  @impl true
   def deliver(%FediServer.HTTPClient{} = client, json_body, %URI{} = iri)
       when is_binary(json_body) do
     FediServer.HTTPClient.deliver(client, json_body, iri)
   end
 
+  @impl true
   def deliver(%URI{} = box_iri, app_agent, json_body, %URI{} = iri)
       when is_binary(app_agent) and is_binary(json_body) do
     with {:ok, client} <- new_transport(box_iri, app_agent) do
@@ -452,11 +461,13 @@ defmodule FediServer.Activities do
     end
   end
 
+  @impl true
   def batch_deliver(%FediServer.HTTPClient{} = client, json_body, recipients)
       when is_binary(json_body) and is_list(recipients) do
     FediServer.HTTPClient.batch_deliver(client, json_body, recipients)
   end
 
+  @impl true
   def batch_deliver(%URI{} = box_iri, app_agent, json_body, recipients)
       when is_binary(app_agent) and is_binary(json_body) and is_list(recipients) do
     with {:ok, client} <- new_transport(box_iri, app_agent) do
@@ -725,13 +736,28 @@ defmodule FediServer.Activities do
     end
   end
 
-  def resolve_and_insert_user(%URI{} = id) do
-    app_agent = FediServer.Application.app_agent()
+  def ensure_user(%URI{} = id, local?, app_agent \\ nil) do
+    case repo_get_by_ap_id(:actors, id) do
+      %User{} = user ->
+        {:ok, user}
+
+      _ ->
+        if local? do
+          {:error, "Local user #{id} not found"}
+        else
+          Logger.error("Inserting new user for #{id})")
+          resolve_and_insert_user(id, app_agent)
+        end
+    end
+  end
+
+  def resolve_and_insert_user(%URI{} = id, app_agent \\ nil) do
+    app_agent = app_agent || FediServer.Application.app_agent()
 
     with client <- HTTPClient.anonymous(app_agent),
          {:ok, json_body} <- HTTPClient.fetch_masto_user(client, id),
          {:ok, data} <- Jason.decode(json_body),
-         user <- User.new_from_masto_data(data) do
+         user <- User.new_remote_user(data) do
       User.changeset(user) |> Repo.insert(returning: true)
     end
   end
@@ -815,7 +841,7 @@ defmodule FediServer.Activities do
     Repo.get_by(User, ap_id: URI.to_string(ap_id))
   end
 
-  def repo_get_by_ap_id(other, _) do
+  def repo_get_by_ap_id(other, %URI{} = _) do
     {:error, "Invalid schema for get by ap_id #{other}"}
   end
 
@@ -912,4 +938,19 @@ defmodule FediServer.Activities do
     "#{Utils.alias_module(module)} #{action} error: #{inspect(changeset)}"
     # "#{Utils.alias_module(module)} #{action} error on fields: #{error_str}"
   end
+
+  def dump_file(object, schema, ap_id) do
+    case URI.parse(ap_id) |> parse_ulid_or_nickname() do
+      {:ok, id, _schema} ->
+        path = "#{schema}-#{id}.exs"
+        Logger.error("dumping #{path}")
+        File.write(path, "#{inspect(Map.from_struct(object))}")
+
+      _ ->
+        Logger.error("couldn't parse #{ap_id}")
+        :ok
+    end
+  end
+
+  def dump_file(_), do: :ok
 end

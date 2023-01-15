@@ -5,6 +5,8 @@ defmodule FediServerWeb.OutboxControllerTest do
 
   require Logger
 
+  alias FediServer.Activities
+
   setup do
     Tesla.Mock.mock_global(fn
       # When we dereference ben
@@ -32,7 +34,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       } ->
         %Tesla.Env{status: 201, body: "Created"}
 
-      %{method: method, url: url} = other ->
+      %{method: method, url: url} ->
         Logger.error("Unhandled #{method} #{url}")
         %Tesla.Env{status: 404, body: "Not found"}
     end)
@@ -71,9 +73,6 @@ defmodule FediServerWeb.OutboxControllerTest do
     }
     """
 
-    # Seed local user, so we have her private key
-    _ = user_fixtures()
-
     conn =
       conn
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
@@ -83,24 +82,18 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "POST a Follow activity to /users/alyssa/outbox", %{conn: conn} do
-    _ = user_fixtures()
+    _users = user_fixtures(local_only: true)
 
     activity = """
     {
       "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Follow",
       "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK8",
-      "to": ["https://www.w3.org/ns/activitystreams#Public", "https://chatty.example/users/ben"],
+      "type": "Follow",
+      "to": ["https://chatty.example/users/ben"],
       "actor": "https://example.com/users/alyssa",
-      "object": {
-        "type": "Person",
-        "id": "https://chatty.example/users/ben"
-      }
+      "object": "https://chatty.example/users/ben"
     }
     """
-
-    # Seed local user, so we have her private key
-    _ = user_fixtures()
 
     conn =
       conn

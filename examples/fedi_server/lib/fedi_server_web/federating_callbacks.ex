@@ -42,8 +42,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   end
 
   @doc """
-  Delegates the authentication of a POST to an
-  inbox.
+  Delegates the authentication of a POST to an inbox.
 
   If an error is returned, it is passed back to the caller of
   `post_inbox`. In this case, the implementation must not send a
@@ -120,11 +119,11 @@ defmodule FediServerWeb.FederatingCallbacks do
   forwarding, as well as actually conducting it if it determines it
   needs to.
 
-  As a side effect, InboxForwarding must set the federated data in the
+  As a side effect, `inbox_forwarding/3` must set the federated data in the
   database, independently of the inbox, however it sees fit in order to
   determine whether it has seen the activity before.
 
-  The provided url is the inbox of the recipient of the Activity. The
+  `inbox_iri` is the inbox of the recipient of the Activity. The
   Activity is examined for the information about who to inbox forward
   to.
 
@@ -137,15 +136,14 @@ defmodule FediServerWeb.FederatingCallbacks do
   end
 
   @doc """
-  sends a federated message. Called only if federation is
-  enabled.
+  Sends a federated message.
 
-  Called if the Federated Protocol is enabled.
+  Only called if the Federated Protocol is enabled.
 
-  The provided url is the outbox of the sender. The Activity contains
+  `outbox_iri` is the outbox of the sender. The Activity contains
   the information about the intended recipients.
 
-  If an error is returned, it is returned to the caller of PostOutbox.
+  If an error is returned, it is returned to the caller of `post_outbox`.
   """
   def deliver(context, %URI{} = outbox_iri, activity) do
     # TODO IMPL
@@ -186,7 +184,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   end
 
   @doc """
-  MaxInboxForwardingRecursionDepth determines how deep to search within
+  Determines how deep to search within
   an activity to determine if inbox forwarding needs to occur.
 
   Zero or negative numbers indicate infinite recursion.
@@ -196,7 +194,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   end
 
   @doc """
-  MaxDeliveryRecursionDepth determines how deep to search within
+  Determines how deep to search within
   collections owned by peers when they are targeted to receive a
   delivery.
 

@@ -814,7 +814,8 @@ defmodule Fedi.ActivityPub.Utils do
         {:error, reason}
 
       elements when is_list(elements) ->
-        with {:activity_object, %P.Object{alias: alias_, values: [%{member: value} | _]} = object} <-
+        with {:activity_object, %P.Object{alias: alias_, values: [%{member: value} | _]} = object}
+             when is_struct(value) <-
                {:activity_object, Utils.get_object(activity)},
              actor_maps <- Map.new(elements) do
           # Obtain the objects maps for each recipient type.
@@ -939,7 +940,8 @@ defmodule Fedi.ActivityPub.Utils do
   def strip_hidden_recipients(%{properties: properties} = activity) do
     activity =
       case Map.get(properties, "object") do
-        %Fedi.ActivityStreams.Property.Object{values: [%{member: value} | _]} = object_prop ->
+        %Fedi.ActivityStreams.Property.Object{values: [%{member: value} | _]} = object_prop
+        when is_struct(value) ->
           value =
             value
             |> Utils.set_iri("bto", nil)
