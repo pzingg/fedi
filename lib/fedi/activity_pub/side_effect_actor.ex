@@ -372,28 +372,25 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   the ActivityStreams Block type.
   """
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
-    {context, activity} =
-      if Actor.protocol_supported?(context, :c2s) do
-        context = wrap_for_social_api(context, outbox_iri, raw_json)
+    Logger.error("SideEffectActor.post_outbox #{inspect(context.data)}")
 
-        case Actor.handle_activity(context, :c2s, activity, top_level: true) do
-          {:ok, new_actor, new_activity} -> {new_actor, new_activity}
-          _ -> {context, activity}
-        end
+    {activity, deliverable} =
+      with true <- Actor.protocol_supported?(context, :c2s),
+           context <- wrap_for_social_api(context, outbox_iri, raw_json),
+           {:ok, activity, deliverable} <-
+             Actor.handle_activity(context, :c2s, activity, top_level: true) do
+        {activity, deliverable}
       else
-        {context, activity}
-      end
-
-    with {:ok, _activity, context_data} <- add_to_outbox(context, outbox_iri, activity) do
-      case context_data do
-        # QUESTION when is undeliverable ever changed?
-        %{undeliverable: undeliverable} ->
-          {:ok, !undeliverable}
+        {:error, reason} ->
+          {:error, reason}
 
         _ ->
-          Logger.error("No context data returned from add_to_outbox - won't deliver!")
-          {:ok, false}
+          {activity, true}
       end
+
+    with {:ok, _activity} <- add_to_outbox(context, outbox_iri, activity) do
+      Logger.error("SideEffectActor.post_outbox :ok, #{deliverable}")
+      {:ok, deliverable}
     end
   end
 
@@ -453,7 +450,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
            apply(database, :update_outbox, [outbox_iri, %{create: [activity]}]) do
-      {:ok, activity, context.data}
+      {:ok, activity}
     else
       {:error, reason} ->
         {:error, reason}
