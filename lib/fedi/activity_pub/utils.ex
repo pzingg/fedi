@@ -96,6 +96,7 @@ defmodule Fedi.ActivityPub.Utils do
       {:ok, conn, json}
     else
       {:error, reason} ->
+        Logger.error("bad body #{reason}")
         {:error, reason}
     end
   end
@@ -695,12 +696,12 @@ defmodule Fedi.ActivityPub.Utils do
 
   def get_dereference_data(%{data: _} = context) do
     Logger.error("No inbox or outbox in #{inspect(context)}")
-    {:error, "Internal system error"}
+    {:error, "Internal server error"}
   end
 
   def get_dereference_data(context) do
     Logger.error("No data in #{inspect(context)}")
-    {:error, "Internal system error"}
+    {:error, "Internal server error"}
   end
 
   @doc """

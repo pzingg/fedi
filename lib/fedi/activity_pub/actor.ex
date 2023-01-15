@@ -546,8 +546,8 @@ defmodule Fedi.ActivityPub.Actor do
          # The HTTP request steps are complete, complete the rest of the outbox
          # and delivery process.
          outbox_id <- APUtils.request_id(conn),
-         {:delivered, :ok} <-
-           {:delivered, deliver(actor, outbox_id, activity, m)} do
+         {:delivery, :ok} <-
+           {:delivery, deliver(actor, outbox_id, activity, m)} do
       # Respond to the request with the new Activity's IRI location.
       #
       # Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
@@ -561,6 +561,7 @@ defmodule Fedi.ActivityPub.Actor do
        |> Plug.Conn.send_resp(:created, "")}
     else
       {:error, reason} ->
+        Logger.error("handle_post_outbox #{reason}")
         {:error, reason}
 
       # Do nothing if it is not an ActivityPub POST request.
@@ -614,31 +615,31 @@ defmodule Fedi.ActivityPub.Actor do
       # Special case: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
-      {:delivered, {:error, %Error{code: :object_required} = error}} ->
+      {:delivery, {:error, %Error{code: :object_required} = error}} ->
         {:ok,
          APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
-           :delivered
+           :delivery
          )}
 
-      {:delivered, {:error, %Error{code: :target_required} = error}} ->
+      {:delivery, {:error, %Error{code: :target_required} = error}} ->
         {:ok,
          APUtils.send_json_resp(
            conn,
            :bad_request,
            error,
-           :delivered
+           :delivery
          )}
 
-      {:delivered, {:error, _reason}} ->
+      {:delivery, {:error, _reason}} ->
         {:ok,
          APUtils.send_json_resp(
            conn,
            :internal_server_error,
            "Internal server error",
-           :delivered
+           :delivery
          )}
     end
   end

@@ -47,7 +47,7 @@ defmodule Fedi.Streams.Utils do
   ### Errors
 
   @doc """
-  Indicates that the activity needs its actor property
+  Indicates that the activity needs its 'actor' property
   set. Can be returned by `Actor.handle_post_inbox/2` or
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
@@ -56,7 +56,7 @@ defmodule Fedi.Streams.Utils do
   end
 
   @doc """
-  Indicates that the activity needs its object property
+  Indicates that the activity needs its 'object' property
   set. Can be returned by `Actor.handle_post_inbox/2` or
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
@@ -65,7 +65,7 @@ defmodule Fedi.Streams.Utils do
   end
 
   @doc """
-  Indicates that the activity needs its target property
+  Indicates that the activity needs its 'target' property
   set. Can be returned by `Actor.handle_post_inbox/2` or
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
@@ -74,12 +74,21 @@ defmodule Fedi.Streams.Utils do
   end
 
   @doc """
-  Indicates that the activity needs its id property
+  Indicates that the activity needs its 'id' property
   set. Can be returned by `Actor.handle_post_inbox/2` or
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_id_required(data \\ []) do
     Error.new(:id_required, "Id property required on the provided Activity", false, data)
+  end
+
+  @doc """
+  Indicates that the activity needs its 'type' property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_type_required(data \\ []) do
+    Error.new(:id_required, "Type property required on the provided Activity", false, data)
   end
 
   @doc """
@@ -227,7 +236,7 @@ defmodule Fedi.Streams.Utils do
       {:ok, id, type_name, category}
     else
       {:error, reason} -> {:error, reason}
-      _ -> {:error, Utils.err_id_required(value: as_value)}
+      _ -> {:error, err_id_required(value: as_value)}
     end
   end
 
@@ -237,7 +246,7 @@ defmodule Fedi.Streams.Utils do
         {:ok, type_name, get_type_category(type_name)}
 
       _ ->
-        {:error, Utils.err_type_required(value: as_value)}
+        {:error, err_type_required(value: as_value)}
     end
   end
 

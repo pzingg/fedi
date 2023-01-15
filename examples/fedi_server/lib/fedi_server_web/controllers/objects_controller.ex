@@ -23,11 +23,11 @@ defmodule FediServerWeb.ObjectsController do
 
       {:fetch, other} ->
         Logger.error("No json data in #{inspect(other)}")
-        send_resp(conn, 500, "Internal system error")
+        send_resp(conn, 500, "Internal server error")
 
       {:error, reason} ->
         Logger.error("Encoding error #{inspect(reason)}")
-        send_resp(conn, 500, "Internal system error")
+        send_resp(conn, 500, "Internal server error")
     end
   end
 

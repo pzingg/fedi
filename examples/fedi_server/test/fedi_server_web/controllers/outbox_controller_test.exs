@@ -52,22 +52,49 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert json_body =~ "/users/alyssa/outbox?page=true"
   end
 
-  test "POST a Create activity /users/alyssa/outbox", %{conn: conn} do
+  test "POST a Create activity to /users/alyssa/outbox", %{conn: conn} do
     _ = user_fixtures()
 
     activity = """
     {
       "@context": "https://www.w3.org/ns/activitystreams",
       "type": "Create",
-      "id": "https://example.com/users/alyssa/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
       "to": ["https://www.w3.org/ns/activitystreams#Public", "https://chatty.example/users/ben"],
       "actor": "https://example.com/users/alyssa",
       "object": {
         "type": "Note",
-        "id": "https://example.com/users/alyssa/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
         "attributedTo": "https://example.com/users/alyssa",
         "to": ["https://www.w3.org/ns/activitystreams#Public", "https://chatty.example/users/ben"],
         "content": "Say, did you finish reading that book I lent you?"
+      }
+    }
+    """
+
+    # Seed local user, so we have her private key
+    _ = user_fixtures()
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", activity)
+
+    assert response(conn, 201) == ""
+  end
+
+  test "POST a Follow activity to /users/alyssa/outbox", %{conn: conn} do
+    _ = user_fixtures()
+
+    activity = """
+    {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Follow",
+      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK8",
+      "to": ["https://www.w3.org/ns/activitystreams#Public", "https://chatty.example/users/ben"],
+      "actor": "https://example.com/users/alyssa",
+      "object": {
+        "type": "Person",
+        "id": "https://chatty.example/users/ben"
       }
     }
     """

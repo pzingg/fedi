@@ -224,6 +224,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   """
   def follow(context, activity)
       when is_struct(context) and is_struct(activity) do
+    Logger.error("social follow #{inspect(activity)}")
+
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
       Actor.handle_activity(context, :c2s, activity)

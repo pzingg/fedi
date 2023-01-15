@@ -17,6 +17,7 @@ defmodule FediServer.Activities do
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
   alias FediServer.Activities.Mailbox
+  alias FediServer.Activities.FollowingRelationship
   alias FediServer.HTTPClient
   alias FediServer.Repo
 
@@ -261,6 +262,8 @@ defmodule FediServer.Activities do
   the entire value.
   """
   def update(as_type) do
+    Logger.error("update #{inspect(as_type)}")
+
     with {:get_actor, %URI{} = actor_iri} <-
            {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
          {:ok, params} <-
@@ -366,7 +369,7 @@ defmodule FediServer.Activities do
 
       {:local_actor, _} ->
         Logger.error("new_id, actor #{inspect(value)} is not ours")
-        {:error, "Internal system error"}
+        {:error, "Internal server error"}
     end
   end
 
@@ -507,9 +510,10 @@ defmodule FediServer.Activities do
     |> Repo.all()
   end
 
-  def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing) do
+  def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing, opts \\ []) do
     actor = URI.to_string(actor_iri)
 
+    # TODO get :min_id, :max_id, :page_size, :liked from opts
     result =
       from(m in Mailbox,
         join: a in Activity,
@@ -565,6 +569,45 @@ defmodule FediServer.Activities do
     case Fedi.Streams.JSONResolver.resolve(activity_json) do
       {:ok, object} -> %P.OrderedItemsIterator{alias: "", member: object}
       _ -> nil
+    end
+  end
+
+  def get_following_relationship(%User{} = follower, %User{} = following) do
+    query =
+      from(FollowingRelationship, where: [follower_id: ^follower.id, following_id: ^following.id])
+
+    Repo.one(query)
+  end
+
+  def update_following_relationship(%User{} = follower, %User{} = following, :rejected) do
+    unfollow(follower, following)
+  end
+
+  def update_following_relationship(%User{} = follower, %User{} = following, state) do
+    case get_following_relationship(follower, following) do
+      nil ->
+        follow(follower, following, state)
+
+      following_relationship ->
+        following_relationship
+        |> FollowingRelationship.state_changeset(%{state: state})
+        |> Repo.update()
+    end
+  end
+
+  def follow(%User{} = follower, %User{} = following, state \\ :accepted) do
+    %FollowingRelationship{}
+    |> FollowingRelationship.changeset(%{follower: follower, following: following, state: state})
+    |> Repo.insert(on_conflict: :nothing)
+  end
+
+  def unfollow(%User{} = follower, %User{} = following) do
+    case get_following_relationship(follower, following) do
+      %FollowingRelationship{} = following_relationship ->
+        Repo.delete(following_relationship)
+
+      _ ->
+        {:ok, nil}
     end
   end
 
@@ -676,6 +719,7 @@ defmodule FediServer.Activities do
             {:ok, nickname, :actors}
 
           _ ->
+            Logger.error("Failed to parse #{URI.to_string(iri)} as object or user")
             {:error, "Missing schema or id in #{URI.to_string(iri)}"}
         end
     end

@@ -23,7 +23,7 @@ defmodule Fedi.Streams.Error do
     %__MODULE__{code: code, message: message, internal?: internal?, data: data}
   end
 
-  def response_message(%__MODULE__{internal?: true}), do: "Internal system error"
+  def response_message(%__MODULE__{internal?: true}), do: "Internal server error"
 
   def response_message(%__MODULE__{}), do: "Bad request"
 end

@@ -38,7 +38,7 @@ defmodule FediServer.Activities.User do
     }
   end
 
-  def changeset(user, params \\ %{}) do
+  def changeset(%__MODULE__{} = user, params \\ %{}) do
     user
     |> cast(params, [:ap_id, :inbox, :name, :nickname, :local, :email, :public_key, :data])
     |> validate_required([:ap_id, :inbox, :name, :nickname, :local, :data])
