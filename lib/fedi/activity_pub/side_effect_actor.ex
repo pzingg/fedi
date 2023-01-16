@@ -89,49 +89,60 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     Fedi.ActivityPub.Actor.make_actor(__MODULE__, common, database, opts)
   end
 
-  ### c2s delegations
+  @doc """
+  Defers to the S2S delegate.
+  """
+  @impl true
+  def post_inbox_request_body_hook(context, %Plug.Conn{} = conn) do
+    Actor.delegate(context, :s2s, :post_inbox_request_body_hook, [conn])
+  end
 
   @doc """
-  Delegates the authentication and authorization
-  of a POST to an outbox.
-
-  Only called if the Social API is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not send a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles sending a response to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
+  Defers to the C2S delegate.
   """
+  @impl true
+  def post_outbox_request_body_hook(context, %Plug.Conn{} = conn) do
+    Actor.delegate(context, :c2s, :post_outbox_request_body_hook, [conn])
+  end
+
+  @doc """
+  Defers to the S2S delegate to authenticate the request.
+  """
+  @impl true
+  def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
+    Actor.delegate(context, :s2s, :authenticate_post_inbox, [conn])
+  end
+
+  @doc """
+  Defers to the common delegate to authenticate the request.
+  """
+  @impl true
+  def authenticate_get_inbox(context, %Plug.Conn{} = conn) do
+    Actor.delegate(context, :common, :authenticate_get_inbox, [conn])
+  end
+
+  @doc """
+  Defers to the C2S delegate to authenticate the request.
+  """
+  @impl true
   def authenticate_post_outbox(context, %Plug.Conn{} = conn) do
     Actor.delegate(context, :c2s, :authenticate_post_outbox, [conn])
   end
 
   @doc """
+  Defers to the common delegate to authenticate the request.
   """
-  def post_outbox_body_hook(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :c2s, :post_outbox_body_hook, [conn])
+  @impl true
+  def authenticate_get_outbox(context, %Plug.Conn{} = conn) do
+    Actor.delegate(context, :common, :authenticate_get_outbox, [conn])
   end
-
-  ### SideEffectActor implementation
 
   @doc """
   Defers to the federating protocol whether the peer request
   is authorized based on the actors' ids.
   """
-  def authorize_post_inbox(%{s2s: nil} = _context, _, _) do
-    :pass
-  end
-
-  def authorize_post_inbox(%{s2s: _} = context, %Plug.Conn{} = conn, activity)
+  @impl true
+  def authorize_post_inbox(context, %Plug.Conn{} = conn, activity)
       when is_struct(activity) do
     with {:activity_actor, %P.Actor{values: [_ | _]} = actor_prop} <-
            {:activity_actor, Utils.get_actor(activity)},
@@ -158,7 +169,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   request, adding the activity to the actor's inbox, and triggering side
   effects based on the activity's type.
   """
-  def post_inbox(context, %Plug.Conn{} = conn, %URI{} = inbox_iri, activity)
+  @impl true
+  def post_inbox(context, %URI{} = inbox_iri, activity)
       when is_struct(context) and is_struct(activity) do
     case add_to_inbox_if_new(context, inbox_iri, activity) do
       {:error, reason} ->
@@ -166,7 +178,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
       {:ok, false} ->
         # Already in our inbox, all good
-        {:ok, conn}
+        :ok
 
       {:ok, true} ->
         # A new activity was added to the inbox
@@ -175,7 +187,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
           case Actor.handle_activity(context, :s2s, activity, top_level: true) do
             {:error, reason} -> {:error, reason}
-            _ -> {:ok, conn}
+            _ -> :ok
           end
         end
     end
@@ -190,6 +202,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   """
+  @impl true
   def inbox_forwarding(%{database: database} = context, %URI{} = inbox_iri, activity) do
     # Ref: This is the first time the server has seen this Activity.
     case Utils.get_json_ld_id(activity) do
@@ -242,12 +255,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           end
         else
           {:error, reason} ->
-            Logger.error("Inbox forwarding error for #{URI.to_string(id)}: #{reason}")
+            Logger.error("Inbox forwarding error for #{id}: #{reason}")
             {:error, reason}
 
           # We have seen the activity before
           {:exists, {:ok, _}} ->
-            Logger.debug("No inbox forwarding needed: #{URI.to_string(id)} has been seen")
+            Logger.debug("No inbox forwarding needed: #{id} has been seen")
             :ok
         end
 
@@ -304,8 +317,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
               {:cont, {[iri | iri_acc], Map.put(col_acc, iri, as_value), ocol_acc}}
 
             true ->
-              Logger.error(
-                "Owned recipient is a #{Utils.alias_module(as_value.__struct__)}, neither an OrderedCollection nor a Collection"
+              Logger.debug(
+                "Owned recipient #{iri} is a #{Utils.alias_module(as_value.__struct__)}, neither an OrderedCollection nor a Collection"
               )
 
               {:cont, acc}
@@ -371,26 +384,29 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   This implementation assumes all types are meant to be delivered except for
   the ActivityStreams Block type.
   """
+  @impl true
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
-    Logger.error("SideEffectActor.post_outbox #{inspect(context.data)}")
+    with true <- Actor.protocol_supported?(context, :c2s),
+         context <- wrap_for_social_api(context, outbox_iri, raw_json),
+         {:ok, deliverable} <-
+           Actor.handle_activity(context, :c2s, activity, top_level: true) do
+      {activity, deliverable}
+    else
+      {:error, reason} ->
+        {:error, reason}
 
-    {activity, deliverable} =
-      with true <- Actor.protocol_supported?(context, :c2s),
-           context <- wrap_for_social_api(context, outbox_iri, raw_json),
-           {:ok, activity, deliverable} <-
-             Actor.handle_activity(context, :c2s, activity, top_level: true) do
-        {activity, deliverable}
-      else
-        {:error, reason} ->
-          {:error, reason}
+      _ ->
+        {activity, true}
+    end
+    |> case do
+      {:error, reason} ->
+        {:error, reason}
 
-        _ ->
-          {activity, true}
-      end
-
-    with {:ok, _activity} <- add_to_outbox(context, outbox_iri, activity) do
-      Logger.error("SideEffectActor.post_outbox :ok, #{deliverable}")
-      {:ok, deliverable}
+      {activity, deliverable} ->
+        case add_to_outbox(context, outbox_iri, activity) do
+          {:ok, _} -> {:ok, deliverable}
+          {:error, reason} -> {:error, reason}
+        end
     end
   end
 
@@ -398,15 +414,20 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Creates new 'id' entries on an activity and its objects if it is a
   Create activity.
   """
+  @impl true
   def add_new_ids(context, activity) do
-    with {:ok, activity} <- set_object_id(context, activity),
-         {:is_create, true} <- {:is_create, APUtils.is_or_extends?(activity, "Create")} do
-      APUtils.update_objects(activity, fn object ->
-        set_object_id(context, object)
-      end)
-    else
-      {:is_create, _} -> {:ok, activity}
-      {:error, reason} -> {:error, reason}
+    case set_object_id(context, activity) do
+      {:ok, activity} ->
+        if APUtils.is_or_extends?(activity, "Create") do
+          APUtils.update_objects(activity, fn object ->
+            set_object_id(context, object)
+          end)
+        else
+          {:ok, activity}
+        end
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -416,6 +437,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Called if the Federated Protocol is supported.
   """
+  @impl true
   def deliver(context, outbox_iri, activity) do
     with {:ok, context, activity, recipients} <- prepare(context, outbox_iri, activity) do
       wrap_for_federated_protocol(context, outbox_iri)
@@ -426,6 +448,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   @doc """
   Wraps an object with a Create activity.
   """
+  @impl true
   def wrap_in_create(%{database: database} = _context, activity, %URI{} = outbox_iri) do
     with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]) do
       {:ok, APUtils.wrap_in_create(activity, actor_iri)}
@@ -441,7 +464,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
   The server MUST then add this new Activity to the outbox collection.
   """
-  def add_to_outbox(%{database: database} = context, %URI{} = outbox_iri, activity) do
+  def add_to_outbox(%{database: database}, %URI{} = outbox_iri, activity)
+      when is_struct(activity) do
     with {:activity_id, %URI{} = _id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
          {:ok, activity, _raw_json} <-
@@ -547,7 +571,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
                 end
               else
                 {:error, reason} -> {:error, reason}
-                {:get_inbox, _} -> {:error, "No inbox for sender #{URI.to_string(outbox_iri)}"}
+                {:get_inbox, _} -> {:error, "No inbox for sender #{outbox_iri}"}
               end
 
               # end targets ->
@@ -736,8 +760,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       when is_struct(val) do
     # QUESTION Are these two values always the same?
     # Could we eliminate the inbox_iri argument?
-    Logger.error("hi_fowarding_values inbox_iri #{URI.to_string(inbox_iri)}")
-    Logger.error("hi_fowarding_values c.box_iri #{URI.to_string(box_iri)}")
+    Logger.error("hi_fowarding_values inbox_iri #{inbox_iri}")
+    Logger.error("hi_fowarding_values c.box_iri #{box_iri}")
 
     # Stop recurring if we are exceeding the maximum depth and the maximum
     # is a positive number.
@@ -809,7 +833,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     end)
   end
 
-  # Recursion preparation: Try fetching the IRIs so we can recurse into them.
+  @doc """
+  Recursion preparation: Try fetching the IRIs so we can recurse into them.
+  """
   def dereference_iris(
         %{data: %{box_iri: box_iri, app_agent: app_agent}, database: database},
         iris
@@ -849,8 +875,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     dereferencing.
   * `raw_activity` is the JSON map literal received when deserializing the
     request body.
-  * `undeliverable` is an out param, indicating if the handled activity
-    should not be delivered to a peer. Its provided default value will always
+  * `deliverable` is an out param, indicating if the handled activity
+    should be delivered to a peer. Its provided default value will always
     be used when a custom function is called.
   """
   def wrap_for_social_api(context, box_iri, raw_json) do
@@ -862,7 +888,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           box_iri: box_iri,
           app_agent: app_agent,
           raw_activity: raw_json,
-          undeliverable: false
+          deliverable: true
         })
     )
   end

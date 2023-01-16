@@ -16,6 +16,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Create activity side effects.
   """
+  @impl true
   def create(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
@@ -70,14 +71,15 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Update activity side effects.
   """
-  def update(%{database: database} = _context, activity) when is_struct(activity) do
+  @impl true
+  def update(%{database: database} = context, activity) when is_struct(activity) do
     with {:ok, %{values: values}} <-
            APUtils.objects_match_activity_origin?(activity),
          {:ok, _updated} <-
            update_objects(database, values),
-         {:ok, updated, _raw_json} <-
+         {:ok, _updated, _raw_json} <-
            apply(database, :update, [activity]) do
-      {:ok, updated}
+      Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} -> {:error, reason}
     end
@@ -103,6 +105,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Delete activity side effects.
   """
+  @impl true
   def delete(%{database: database} = context, activity) when is_struct(activity) do
     with {:ok, %{values: values}} <- APUtils.objects_match_activity_origin?(activity),
          {:ok, _deleted} <- delete_objects(database, values),
@@ -144,6 +147,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   * :automatically_reject triggers the side effect of sending a
    Reject of this Follow request in response.
   """
+  @impl true
   def follow(
         %{database: database, data: %{on_follow: on_follow, inbox_iri: inbox_iri}} = context,
         %{__struct__: _, alias: alias_} = activity
@@ -275,6 +279,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Accept activity side effects.
   """
+  @impl true
   def accept(%{database: database, inbox_iri: inbox_iri} = context, %{alias: alias_} = activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
@@ -383,6 +388,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Reject activity side effects.
   """
+  @impl true
   def reject(context, activity) when is_struct(context) and is_struct(activity) do
     Actor.handle_activity(context, :s2s, activity)
   end
@@ -390,6 +396,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Add activity side effects.
   """
+  @impl true
   def add(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -408,6 +415,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Remove activity side effects.
   """
+  @impl true
   def remove(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -426,6 +434,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Like activity side effects.
   """
+  @impl true
   def like(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
@@ -492,6 +501,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Announce activity side effects.
   """
+  @impl true
   def announce(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
@@ -558,6 +568,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Undo activity side effects.
   """
+  @impl true
   def undo(context, activity) when is_struct(activity) do
     with :ok <- APUtils.object_actors_match_activity_actors?(context, activity) do
       Actor.handle_activity(context, :s2s, activity)
@@ -569,6 +580,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @doc """
   Implements the federating Block activity side effects.
   """
+  @impl true
   def block(context, activity)
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-

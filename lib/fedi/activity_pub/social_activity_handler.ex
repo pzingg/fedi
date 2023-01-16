@@ -11,7 +11,6 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
-  alias Fedi.ActivityStreams.Type, as: T
 
   @doc """
   Implements the social Create activity side effects.
@@ -35,6 +34,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   likewise with copying recipients from the object to the wrapping Create
   activity.
   """
+  @impl true
   def create(
         %{database: database, data: context_data} = context,
         %{alias: alias_, properties: _} = activity
@@ -83,7 +83,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
         {:ok, activity} ->
           # Persist all objects we've created, which will include sensitive
           # recipients such as 'bcc' and 'bto'.
-          context_data = Map.put(context_data, :undeliverable, false)
+          context_data = Map.put(context_data, :deliverable, false)
           context = Map.put(context, :data, context_data)
 
           Enum.reduce_while(object.values, :ok, fn
@@ -91,7 +91,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
               case APUtils.get_id(as_type) do
                 %URI{} = _id ->
                   case apply(database, :create, [as_type]) do
-                    {:ok, _} ->
+                    {:ok, _created, _raw_json} ->
                       {:cont, acc}
 
                     {:error, reason} ->
@@ -125,6 +125,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Update activity side effects.
   """
+  @impl true
   def update(%{database: database, data: %{raw_activity: raw_activity}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
@@ -155,7 +156,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
               end
 
             _ ->
-              {:halt, {:error, Utils.err_id_required(object: object_type)}}
+              {:halt, {:error, Utils.err_id_required(value: object_type)}}
           end
 
         _non_type_iter, _acc ->
@@ -182,6 +183,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   a Tombstone of the object that will be displayed in activities which
   reference the deleted object.
   """
+  @impl true
   def delete(%{database: database} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
@@ -200,7 +202,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
               end
 
             _ ->
-              {:halt, {:error, Utils.err_id_required(object: object_type)}}
+              {:halt, {:error, Utils.err_id_required(value: object_type)}}
           end
 
         _non_type_iter, _acc ->
@@ -222,6 +224,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Follow activity side effects.
   """
+  @impl true
   def follow(context, activity)
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
@@ -240,6 +243,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Additionally, clients submitting the following activities to an outbox
   MUST also provide the target property: Add, Remove.
   """
+  @impl true
   def add(context, activity)
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -258,6 +262,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Remove activity side effects.
   """
+  @impl true
   def remove(context, activity)
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -276,6 +281,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Like activity side effects.
   """
+  @impl true
   def like(%{database: database, data: %{box_iri: outbox_iri}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -295,6 +301,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Undo activity side effects.
   """
+  @impl true
   def undo(%{data: context_data} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
@@ -302,7 +309,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
            {:activity_actor, Utils.get_actor(activity)},
          :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
-      context_data = Map.put(context_data, :undeliverable, false)
+      context_data = Map.put(context_data, :deliverable, false)
       context = Map.put(context, :data, context_data)
       Actor.handle_activity(context, :c2s, activity)
     else
@@ -315,10 +322,11 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @doc """
   Implements the social Block activity side effects.
   """
+  @impl true
   def block(%{data: context_data} = context, activity) when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      context_data = Map.put(context_data, :undeliverable, true)
+      context_data = Map.put(context_data, :deliverable, true)
       context = Map.put(context, :data, context_data)
       Actor.handle_activity(context, :c2s, activity)
     else

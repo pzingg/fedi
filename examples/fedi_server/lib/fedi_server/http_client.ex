@@ -139,8 +139,8 @@ defmodule FediServer.HTTPClient do
   end
 
   def dereference(%__MODULE__{} = _transport, %URI{} = url) do
-    Logger.error("Can't dereference #{URI.to_string(url)}: missing private key or public key id")
-    {:error, "Can't dereference #{URI.to_string(url)}: missing private key or public key id"}
+    Logger.error("Can't dereference #{url}: missing private key or public key id")
+    {:error, "Can't dereference #{url}: missing private key or public key id"}
   end
 
   @doc """

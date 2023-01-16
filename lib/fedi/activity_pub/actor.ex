@@ -45,7 +45,7 @@ defmodule Fedi.ActivityPub.Actor do
           box_iri: URI.t(),
           app_agent: String.t(),
           raw_activity: map(),
-          undeliverable: boolean()
+          deliverable: boolean()
         }
 
   @typedoc """
@@ -249,6 +249,7 @@ defmodule Fedi.ActivityPub.Actor do
       cond do
         function_exported?(callback_module, callback_fn, 2) ->
           apply(callback_module, callback_fn, [context, activity])
+          |> activity_handler_result(which, context, activity)
 
         function_exported?(callback_module, :default_callback, 2) ->
           Logger.debug(
@@ -256,15 +257,13 @@ defmodule Fedi.ActivityPub.Actor do
           )
 
           apply(callback_module, :default_callback, [context, activity])
+          |> activity_handler_result(which, context, activity)
 
         true ->
           Logger.error("#{which} Activity handler: no #{callback_fn} or default_callback")
           {:ok, activity, context.data}
       end
     else
-      :pass ->
-        {:ok, activity, context.data}
-
       {:module, _} ->
         Logger.error("#{which} Activity handler not set")
         {:error, "#{which} Activity handler not set"}
@@ -274,6 +273,20 @@ defmodule Fedi.ActivityPub.Actor do
         {:error, "#{which} Activity handler does not exist"}
     end
   end
+
+  defp activity_handler_result(:pass, :c2s, %{data: %{deliverable: deliverable}}, _activity) do
+    {:ok, deliverable}
+  end
+
+  defp activity_handler_result(:pass, :c2s, _context, _activity) do
+    {:ok, true}
+  end
+
+  defp activity_handler_result(:pass, :s2s, _context, activity) do
+    {:ok, activity}
+  end
+
+  defp activity_handler_result(result, _, _, _), do: result
 
   defp get_activity_handler_module(context, which, true) do
     case which do
@@ -739,11 +752,9 @@ defmodule Fedi.ActivityPub.Actor do
          # code, or something else is incorrect with the type system.
          {:valid_activity, true} <-
            {:valid_activity, APUtils.is_or_extends?(activity, "Activity")},
-
          # Delegate generating new IDs for the activity and all new objects.
          {:ok, activity} <-
            main_delegate(actor, :c2s, :add_new_ids, [activity]),
-
          # Post the activity to the actor's outbox and trigger side effects for
          # that particular Activity type.
          # Since 'm' is nil-able and side effects may need access to literal nil
@@ -751,7 +762,7 @@ defmodule Fedi.ActivityPub.Actor do
          {:ok, m} <-
            ensure_serialized(m, activity),
          {:ok, deliverable} <-
-           main_delegate(actor, :s2s, :post_outbox, [activity, outbox_iri, m]) do
+           main_delegate(actor, :c2s, :post_outbox, [activity, outbox_iri, m]) do
       # Request has been processed and all side effects internal to this
       # application server have finished. Begin side effects affecting other
       # servers and/or the client who sent this request.

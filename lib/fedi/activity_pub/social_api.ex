@@ -87,5 +87,5 @@ defmodule Fedi.ActivityPub.SocialApi do
   default_callback.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct(), undeliverable :: boolean()} | {:error, term()}
+              {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}
 end

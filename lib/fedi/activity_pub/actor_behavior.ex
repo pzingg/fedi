@@ -19,7 +19,177 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   @type context() :: Fedi.ActivityPub.Actor.context()
 
-  # TODO IMPL add missing SideEffectActor delegate callbacks
+  @doc """
+  Hook callback after parsing the request body for a federated request
+  to the Actor's inbox.
+
+  Can be used to set contextual information based on the Activity
+  received.
+
+  Only called if the Federated Protocol is enabled.
+
+  Warning: Neither authentication nor authorization has taken place at
+  this time. Doing anything beyond setting contextual information is
+  strongly discouraged.
+
+  If an error is returned, it is passed back to the caller of
+  `post_inbox`. In this case, the implementation must not
+  send a response to the connection as is expected that the caller
+  to `post_inbox` will do so when handling the error.
+  """
+  @callback post_inbox_request_body_hook(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t()} | {:error, term()}
+
+  @doc """
+  Hook callback after parsing the request body for a client request
+  to the Actor's outbox.
+
+  Can be used to set contextual information based on the
+  ActivityStreams object received.
+
+  Only called if the Social API is enabled.
+
+  Warning: Neither authentication nor authorization has taken place at
+  this time. Doing anything beyond setting contextual information is
+  strongly discouraged.
+
+  If an error is returned, it is passed back to the caller of
+  `post_outbox`. In this case, the implementation must not
+  send a response to the connection as is expected that the caller
+  to `post_outbox` will do so when handling the error.
+  """
+  @callback post_outbox_request_body_hook(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t()} | {:error, term()}
+
+  @doc """
+  Delegates the authentication of a POST to an inbox.
+
+  If an error is returned, it is passed back to the caller of
+  `post_inbox`. In this case, the implementation must not send a
+  response to the connection as is expected that the client will
+  do so when handling the error. The 'authenticated' is ignored.
+
+  If no error is returned, but authentication or authorization fails,
+  then authenticated must be false. It is expected that
+  the implementation handles sending a response in this
+  case.
+
+  Finally, if the authentication and authorization succeeds, then
+  authenticated must be true. The request will continue
+  to be processed.
+  """
+  @callback authenticate_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+
+  @doc """
+  Delegates the authentication of a GET to an inbox.
+
+  Always called, regardless whether the Federated Protocol or Social
+  API is enabled.
+
+  If an error is returned, it is passed back to the caller of
+  GetInbox. In this case, the implementation must not send a
+  response to the connection as is expected that the client will
+  do so when handling the error. The 'authenticated' is ignored.
+
+  If no error is returned, but authentication or authorization fails,
+  then authenticated must be false. It is expected that
+  the implementation handles sending to the connection in this case.
+
+  Finally, if the authentication and authorization succeeds, then
+  authenticated must be true. The request will continue
+  to be processed.
+  """
+  @callback authenticate_get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+
+  @doc """
+  Delegates the authorization of an activity that
+  has been sent by POST to an inbox.
+
+  Only called if the Federated Protocol is enabled.
+
+  If an error is returned, it is passed back to the caller of
+  `post_inbox`. In this case, the implementation must not send a
+  response to the connection as is expected that the client will
+  do so when handling the error. The 'authorized' is ignored.
+
+  If no error is returned, but authorization fails, then authorized
+  must be false and error nil. It is expected that the implementation
+  handles sending to the connection in this case.
+
+  Finally, if the authentication and authorization succeeds, then
+  authorized must be true and error nil. The request will continue
+  to be processed.
+  """
+  @callback authorize_post_inbox(
+              context :: context(),
+              conn :: Plug.Conn.t(),
+              activity :: struct()
+            ) ::
+              {:ok, Plug.Conn.t(), authorized :: boolean()} | {:error, term()}
+
+  @doc """
+  Delegates the authentication and authorization of a POST to an outbox.
+
+  Only called if the Social API is enabled.
+
+  If an error is returned, it is passed back to the caller of
+  PostOutbox. In this case, the implementation must not send a
+  response to the connection as is expected that the client will
+  do so when handling the error. The 'authenticated' is ignored.
+
+  If no error is returned, but authentication or authorization fails,
+  then authenticated must be false. It is expected that
+  the implementation handles sending to the connection in this
+  case.
+
+  Finally, if the authentication and authorization succeeds, then
+  authenticated must be true. The request will continue
+  to be processed.
+  """
+  @callback authenticate_post_outbox(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+
+  @doc """
+  Delegates the authentication of a GET to an outbox.
+
+  Always called, regardless whether the Federated Protocol or Social
+  API is enabled.
+
+  If an error is returned, it is passed back to the caller of
+  `get_outbox`. In this case, the implementation must not send a
+  response to the connection as is expected that the client will
+  do so when handling the error. The 'authenticated' is ignored.
+
+  If no error is returned, but authentication or authorization fails,
+  then authenticated must be false. It is expected that
+  the implementation handles sending to the connection in this
+  case.
+
+  Finally, if the authentication and authorization succeeds, then
+  authenticated must be true. The request will continue
+  to be processed.
+  """
+  @callback authenticate_get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
+              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+
+  @doc """
+  Delegates the side effects of adding to the inbox and
+  determining if it is a request that should be blocked.
+
+  Only called if the Federated Protocol is enabled.
+
+  As a side effect, sets the federated data in the inbox, but
+  not on its own in the database, as `inbox_forwarding` (which is called
+  later) must decide whether it has seen this activity before in order
+  to determine whether to do the forwarding algorithm.
+
+  If the error is `:object_required` or `:target_required`, then a Bad
+  Request status is sent in the response.
+  """
+  @callback post_inbox(context :: context(), inbox_iri :: URI.t(), activity :: struct()) ::
+              :ok | {:error, term()}
 
   @doc """
   Delegates inbox forwarding logic when a POST request

@@ -5,6 +5,7 @@ defmodule FediServerWeb.SocialCallbacks do
 
   @behaviour Fedi.ActivityPub.CommonApi
   @behaviour Fedi.ActivityPub.SocialApi
+  @behaviour Fedi.ActivityPub.SocialActivityApi
 
   require Logger
 
@@ -14,37 +15,20 @@ defmodule FediServerWeb.SocialCallbacks do
   alias FediServer.Activities.User
   alias FediServerWeb.CommonCallbacks
 
+  @impl true
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
 
+  @impl true
   defdelegate get_inbox(context, conn, params), to: CommonCallbacks
 
+  @impl true
   defdelegate authenticate_get_outbox(context, conn), to: CommonCallbacks
 
+  @impl true
   defdelegate get_outbox(context, conn, params), to: CommonCallbacks
 
+  @impl true
   defdelegate post_outbox(context, activity, outbox_iri, raw_json), to: CommonCallbacks
-
-  @doc """
-  Hook callback after parsing the request body for a federated request
-  to the Actor's inbox.
-
-  Can be used to set contextual information based on the Activity
-  received.
-
-  Only called if the Federated Protocol is enabled.
-
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
-
-  If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the ActorBehavior implementation must not
-  send a response to the connection as is expected that the caller
-  to post_inbox will do so when handling the error.
-  """
-  def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
-    {:ok, conn}
-  end
 
   @doc """
   Hook callback after parsing the request body for a client request
@@ -64,31 +48,9 @@ defmodule FediServerWeb.SocialCallbacks do
   send a response to the connection as is expected that the caller
   to post_outbox will do so when handling the error.
   """
+  @impl true
   def post_outbox_request_body_hook(context, %Plug.Conn{} = conn, data) do
     {:ok, conn}
-  end
-
-  @doc """
-  Delegates the authentication of a POST to an inbox.
-
-  Only called if the Federated Protocol is enabled.
-
-  If an error is returned, it is passed back to the caller of
-  post_inbox. In this case, the implementation must not send a
-  response to the connection as is expected that the client will
-  do so when handling the error. The 'authenticated' is ignored.
-
-  If no error is returned, but authentication or authorization fails,
-  then authenticated must be false and error nil. It is expected that
-  the implementation handles sending a response to the connection in this
-  case.
-
-  Finally, if the authentication and authorization succeeds, then
-  authenticated must be true and error nil. The request will continue
-  to be processed.
-  """
-  def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
-    {:error, "Unauthenticated"}
   end
 
   @doc """
@@ -99,6 +61,7 @@ defmodule FediServerWeb.SocialCallbacks do
 
   If an error is returned, it is returned to the caller of post_outbox.
   """
+  @impl true
   def add_new_ids(context, activity) do
     :pass
   end
@@ -122,6 +85,7 @@ defmodule FediServerWeb.SocialCallbacks do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
+  @impl true
   def authenticate_post_outbox(context, %Plug.Conn{} = conn) do
     {:ok, conn, true}
   end
@@ -132,9 +96,18 @@ defmodule FediServerWeb.SocialCallbacks do
 
   Only called if the Social API is enabled.
   """
+  @impl true
   def wrap_in_create(context, value, %URI{} = outbox_iri) do
     # {:ok, create}
     {:error, "Unimplemented"}
+  end
+
+  @doc """
+  A no-op for the Social API.
+  """
+  @impl true
+  def default_callback(_context, _activity) do
+    :pass
   end
 
   ### Activity handlers
@@ -142,6 +115,7 @@ defmodule FediServerWeb.SocialCallbacks do
   @doc """
   Create a following relationship.
   """
+  @impl true
   def follow(context, activity) do
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
@@ -151,7 +125,7 @@ defmodule FediServerWeb.SocialCallbacks do
          # Insert remote following user if not in db
          {:ok, %User{} = following} <- Activities.ensure_user(following_id, false),
          {:ok, relationship} <- Activities.follow(follower, following, :pending) do
-      Logger.error("Inserted new relationship")
+      Logger.debug("Inserted new relationship")
       {:ok, activity, false}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -174,12 +148,5 @@ defmodule FediServerWeb.SocialCallbacks do
       {:following_id, _} ->
         {:error, "No id in object"}
     end
-  end
-
-  @doc """
-  A no-op for the Social API.
-  """
-  def default_callback(_context, _activity) do
-    :pass
   end
 end

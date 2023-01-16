@@ -83,8 +83,7 @@ defmodule Fedi.ActivityPub.CommonApi do
               | {:error, term()}
 
   @doc """
-  Delegates the logic for side effects and adding to the
-  outbox.
+  Delegates the logic for side effects and adding to the outbox.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled. In the case of the Social API being enabled, side
@@ -102,21 +101,13 @@ defmodule Fedi.ActivityPub.CommonApi do
   JSON. Since the library does not differentiate between null values and
   values that are simply not present, the `raw_json` map is ONLY needed
   for this narrow and specific use case.
-
-  `get_outbox` returns the OrderedCollection inbox of the actor for this
-  context. It is up to the implementation to provide the correct
-  collection for the kind of authorization given in the request.
-
-  `authenticate_get_outbox` will be called prior to this.
-
-  Always called, regardless whether the Federated Protocol or Social
-  API is enabled.
   """
+  # FIXME
   @callback post_outbox(
               context :: context(),
               activity :: struct(),
               outbox_iri :: URI.t(),
               raw_json :: map()
             ) ::
-              {:ok, ordered_collection :: struct} | {:error, term()}
+              {:ok, deliverable :: boolean()} | {:error, term()}
 end

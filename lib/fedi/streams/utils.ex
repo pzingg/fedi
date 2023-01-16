@@ -52,7 +52,8 @@ defmodule Fedi.Streams.Utils do
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_actor_required(data \\ []) do
-    Error.new(:actor_required, "Actor property required on the provided activity", false, data)
+    suffix = err_location(data)
+    Error.new(:actor_required, "Actor property required#{suffix}", false, data)
   end
 
   @doc """
@@ -61,7 +62,8 @@ defmodule Fedi.Streams.Utils do
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_object_required(data \\ []) do
-    Error.new(:object_required, "Object property required on the provided activity", false, data)
+    suffix = err_location(data)
+    Error.new(:object_required, "Object property required#{suffix}", false, data)
   end
 
   @doc """
@@ -70,7 +72,8 @@ defmodule Fedi.Streams.Utils do
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_target_required(data \\ []) do
-    Error.new(:target_required, "Target property required on the provided activity", false, data)
+    suffix = err_location(data)
+    Error.new(:target_required, "Target property required#{suffix}", false, data)
   end
 
   @doc """
@@ -79,7 +82,8 @@ defmodule Fedi.Streams.Utils do
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_id_required(data \\ []) do
-    Error.new(:id_required, "Id property required on the provided Activity", false, data)
+    suffix = err_location(data)
+    Error.new(:id_required, "Id property required#{suffix}", false, data)
   end
 
   @doc """
@@ -88,7 +92,8 @@ defmodule Fedi.Streams.Utils do
   `Actor.handle_post_outbox/2` so a Bad Request response is set.
   """
   def err_type_required(data \\ []) do
-    Error.new(:id_required, "Type property required on the provided Activity", false, data)
+    suffix = err_location(data)
+    Error.new(:id_required, "Type property required#{suffix}", false, data)
   end
 
   @doc """
@@ -104,6 +109,32 @@ defmodule Fedi.Streams.Utils do
   """
   def err_serialization(message, data \\ []) do
     Error.new(:serialization, message, true, data)
+  end
+
+  def err_location([]), do: ""
+
+  def err_location(data) do
+    cond do
+      Keyword.has_key?(data, :activity) ->
+        %{__struct__: module} = Keyword.get(data, :activity)
+        " on activity #{alias_module(module)}"
+
+      Keyword.has_key?(data, :value) ->
+        %{__struct__: module} = Keyword.get(data, :value)
+        " on type #{alias_module(module)}"
+
+      Keyword.has_key?(data, :iters) ->
+        case Keyword.get(data, :iters) do
+          [%{__struct__: module} | _] ->
+            " on property #{alias_module(module)}"
+
+          _ ->
+            ""
+        end
+
+      true ->
+        ""
+    end
   end
 
   def capitalize(str) do

@@ -15,7 +15,7 @@ alias FediServer.Activities
 alias FediServer.Activities.User
 
 # Add a remote user
-{:ok, contents} = Path.join(:code.priv_dir(:fedi_server), "pzingg.json") |> File.read()
+{:ok, contents} = Path.join(:code.priv_dir(:fedi_server), "ben.json") |> File.read()
 {:ok, data} = Jason.decode(contents)
 
 User.new_from_masto_data(data)

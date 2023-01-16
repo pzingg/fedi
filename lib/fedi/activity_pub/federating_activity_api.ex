@@ -31,6 +31,14 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
 
   @type context() :: Actor.s2s_context()
   @type on_follow() :: Actor.on_follow()
+  @type handler_result() :: :pass | :ok | {:error, term()}
+
+  @doc """
+  Determines what action to take for this particular callback
+  if a Follow activity is handled.
+  """
+  @callback on_follow(context :: context()) ::
+              {:ok, on_follow()} | {:error, term()}
 
   @doc """
   Handles additional side effects for the Create ActivityStreams
@@ -41,8 +49,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
 
   Create calls Create for each object in the federated Activity.
   """
-  @callback create(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback create(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Update ActivityStreams
@@ -54,8 +61,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   Update calls Update on the federated entry from the database, with a
   new value.
   """
-  @callback update(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback update(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Delete ActivityStreams
@@ -63,8 +69,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
 
   Delete removes the federated entry from the database.
   """
-  @callback delete(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback delete(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Follow ActivityStreams
@@ -73,15 +78,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   The wrapping function can have one of several default behaviors,
   depending on the value of the `on_follow` setting.
   """
-  @callback follow(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
-
-  @doc """
-  Determines what action to take for this particular callback
-  if a Follow activity is handled.
-  """
-  @callback on_follow(context :: context()) ::
-              {:ok, on_follow()} | {:error, term()}
+  @callback follow(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Accept ActivityStreams
@@ -93,8 +90,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
 
   Otherwise, no side effects are done by go-fed.
   """
-  @callback accept(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback accept(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Reject ActivityStreams
@@ -105,8 +101,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   forward with adding the 'actor' to the original 'actor's 'following'
   collection by the client application.
   """
-  @callback reject(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback reject(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Add ActivityStreams
@@ -116,8 +111,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   'target' collection if the 'target' collection(s) live on this
   server.
   """
-  @callback add(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback add(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Remove ActivityStreams
@@ -127,8 +121,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   'target' collection if the 'target' collection(s) live on this
   server.
   """
-  @callback remove(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback remove(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Like ActivityStreams
@@ -137,8 +130,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   The wrapping function will add the activity to the 'likes' collection
   on all 'object' targets owned by this server.
   """
-  @callback like(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback like(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Announce
@@ -147,8 +139,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   The wrapping function will add the activity to the 'shares'
   collection on all 'object' targets owned by this server.
   """
-  @callback announce(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback announce(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Undo ActivityStreams
@@ -162,8 +153,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   It is expected that the application will implement the proper
   reversal of activities that are being undone.
   """
-  @callback undo(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback undo(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Block ActivityStreams
@@ -174,6 +164,5 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   received from a federated peer, as delivering Blocks explicitly
   deviates from the original ActivityPub specification.
   """
-  @callback block(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+  @callback block(context :: context(), activity :: struct()) :: handler_result()
 end

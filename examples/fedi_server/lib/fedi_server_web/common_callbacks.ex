@@ -120,7 +120,8 @@ defmodule FediServerWeb.CommonCallbacks do
   for this narrow and specific use case.
   """
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
-    # TODO IMPL
+    Logger.error("CommonCallbacks.post_outbox")
+    # TODO FIXME IMPL
     {:ok, true}
   end
 end

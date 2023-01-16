@@ -28,7 +28,7 @@ defmodule Fedi.Streams.Error do
   def response_message(%__MODULE__{}), do: "Bad request"
 end
 
-defimpl String.Chars, for: Fedi.ActivityPub.Error do
+defimpl String.Chars, for: Fedi.Streams.Error do
   def to_string(%{message: message}) do
     message
   end

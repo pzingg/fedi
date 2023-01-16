@@ -11,8 +11,8 @@ defmodule FediServer.ActivitiesTest do
 
     test "inserts local and federated users" do
       users = FediServer.FixturesHelper.user_fixtures()
-      assert users.pzingg.nickname == "pzingg"
-      assert users.alyssa.nickname == "alyssa"
+      assert users.ben.user.nickname == "ben"
+      assert users.alyssa.user.nickname == "alyssa"
     end
   end
 

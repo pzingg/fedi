@@ -8,14 +8,19 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   alias FediServerWeb.CommonCallbacks
 
+  @impl true
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
 
+  @impl true
   defdelegate get_inbox(context, conn, params), to: CommonCallbacks
 
+  @impl true
   defdelegate authenticate_get_outbox(context, conn), to: CommonCallbacks
 
+  @impl true
   defdelegate get_outbox(context, conn, params), to: CommonCallbacks
 
+  @impl true
   defdelegate post_outbox(context, activity, outbox_iri, raw_json), to: CommonCallbacks
 
   @doc """
@@ -36,6 +41,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   send a response to `conn` as is expected that the caller
   to `post_inbox` will do so when handling the error.
   """
+  @impl true
   def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
     # TODO IMPL
     {:ok, conn}
@@ -58,6 +64,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   authenticated must be true and error nil. The request will continue
   to be processed.
   """
+  @impl true
   def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
@@ -83,7 +90,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   authorized must be true and error nil. The request will continue
   to be processed.
   """
-
+  @impl true
   def authorize_post_inbox(context, %Plug.Conn{} = conn) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
@@ -104,6 +111,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   If the error is `:object_required` or `:target_required`, then a Bad
   Request status is sent in the response.
   """
+  @impl true
   def post_inbox(context, %Plug.Conn{} = conn, %URI{} = inbox_iri, activity) do
     # TODO IMPL
     {:ok, conn}
@@ -129,7 +137,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   If an error is returned, it is returned to the caller of `post_inbox`.
   """
-
+  @impl true
   def inbox_fowarding(context, %URI{} = inbox_iri, activity) do
     # TODO IMPL
     {:error, "Unimplemented"}
@@ -145,21 +153,10 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   If an error is returned, it is returned to the caller of `post_outbox`.
   """
+  @impl true
   def deliver(context, %URI{} = outbox_iri, activity) do
     # TODO IMPL
     {:error, "Unimplemented"}
-  end
-
-  @doc """
-  Called for types that can be deserialized but
-  are not handled by the application's type-specific callbacks.
-
-  Applications are not expected to handle every single ActivityStreams
-  type and extension, so the unhandled ones are passed to
-  default_callback.
-  """
-  def default_callback(_context, _activity) do
-    :pass
   end
 
   @doc """
@@ -178,6 +175,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   blocked must be false and error nil. The request will continue
   to be processed.
   """
+  @impl true
   def blocked(context, actor_iris) when is_list(actor_iris) do
     # For this example we don't maintain block lists.
     {:ok, false}
@@ -189,6 +187,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   Zero or negative numbers indicate infinite recursion.
   """
+  @impl true
   def max_inbox_forwarding_recursion_depth(context) do
     {:ok, 4}
   end
@@ -200,6 +199,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   Zero or negative numbers indicate infinite recursion.
   """
+  @impl true
   def max_delivery_recursion_depth(context) do
     {:ok, 4}
   end
@@ -213,8 +213,22 @@ defmodule FediServerWeb.FederatingCallbacks do
   The activity is provided as a reference for more intelligent
   logic to be used, but the implementation must not modify it.
   """
+  @impl true
   def filter_forwarding(context, recipients, activity) when is_list(recipients) do
     # For this example we don't maintain block lists or other filters.
     {:ok, recipients}
+  end
+
+  @doc """
+  Called for types that can be deserialized but
+  are not handled by the application's type-specific callbacks.
+
+  Applications are not expected to handle every single ActivityStreams
+  type and extension, so the unhandled ones are passed to
+  default_callback.
+  """
+  @impl true
+  def default_callback(_context, _activity) do
+    :pass
   end
 end

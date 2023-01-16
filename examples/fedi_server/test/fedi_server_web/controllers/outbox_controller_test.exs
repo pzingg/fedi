@@ -5,8 +5,6 @@ defmodule FediServerWeb.OutboxControllerTest do
 
   require Logger
 
-  alias FediServer.Activities
-
   setup do
     Tesla.Mock.mock_global(fn
       # When we dereference ben
@@ -100,6 +98,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", activity)
 
+    # QUESTION Should a Follow return 202?
     assert response(conn, 201) == ""
   end
 end

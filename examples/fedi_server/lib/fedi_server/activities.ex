@@ -92,10 +92,10 @@ defmodule FediServer.Activities do
       {:ok, %URI{iri | path: "/users/#{nickname}"}}
     else
       false ->
-        {:error, "Not our actor #{URI.to_string(iri)}"}
+        {:error, "Not our actor #{iri}"}
 
       {:error, _} ->
-        {:error, "Invalid outbox #{URI.to_string(iri)}"}
+        {:error, "Invalid outbox #{iri}"}
     end
   end
 
@@ -111,10 +111,10 @@ defmodule FediServer.Activities do
       {:ok, %URI{iri | path: "/users/#{nickname}"}}
     else
       false ->
-        {:error, "Not our actor #{URI.to_string(iri)}"}
+        {:error, "Not our actor #{iri}"}
 
       {:error, _} ->
-        {:error, "Invalid inbox #{URI.to_string(iri)}"}
+        {:error, "Invalid inbox #{iri}"}
     end
   end
 
@@ -129,10 +129,10 @@ defmodule FediServer.Activities do
       {:ok, %URI{iri | path: "/users/#{nickname}/outbox"}}
     else
       false ->
-        {:error, "Not our actor #{URI.to_string(iri)}"}
+        {:error, "Not our actor #{iri}"}
 
       {:error, _} ->
-        {:error, "Invalid inbox #{URI.to_string(iri)}"}
+        {:error, "Invalid inbox #{iri}"}
     end
   end
 
@@ -730,8 +730,8 @@ defmodule FediServer.Activities do
             {:ok, nickname, :actors}
 
           _ ->
-            Logger.error("Failed to parse #{URI.to_string(iri)} as object or user")
-            {:error, "Missing schema or id in #{URI.to_string(iri)}"}
+            Logger.error("Failed to parse #{iri} as object or user")
+            {:error, "Missing schema or id in #{iri}"}
         end
     end
   end
@@ -745,7 +745,6 @@ defmodule FediServer.Activities do
         if local? do
           {:error, "Local user #{id} not found"}
         else
-          Logger.error("Inserting new user for #{id})")
           resolve_and_insert_user(id, app_agent)
         end
     end

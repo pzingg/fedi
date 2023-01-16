@@ -550,14 +550,23 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  def make_id_map(nil), do: {:ok, %{}}
+
   def make_id_map(other) do
+    raise "make_id_map not implmented on #{inspect(other)}"
     {:error, "make_id_map not implmented on #{inspect(other)}"}
   end
 
   def property_and_id_map(%{properties: properties}, prop_name) do
     case Map.get(properties, prop_name) do
-      %{__struct__: module, values: iters} = prop -> {prop, iters, module, make_id_map(prop)}
-      _ -> {nil, [], Utils.property_module(prop_name), %{}}
+      %{__struct__: module, values: iters} = prop ->
+        case make_id_map(prop) do
+          {:ok, m} -> {prop, iters, module, m}
+          _ -> {prop, iters, module, %{}}
+        end
+
+      _ ->
+        {nil, [], Utils.property_module(prop_name), %{}}
     end
   end
 
@@ -626,7 +635,7 @@ defmodule Fedi.ActivityPub.Utils do
             if host == origin_host do
               {:cont, acc}
             else
-              {:halt, {:error, "Object #{URI.to_string(object_id)} is not in activity origin"}}
+              {:halt, {:error, "Object #{object_id} is not in activity origin"}}
             end
 
           _ ->
