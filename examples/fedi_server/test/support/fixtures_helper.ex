@@ -56,6 +56,18 @@ defmodule FediServer.FixturesHelper do
     |> Map.new()
   end
 
+  def following_fixtures() do
+    %{ben: %{user: ben}, alyssa: %{user: alyssa}} = user_fixtures()
+
+    Activities.follow(alyssa, ben)
+  end
+
+  def followers_fixtures() do
+    %{ben: %{user: ben}, alyssa: %{user: alyssa}} = user_fixtures()
+
+    Activities.follow(ben, alyssa)
+  end
+
   def outbox_fixtures() do
     _ = user_fixtures()
 

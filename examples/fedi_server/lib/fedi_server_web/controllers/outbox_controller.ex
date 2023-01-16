@@ -5,11 +5,24 @@ defmodule FediServerWeb.OutboxController do
 
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
-  def get_outbox(conn, %{"nickname" => nickname} = params) do
+  def get_outbox(conn, %{"nickname" => nickname} = _params) do
+    # Get the Actor struct placed in the connection by the
+    # `set_actor/2` plug in router.ex.
+    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    handle_get_outbox(conn, actor, nickname)
+  end
+
+  def liked(conn, %{"nickname" => nickname} = _params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)
 
+    # Filter on liked activities
+    conn = Plug.Conn.assign(conn, :liked, true)
+    handle_get_outbox(conn, actor, nickname)
+  end
+
+  def handle_get_outbox(conn, actor, nickname) do
     # Pass the connection to the fedi Actor logic
     case Fedi.ActivityPub.Actor.handle_get_outbox(actor, conn) do
       {:ok, processed_conn} ->
@@ -34,7 +47,7 @@ defmodule FediServerWeb.OutboxController do
     end
   end
 
-  def post_outbox(conn, %{"nickname" => nickname} = params) do
+  def post_outbox(conn, %{"nickname" => nickname} = _params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
     actor = Fedi.ActivityPub.Actor.get_actor!(conn)

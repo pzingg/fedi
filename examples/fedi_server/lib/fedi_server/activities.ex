@@ -524,22 +524,6 @@ defmodule FediServer.Activities do
   def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing, opts \\ []) do
     actor = URI.to_string(actor_iri)
 
-    # TODO get :min_id, :max_id, :page_size, :liked from opts
-    result =
-      from(m in Mailbox,
-        join: a in Activity,
-        on: a.ap_id == m.activity_id,
-        select: a.data,
-        where: [owner: ^actor, outgoing: ^outgoing],
-        order_by: [desc: :id],
-        limit: 30
-      )
-      |> Repo.all()
-
-    ordered_item_iters =
-      Enum.map(result, &mailbox_to_ordered_item(&1))
-      |> Enum.filter(fn iter -> !is_nil(iter) end)
-
     mailbox_path =
       if outgoing do
         actor_path <> "/outbox"
@@ -552,6 +536,23 @@ defmodule FediServer.Activities do
 
     coll_id = %URI{actor_iri | path: mailbox_path}
     part_of_prop = %P.PartOf{alias: "", iri: coll_id}
+
+    # TODO get :min_id, :max_id, :liked from opts
+    page_size = Keyword.get(opts, :page_size, 30)
+
+    query =
+      Mailbox
+      |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
+      |> where([m], m.owner == ^actor and m.outgoing == ^outgoing)
+      |> select([m, a], a.data)
+      |> order_by(desc: :id)
+      |> limit(^page_size)
+
+    result = Repo.all(query)
+
+    ordered_item_iters =
+      Enum.map(result, &mailbox_to_ordered_item(&1))
+      |> Enum.filter(fn iter -> !is_nil(iter) end)
 
     ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
 
@@ -581,6 +582,62 @@ defmodule FediServer.Activities do
       {:ok, object} -> %P.OrderedItemsIterator{alias: "", member: object}
       _ -> nil
     end
+  end
+
+  def get_following_collection(%URI{path: actor_path} = actor_iri, opts \\ []) do
+    actor_id = URI.to_string(actor_iri)
+    path = actor_path <> "/following"
+    coll_id = %URI{actor_iri | path: path}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
+
+    query =
+      FollowingRelationship
+      |> join(:inner, [r], u in User, on: r.following_id == u.id)
+      |> join(:inner, [r], g in User, on: r.follower_id == g.id)
+      |> where([r, u, g], g.ap_id == ^actor_id)
+      |> where([r], r.state == ^:accepted)
+      |> select([r, u], u.ap_id)
+
+    result = Repo.all(query) |> Enum.map(&URI.parse(&1))
+    item_iters = Enum.map(result, &relationship_to_item(&1))
+    items_prop = %P.Items{alias: "", values: item_iters}
+
+    properties = %{
+      "id" => id_prop,
+      "items" => items_prop
+    }
+
+    {:ok, %T.Collection{alias: "", properties: properties}}
+  end
+
+  def get_followers_collection(%URI{path: actor_path} = actor_iri, opts \\ []) do
+    actor_id = URI.to_string(actor_iri)
+    path = actor_path <> "/following"
+    coll_id = %URI{actor_iri | path: path}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
+
+    query =
+      FollowingRelationship
+      |> join(:inner, [r], u in User, on: r.follower_id == u.id)
+      |> join(:inner, [r], g in User, on: r.following_id == g.id)
+      |> where([r, u, g], g.ap_id == ^actor_id)
+      |> where([r], r.state == ^:accepted)
+      |> select([r, u], u.ap_id)
+
+    result = Repo.all(query) |> Enum.map(&URI.parse(&1))
+    item_iters = Enum.map(result, &relationship_to_item(&1))
+    items_prop = %P.Items{alias: "", values: item_iters}
+
+    properties = %{
+      "id" => id_prop,
+      "items" => items_prop
+    }
+
+    {:ok, %T.Collection{alias: "", properties: properties}}
+  end
+
+  def relationship_to_item(actor_iri, alias_ \\ "") do
+    %P.ItemsIterator{alias: alias_, iri: actor_iri}
   end
 
   def get_following_relationship(%User{} = follower, %User{} = following) do
