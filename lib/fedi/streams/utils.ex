@@ -93,7 +93,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_type_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:id_required, "Type property required#{suffix}", false, data)
+    Error.new(:type_required, "Type property required#{suffix}", false, data)
   end
 
   @doc """

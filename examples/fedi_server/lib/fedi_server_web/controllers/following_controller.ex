@@ -17,7 +17,7 @@ defmodule FediServerWeb.FollowingController do
     with {:ok, actor_iri} <-
            %URI{request_iri | path: String.replace(path, "/following", "/outbox")}
            |> Activities.actor_for_outbox(),
-         {:ok, coll} <- Activities.get_following_collection(actor_iri),
+         {:ok, coll} <- Activities.get_following_page(actor_iri),
          {:ok, m} <- Fedi.Streams.Serializer.serialize(coll),
          {:ok, body} <- Jason.encode(m) do
       conn
@@ -44,7 +44,7 @@ defmodule FediServerWeb.FollowingController do
     with {:ok, actor_iri} <-
            %URI{request_iri | path: String.replace(path, "/followers", "/outbox")}
            |> Activities.actor_for_outbox(),
-         {:ok, coll} <- Activities.get_followers_collection(actor_iri),
+         {:ok, coll} <- Activities.get_followers_page(actor_iri),
          {:ok, m} <- Fedi.Streams.Serializer.serialize(coll),
          {:ok, body} <- Jason.encode(m) do
       conn

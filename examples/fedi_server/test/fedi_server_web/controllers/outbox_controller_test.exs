@@ -52,6 +52,18 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert json_body =~ "/users/alyssa/outbox?page=true"
   end
 
+  test "GET /users/alyssa/liked", %{conn: conn} do
+    _ = user_fixtures()
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "application/activity+json")
+      |> get("/users/alyssa/outbox")
+
+    assert json_body = response(conn, 200)
+    assert json_body =~ "/users/alyssa/outbox?page=true"
+  end
+
   test "POST a Create activity to /users/alyssa/outbox", %{conn: conn} do
     _ = user_fixtures()
 
@@ -99,6 +111,28 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", activity)
 
     # QUESTION Should a Follow return 202?
+    assert response(conn, 201) == ""
+  end
+
+  test "POST a Like activity to /users/alyssa/outbox", %{conn: conn} do
+    {[_create | _], [note | _]} = outbox_fixtures()
+
+    activity = """
+    {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Like",
+      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
+      "to": ["https://www.w3.org/ns/activitystreams#Public", "https://chatty.example/users/ben"],
+      "actor": "https://example.com/users/alyssa",
+      "object": "#{note.ap_id}"
+    }
+    """
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", activity)
+
     assert response(conn, 201) == ""
   end
 end

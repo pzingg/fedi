@@ -93,7 +93,8 @@ defmodule FediServerWeb.CommonCallbacks do
   def get_outbox(context, %Plug.Conn{} = conn, params) do
     outbox_iri = APUtils.request_id(conn)
 
-    with {:ok, oc} <- Activities.get_outbox(outbox_iri, params) do
+    # TODO Parse max_id and min_id from params, add to opts
+    with {:ok, oc} <- Activities.get_outbox(outbox_iri, []) do
       {:ok, conn, oc}
     end
   end

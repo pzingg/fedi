@@ -259,12 +259,24 @@ defmodule FediServer.Activities do
   """
   @impl true
   def update(as_type) do
-    Logger.error("update #{inspect(as_type)}")
+    case parse_basic_params(as_type) do
+      {:error, reason} ->
+        {:error, reason}
 
+      {:ok, %{schema: :activities} = params} ->
+        update_activity(as_type, params)
+
+      {:ok, %{schema: :objects} = params} ->
+        update_object(as_type, params)
+
+      {:ok, _} ->
+        Logger.error("Don't know how to update #{inspect(as_type)}")
+    end
+  end
+
+  def update_activity(as_type, params) do
     with {:get_actor, %URI{} = actor_iri} <-
            {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
-         {:ok, params} <-
-           parse_basic_params(as_type),
          {:ok, json_data} <-
            Fedi.Streams.Serializer.serialize(as_type),
          {:ok, recipients} <- APUtils.get_recipients(as_type),
@@ -281,6 +293,26 @@ defmodule FediServer.Activities do
       {:get_actor, _} ->
         {:error, "Missing actor in activity"}
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.error("Update failed: #{describe_errors(changeset)}")
+        {:error, "Internal database error"}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def update_object(as_type, params) do
+    with {:ok, json_data} <-
+           Fedi.Streams.Serializer.serialize(as_type),
+         params <-
+           Map.merge(params, %{
+             ap_id: URI.to_string(params.ap_id),
+             data: json_data
+           }),
+         {:ok, object} <- repo_update(params.schema, params) do
+      {:ok, as_type, json_data}
+    else
       {:error, %Ecto.Changeset{} = changeset} ->
         Logger.error("Update failed: #{describe_errors(changeset)}")
         {:error, "Internal database error"}
@@ -310,9 +342,17 @@ defmodule FediServer.Activities do
   Used in social SideEffectActor post_outbox.
   """
   @impl true
-  def get_outbox(outbox_iri, opts \\ []) do
-    with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
-      get_mailbox_page(actor_iri, true)
+  def get_outbox(%{path: path} = outbox_iri, opts \\ []) do
+    if String.contains?(path, "/liked") do
+      with outbox_iri <-
+             %URI{outbox_iri | path: String.replace(path, "/liked", "/outbox")},
+           {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
+        get_liked_page(actor_iri, opts)
+      end
+    else
+      with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
+        get_mailbox_page(actor_iri, true, opts)
+      end
     end
   end
 
@@ -380,8 +420,8 @@ defmodule FediServer.Activities do
   If modified, the library will then call Update.
   """
   @impl true
-  def followers(actor_iri) do
-    {:ok, OrderedCollectionPage.new()}
+  def followers(%URI{} = actor_iri) do
+    get_followers_page(actor_iri)
   end
 
   @doc """
@@ -390,8 +430,8 @@ defmodule FediServer.Activities do
   If modified, the library will then call Update.
   """
   @impl true
-  def following(actor_iri) do
-    {:ok, OrderedCollectionPage.new()}
+  def following(%URI{} = actor_iri) do
+    get_following_page(actor_iri)
   end
 
   @doc """
@@ -400,8 +440,8 @@ defmodule FediServer.Activities do
   If modified, the library will then call Update.
   """
   @impl true
-  def liked(actor_iri) do
-    {:ok, OrderedCollectionPage.new()}
+  def liked(%URI{} = actor_iri) do
+    get_liked_page(actor_iri)
   end
 
   @doc """
@@ -488,7 +528,7 @@ defmodule FediServer.Activities do
             Map.merge(params, %{
               outgoing: outgoing,
               activity_id: URI.to_string(params.ap_id),
-              owner: URI.to_string(actor_iri),
+              actor: URI.to_string(actor_iri),
               local: params.local
             })
 
@@ -511,14 +551,14 @@ defmodule FediServer.Activities do
   def get_mailbox_items(%URI{} = actor_iri, outgoing) do
     actor = URI.to_string(actor_iri)
 
-    from(m in Mailbox,
-      join: a in Activity,
-      on: a.ap_id == m.activity_id,
-      select: a.ap_id,
-      where: [owner: ^actor, outgoing: ^outgoing],
-      order_by: [desc: :id]
-    )
-    |> Repo.all()
+    query =
+      Mailbox
+      |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
+      |> where([m], m.actor == ^actor and m.outgoing == ^outgoing)
+      |> select([m, a], a.ap_id)
+      |> order_by([m, a], desc: a.id)
+
+    Repo.all(query)
   end
 
   def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing, opts \\ []) do
@@ -531,30 +571,72 @@ defmodule FediServer.Activities do
         actor_path <> "/inbox"
       end
 
-    page_id = %URI{actor_iri | path: mailbox_path <> "?page=true"}
-    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
-
-    coll_id = %URI{actor_iri | path: mailbox_path}
-    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
-
-    # TODO get :min_id, :max_id, :liked from opts
+    # TODO get :min_id, :max_id from opts
     page_size = Keyword.get(opts, :page_size, 30)
 
     query =
       Mailbox
       |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
-      |> where([m], m.owner == ^actor and m.outgoing == ^outgoing)
+      |> where([m], m.actor == ^actor and m.outgoing == ^outgoing)
       |> select([m, a], a.data)
-      |> order_by(desc: :id)
+      |> order_by([a], desc: a.id)
+      |> limit(^page_size)
+
+    build_page(query, actor_iri, mailbox_path, opts)
+  end
+
+  def get_liked_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
+    actor = URI.to_string(actor_iri)
+
+    liked_path = actor_path <> "/liked"
+
+    # TODO get :min_id, :max_id from opts
+    page_size = Keyword.get(opts, :page_size, 30)
+
+    query =
+      Activity
+      |> where([a], a.actor == ^actor and a.type == "Like")
+      |> select([a], a.data)
+      |> order_by([a], desc: a.id)
       |> limit(^page_size)
 
     result = Repo.all(query)
 
+    build_page(query, actor_iri, liked_path, opts)
+  end
+
+  def build_page(query, actor_iri, page_path, opts) do
+    query =
+      case Keyword.get(opts, :min_id) do
+        %URI{} = min_id ->
+          query |> where([m, a], a.ap_id >= ^min_id)
+
+        _ ->
+          query
+      end
+
+    query =
+      case Keyword.get(opts, :max_id) do
+        %URI{} = max_id ->
+          query |> where([m, a], a.ap_id <= ^max_id)
+
+        _ ->
+          query
+      end
+
+    result = Repo.all(query)
+
     ordered_item_iters =
-      Enum.map(result, &mailbox_to_ordered_item(&1))
+      Enum.map(result, &activity_json_to_ordered_item(&1))
       |> Enum.filter(fn iter -> !is_nil(iter) end)
 
     ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
+
+    page_id = %URI{actor_iri | path: page_path <> "?page=true"}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
+
+    coll_id = %URI{actor_iri | path: page_path}
+    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
 
     properties = %{
       "id" => id_prop,
@@ -569,7 +651,7 @@ defmodule FediServer.Activities do
 
         [first | _] ->
           max_id = Map.get(first, "id")
-          next_id = %URI{actor_iri | path: mailbox_path <> "?max_id=#{max_id}\u0026page=true"}
+          next_id = %URI{actor_iri | path: page_path <> "?max_id=#{max_id}\u0026page=true"}
           next_prop = %P.Next{alias: "", iri: next_id}
           Map.put(properties, "next", next_prop)
       end
@@ -577,14 +659,14 @@ defmodule FediServer.Activities do
     {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
-  def mailbox_to_ordered_item(activity_json) do
+  def activity_json_to_ordered_item(activity_json) do
     case Fedi.Streams.JSONResolver.resolve(activity_json) do
       {:ok, object} -> %P.OrderedItemsIterator{alias: "", member: object}
       _ -> nil
     end
   end
 
-  def get_following_collection(%URI{path: actor_path} = actor_iri, opts \\ []) do
+  def get_following_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
     actor_id = URI.to_string(actor_iri)
     path = actor_path <> "/following"
     coll_id = %URI{actor_iri | path: path}
@@ -600,17 +682,17 @@ defmodule FediServer.Activities do
 
     result = Repo.all(query) |> Enum.map(&URI.parse(&1))
     item_iters = Enum.map(result, &relationship_to_item(&1))
-    items_prop = %P.Items{alias: "", values: item_iters}
+    items_prop = %P.OrderedItems{alias: "", values: item_iters}
 
     properties = %{
       "id" => id_prop,
-      "items" => items_prop
+      "orderedItems" => items_prop
     }
 
-    {:ok, %T.Collection{alias: "", properties: properties}}
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
-  def get_followers_collection(%URI{path: actor_path} = actor_iri, opts \\ []) do
+  def get_followers_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
     actor_id = URI.to_string(actor_iri)
     path = actor_path <> "/following"
     coll_id = %URI{actor_iri | path: path}
@@ -626,23 +708,24 @@ defmodule FediServer.Activities do
 
     result = Repo.all(query) |> Enum.map(&URI.parse(&1))
     item_iters = Enum.map(result, &relationship_to_item(&1))
-    items_prop = %P.Items{alias: "", values: item_iters}
+    items_prop = %P.OrderedItems{alias: "", values: item_iters}
 
     properties = %{
       "id" => id_prop,
-      "items" => items_prop
+      "orderedItems" => items_prop
     }
 
-    {:ok, %T.Collection{alias: "", properties: properties}}
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
   def relationship_to_item(actor_iri, alias_ \\ "") do
-    %P.ItemsIterator{alias: alias_, iri: actor_iri}
+    %P.OrderedItemsIterator{alias: alias_, iri: actor_iri}
   end
 
   def get_following_relationship(%User{} = follower, %User{} = following) do
     query =
-      from(FollowingRelationship, where: [follower_id: ^follower.id, following_id: ^following.id])
+      FollowingRelationship
+      |> where([r], r.follower_id == ^follower.id and r.following_id == ^following.id)
 
     Repo.one(query)
   end
@@ -829,17 +912,17 @@ defmodule FediServer.Activities do
   end
 
   def repo_exists?(:objects, ulid) do
-    query = from(Object, where: [id: ^ulid])
+    query = Object |> where([o], o.id == ^ulid)
     Repo.exists?(query)
   end
 
   def repo_exists?(:activities, ulid) do
-    query = from(Activity, where: [id: ^ulid])
+    query = Activity |> where([a], a.id == ^ulid)
     Repo.exists?(query)
   end
 
   def repo_exists?(:actors, nickname) do
-    query = from(User, where: [nickname: ^nickname])
+    query = User |> where([u], u.nickname == ^nickname)
     Repo.exists?(query)
   end
 
@@ -849,19 +932,20 @@ defmodule FediServer.Activities do
 
   def repo_ap_id_exists?(:objects, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(Object, where: [ap_id: ^ap_id])
+
+    query = Object |> where([o], o.ap_id == ^ap_id)
     Repo.exists?(query)
   end
 
   def repo_ap_id_exists?(:activities, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(Activity, where: [ap_id: ^ap_id])
+    query = Activity |> where([a], a.ap_id == ^ap_id)
     Repo.exists?(query)
   end
 
   def repo_ap_id_exists?(:actors, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(User, where: [ap_id: ^ap_id])
+    query = User |> where([u], u.ap_id == ^ap_id)
     Repo.exists?(query)
   end
 
@@ -961,19 +1045,19 @@ defmodule FediServer.Activities do
 
   def repo_delete(:objects, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(Object, where: [ap_id: ^ap_id])
+    query = Object |> where([o], o.ap_id == ^ap_id)
     Repo.delete_all(query)
   end
 
   def repo_delete(:activities, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(Activity, where: [ap_id: ^ap_id])
+    query = Activity |> where([a], a.ap_id == ^ap_id)
     Repo.delete_all(query)
   end
 
   def repo_delete(:actors, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = from(User, where: [ap_id: ^ap_id])
+    query = User |> where([u], u.ap_id == ^ap_id)
     Repo.delete_all(query)
   end
 

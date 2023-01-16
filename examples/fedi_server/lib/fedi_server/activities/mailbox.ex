@@ -11,7 +11,7 @@ defmodule FediServer.Activities.Mailbox do
     field(:activity_id, :string)
     field(:outgoing, :boolean)
     field(:type, :string)
-    field(:owner, :string)
+    field(:actor, :string)
     field(:local, :boolean)
     field(:status, :string)
 
@@ -20,8 +20,8 @@ defmodule FediServer.Activities.Mailbox do
 
   def changeset(%__MODULE__{} = mailbox, params \\ %{}) do
     mailbox
-    |> cast(params, [:activity_id, :outgoing, :type, :owner, :local, :status])
-    |> validate_required([:activity_id, :outgoing, :type, :owner, :local])
-    |> unique_constraint([:outgoing, :owner, :activity_id])
+    |> cast(params, [:activity_id, :outgoing, :type, :actor, :local, :status])
+    |> validate_required([:activity_id, :outgoing, :type, :actor, :local])
+    |> unique_constraint([:outgoing, :actor, :activity_id])
   end
 end

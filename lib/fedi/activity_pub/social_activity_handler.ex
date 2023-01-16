@@ -83,7 +83,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
         {:ok, activity} ->
           # Persist all objects we've created, which will include sensitive
           # recipients such as 'bcc' and 'bto'.
-          context_data = Map.put(context_data, :deliverable, false)
+          context_data = Map.put(context_data, :deliverable, true)
           context = Map.put(context, :data, context_data)
 
           Enum.reduce_while(object.values, :ok, fn
@@ -286,8 +286,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
-         {:ok, actor_iri} <- apply(database, :actor_for_outbox, outbox_iri),
-         {:ok, liked} <- apply(database, :liked, actor_iri),
+         {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
+         {:ok, liked} <- apply(database, :liked, [actor_iri]),
          {:ok, object_ids} <- APUtils.get_ids(object),
          liked <- Utils.prepend_iris(liked, "items", object_ids),
          {:ok, _updated, _raw_json} <- apply(database, :update, [liked]) do
@@ -309,7 +309,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
            {:activity_actor, Utils.get_actor(activity)},
          :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
-      context_data = Map.put(context_data, :deliverable, false)
+      context_data = Map.put(context_data, :deliverable, true)
       context = Map.put(context, :data, context_data)
       Actor.handle_activity(context, :c2s, activity)
     else
