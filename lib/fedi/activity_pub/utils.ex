@@ -721,7 +721,7 @@ defmodule Fedi.ActivityPub.Utils do
     with {:ok, op_ids} <- get_ids(object_prop),
          {:ok, target_ids} <- get_ids(target_prop) do
       Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns, {:ok, true}} <- {:owns, apply(database, :owns, [target_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [target_id])},
              {:ok, as_value} <- apply(database, :get, [target_id]) do
           cond do
             is_or_extends?(as_value, "OrderedCollection") ->
@@ -745,8 +745,8 @@ defmodule Fedi.ActivityPub.Utils do
           end
         else
           {:error, reason} -> {:halt, {:error, reason}}
-          {:owns, {:ok, _}} -> {:cont, acc}
-          {:owns, {:error, reason}} -> {:halt, {:error, reason}}
+          {:owns?, {:ok, _}} -> {:cont, acc}
+          {:owns?, {:error, reason}} -> {:halt, {:error, reason}}
         end
       end)
     end
@@ -760,7 +760,7 @@ defmodule Fedi.ActivityPub.Utils do
     with {:ok, op_ids} <- get_ids(object_prop),
          {:ok, target_ids} <- get_ids(target_prop) do
       Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns, {:ok, true}} <- {:owns, apply(database, :owns, [target_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [target_id])},
              {:ok, as_value} <- apply(database, :get, [target_id]) do
           cond do
             is_or_extends?(as_value, "OrderedCollection") ->
@@ -784,8 +784,8 @@ defmodule Fedi.ActivityPub.Utils do
           end
         else
           {:error, reason} -> {:halt, {:error, reason}}
-          {:owns, {:ok, _}} -> {:cont, acc}
-          {:owns, {:error, reason}} -> {:halt, {:error, reason}}
+          {:owns?, {:ok, _}} -> {:cont, acc}
+          {:owns?, {:error, reason}} -> {:halt, {:error, reason}}
         end
       end)
     end

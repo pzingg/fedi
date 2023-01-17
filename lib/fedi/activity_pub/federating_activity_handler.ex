@@ -152,6 +152,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
         %{database: database, data: %{on_follow: on_follow, inbox_iri: inbox_iri}} = context,
         %{__struct__: _, alias: alias_} = activity
       ) do
+    Logger.error("S2S Follow")
+
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, %URI{} = actor_iri} <- apply(database, :actor_for_inbox, [inbox_iri]) do
@@ -160,6 +162,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           {:error, reason}
 
         true ->
+          Logger.error("S2S Follow: it's me!")
+
           case prepare_and_deliver_follow(context, activity, actor_iri, on_follow, alias_) do
             {:error, reason} ->
               {:error, reason}
@@ -169,6 +173,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           end
 
         _ ->
+          Logger.error("S2S Follow: it's not me")
           Actor.handle_activity(context, :s2s, activity)
       end
     else
@@ -246,7 +251,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
         # If automatically rejecting, do not update the
         # followers collection.
-        update_collection(database, :followers, actor_iri, recipients, alias_)
+        update_collection(database, "/followers", actor_iri, recipients)
       else
         :ok
       end
@@ -260,20 +265,10 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     end
   end
 
-  def update_collection(database, collection, actor_iri, recipients, alias_) do
-    with {:ok, %{properties: _} = coll} <- apply(database, collection, [actor_iri]),
-         # Prepend recipients to "items"
-         items_iters <-
-           Enum.map(recipients, fn iri ->
-             %P.ItemsIterator{alias: alias_, iri: iri}
-           end),
-         coll <- Utils.prepend_iters(coll, "items", items_iters),
-         {:ok, updated, _raw_json} <- apply(database, :update, [coll]) do
-      {:ok, updated}
-    else
-      {:error, reason} ->
-        {:error, reason}
-    end
+  def update_collection(database, collection, %URI{path: path} = actor_iri, recipients) do
+    coll_id = %URI{actor_iri | path: path <> collection}
+    Logger.error("S2S update collection #{coll_id} with #{inspect(recipients)}")
+    apply(database, :update_collection, [coll_id, %{add: recipients}])
   end
 
   @doc """
@@ -317,7 +312,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
            {:all_on_original,
             MapSet.subset?(MapSet.new(accept_actors), MapSet.new(follow_actors))},
          {:ok, _} <-
-           update_collection(database, :following, actor_iri, accept_actors, alias_) do
+           update_collection(database, "/following", actor_iri, accept_actors) do
       Actor.handle_activity(context, :s2s, activity)
     else
       {:error, reason} ->
@@ -444,7 +439,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, op_ids} <-
            APUtils.get_ids(object_prop) do
       Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns, {:ok, true}} <- {:owns, apply(database, :owns, [obj_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [obj_id])},
              {:ok, %{alias: alias_, properties: properties} = like} <-
                apply(database, :get, [obj_id]) do
           # Get 'likes' property on the object, creating default if
@@ -482,7 +477,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
             {:error, reason} -> {:halt, {:error, reason}}
           end
         else
-          {:owns, {:ok, _}} -> {:cont, acc}
+          {:owns?, {:ok, _}} -> {:cont, acc}
           {_, {:error, reason}} -> {:halt, {:error, reason}}
           {:error, reason} -> {:halt, {:error, reason}}
         end
@@ -511,7 +506,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, op_ids} <-
            APUtils.get_ids(object_prop) do
       Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns, {:ok, true}} <- {:owns, apply(database, :owns, [obj_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [obj_id])},
              {:ok, %{alias: alias_, properties: properties} = share} <-
                apply(database, :get, [obj_id]) do
           # Get 'shares' property on the object, creating default if
@@ -549,7 +544,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
             {:error, reason} -> {:halt, {:error, reason}}
           end
         else
-          {:owns, {:ok, _}} -> {:cont, acc}
+          {:owns?, {:ok, _}} -> {:cont, acc}
           {_, {:error, reason}} -> {:halt, {:error, reason}}
           {:error, reason} -> {:halt, {:error, reason}}
         end

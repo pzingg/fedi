@@ -8,36 +8,42 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @type transport_params() :: Actor.c2s_data() | Actor.s2s_data()
 
   @doc """
-  Returns true if the OrderedCollection at `inbox`
-  contains the specified `id`.
+  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
+  contains the specified 'id'.
   """
-  @callback inbox_contains(inbox :: struct(), id :: URI.t()) ::
+  @callback colletion_contains?(inbox :: struct(), coll_id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
 
   @doc """
-  Returns the first ordered collection page of the inbox at
-  the specified IRI, for prepending new items.
+  Returns the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  at the specified IRI.
   """
-  @callback get_inbox(inbox_iri :: URI.t(), opts :: Keyword.t()) ::
+  @callback get_collection(coll_id :: URI.t(), opts :: Keyword.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
-  Saves the first ordered collection page of the inbox at
+  Updates the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
   the specified IRI, with new items specified in the
-  :create member of the the updates map prepended.
+  :add member of the the `updates` map prepended.
 
   Note that the new items must not be added
-  as independent database entries. Separate calls to `create/1` will do that.
+  as independent database entries. Separate calls to Create will do that.
   """
-  @callback update_inbox(inbox_iri :: URI.t(), updates :: map()) ::
+  @callback update_collection(coll_id :: URI.t(), updates :: map()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
   Returns true if the database has an entry for the IRI and it
   exists in the database.
   """
-  @callback owns(id :: URI.t()) ::
+  @callback owns?(id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
+
+  @doc """
+  Fetches the actor's IRI for the given collection IRI.
+  """
+  @callback actor_for_collection(coll_id :: URI.t()) ::
+              {:ok, actor_iri :: URI.t()} | {:error, term()}
 
   @doc """
   Fetches the actor's IRI for the given outbox IRI.
@@ -71,7 +77,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   Returns true if the database has an entry for the specified
   id. It may not be owned by this application instance.
   """
-  @callback exists(id :: URI.t()) ::
+  @callback exists?(id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
 
   @doc """
@@ -116,24 +122,6 @@ defmodule Fedi.ActivityPub.DatabaseApi do
               :ok | {:error, term()}
 
   @doc """
-  Returns the first ordered collection page of the outbox
-  at the specified IRI, for prepending new items.
-  """
-  @callback get_outbox(outbox_iri :: URI.t(), opts :: Keyword.t()) ::
-              {:ok, ordered_collection_page :: struct()} | {:error, term()}
-
-  @doc """
-  Saves the first ordered collection page of the outbox at
-  the specified IRI, with new items specified in the
-  `:create` member of the the updates map prepended.
-
-  Note that the new items must not be added as independent
-  database entries. Separate calls to `create/1` will do that.
-  """
-  @callback update_outbox(outbox_iri :: URI.t(), updates :: map()) ::
-              {:ok, ordered_collection_page :: struct()} | {:error, term()}
-
-  @doc """
   Creates a new IRI id for the provided activity or object. The
   implementation does not need to set the 'id' property and simply
   needs to determine the value.
@@ -143,30 +131,6 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   """
   @callback new_id(object :: struct()) ::
               {:ok, id :: URI.t()} | {:error, term()}
-
-  @doc """
-  Obtains the Followers Collection for an actor with the given id.
-
-  If modified, the library will then call `update/1`.
-  """
-  @callback followers(actor_iri :: URI.t()) ::
-              {:ok, ordered_collection_page :: struct()} | {:error, term()}
-
-  @doc """
-  Obtains the Following Collection for an actor with the given id.
-
-  If modified, the library will then call `update/1`.
-  """
-  @callback following(actor_iri :: URI.t()) ::
-              {:ok, ordered_collection_page :: struct()} | {:error, term()}
-
-  @doc """
-  Obtains the Liked Collection for an actor with the given id.
-
-  If modified, the library will then call `update/1`.
-  """
-  @callback liked(actor_iri :: URI.t()) ::
-              {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
   Returns a new HTTP Transport on behalf of a specific actor.

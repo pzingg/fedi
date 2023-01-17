@@ -39,10 +39,11 @@ defmodule Fedi.Streams.Utils do
     "Update",
     "View"
   ]
+  @actor_types ["Application", "Group", "Organization", "Person", "Service"]
   @document_types ["Audio", "Document", "Page", "Image", "Video"]
   @post_types ["Article", "Note"]
-  @actor_types ["Application", "Group", "Organization", "Person", "Service"]
   @link_types ["Link", "Mention"]
+  @collection_types ["Collection", "CollectionPage", "OrderedColletion", "OrderedCollectionPage"]
 
   ### Errors
 
@@ -284,11 +285,12 @@ defmodule Fedi.Streams.Utils do
   # TODO ONTOLOGY
   def get_type_category(type_name) when is_binary(type_name) do
     cond do
+      Enum.member?(@actor_types, type_name) -> :actors
       Enum.member?(@activity_types, type_name) -> :activities
       Enum.member?(@document_types, type_name) -> :documents
       Enum.member?(@post_types, type_name) -> :posts
-      Enum.member?(@actor_types, type_name) -> :actors
       Enum.member?(@link_types, type_name) -> :links
+      Enum.member?(@collection_types, type_name) -> :collections
       true -> :objects
     end
   end

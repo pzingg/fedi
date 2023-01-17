@@ -59,13 +59,13 @@ defmodule FediServer.FixturesHelper do
   def following_fixtures() do
     %{ben: %{user: ben}, alyssa: %{user: alyssa}} = user_fixtures()
 
-    Activities.follow(alyssa, ben)
+    Activities.follow(URI.parse(alyssa.ap_id), URI.parse(ben.ap_id))
   end
 
   def followers_fixtures() do
     %{ben: %{user: ben}, alyssa: %{user: alyssa}} = user_fixtures()
 
-    Activities.follow(ben, alyssa)
+    Activities.follow(URI.parse(ben.ap_id), URI.parse(alyssa.ap_id))
   end
 
   def outbox_fixtures() do

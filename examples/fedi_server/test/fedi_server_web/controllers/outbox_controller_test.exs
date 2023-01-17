@@ -5,6 +5,10 @@ defmodule FediServerWeb.OutboxControllerTest do
 
   require Logger
 
+  alias Fedi.ActivityStreams.Property, as: P
+  alias Fedi.ActivityStreams.Type, as: T
+  alias FediServer.Activities
+
   setup do
     Tesla.Mock.mock_global(fn
       # When we dereference ben
@@ -112,6 +116,13 @@ defmodule FediServerWeb.OutboxControllerTest do
 
     # QUESTION Should a Follow return 202?
     assert response(conn, 201) == ""
+
+    assert {:ok, %{properties: properties} = _following_page} =
+             URI.parse("https://example.com/users/alyssa/following")
+             |> Activities.get_collection()
+
+    assert %P.OrderedItems{values: [%P.OrderedItemsIterator{iri: following_id} | _]} =
+             Map.get(properties, "orderedItems")
   end
 
   test "POST a Like activity to /users/alyssa/outbox", %{conn: conn} do
@@ -134,5 +145,14 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", activity)
 
     assert response(conn, 201) == ""
+
+    assert {:ok, %{properties: properties} = _liked_page} =
+             URI.parse("https://example.com/users/alyssa/liked")
+             |> Activities.get_collection()
+
+    assert %P.OrderedItems{values: [%P.OrderedItemsIterator{member: object} | _]} =
+             Map.get(properties, "orderedItems")
+
+    assert %T.Note{} = object
   end
 end

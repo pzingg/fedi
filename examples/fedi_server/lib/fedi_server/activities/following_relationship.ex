@@ -4,27 +4,21 @@ defmodule FediServer.Activities.FollowingRelationship do
 
   require Logger
 
-  alias FediServer.Activities.User
-  alias FediServerWeb.Router.Helpers, as: Routes
-
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   @foreign_key_type Ecto.ULID
   schema "following_relationships" do
     field(:state, Ecto.Enum, values: [:pending, :accepted, :rejected])
-
-    belongs_to(:follower, User)
-    belongs_to(:following, User)
+    field(:follower_id, :string)
+    field(:following_id, :string)
 
     timestamps()
   end
 
-  def changeset(%__MODULE__{} = following_relationship, attrs) do
+  def changeset(%__MODULE__{} = following_relationship, attrs \\ %{}) do
     following_relationship
-    |> cast(attrs, [:state])
-    |> put_assoc(:follower, attrs.follower)
-    |> put_assoc(:following, attrs.following)
-    |> validate_required([:state, :follower, :following])
+    |> cast(attrs, [:state, :follower_id, :following_id])
+    |> validate_required([:state, :follower_id, :following_id])
     |> unique_constraint(:follower_id,
       name: :following_relationships_follower_id_following_id_index
     )

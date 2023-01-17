@@ -49,7 +49,7 @@ defmodule FediServerWeb.CommonCallbacks do
   def get_inbox(context, %Plug.Conn{} = conn, params) do
     inbox_iri = APUtils.request_id(conn)
 
-    with {:ok, oc} <- Activities.get_inbox(inbox_iri, params) do
+    with {:ok, oc} <- Activities.get_collection(inbox_iri, collection_opts(params)) do
       {:ok, conn, oc}
     end
   end
@@ -94,9 +94,21 @@ defmodule FediServerWeb.CommonCallbacks do
     outbox_iri = APUtils.request_id(conn)
 
     # TODO Parse max_id and min_id from params, add to opts
-    with {:ok, oc} <- Activities.get_outbox(outbox_iri, []) do
+    with {:ok, oc} <- Activities.get_collection(outbox_iri, collection_opts(params)) do
       {:ok, conn, oc}
     end
+  end
+
+  def collection_opts(%{}), do: []
+
+  def collection_opts(params) do
+    [{"max_id", :max_id}, {"min_id", :min_id}]
+    |> Enum.reduce([], fn {name, key}, acc ->
+      case Map.get(params, name) do
+        nil -> acc
+        v -> Keyword.put(acc, key, v)
+      end
+    end)
   end
 
   @doc """

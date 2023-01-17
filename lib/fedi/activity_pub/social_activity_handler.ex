@@ -225,10 +225,17 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Follow activity side effects.
   """
   @impl true
-  def follow(context, activity)
+  def follow(%{database: database, data: %{box_iri: box_iri}} = context, activity)
       when is_struct(context) and is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _]}} <-
-           {:activity_object, Utils.get_object(activity)} do
+    Logger.error("C2S Follow")
+
+    with {:activity_object, %P.Object{values: [_ | _]} = object} <-
+           {:activity_object, Utils.get_object(activity)},
+         {:ok, following_ids} <- APUtils.get_ids(object),
+         {:ok, %URI{path: actor_path} = actor_iri} <-
+           apply(database, :actor_for_outbox, [box_iri]),
+         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
+         apply(database, :update_collection, [coll_id, %{add: following_ids}]) do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -286,11 +293,11 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
-         {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
-         {:ok, liked} <- apply(database, :liked, [actor_iri]),
+         {:ok, %URI{path: actor_path} = actor_iri} <-
+           apply(database, :actor_for_outbox, [outbox_iri]),
          {:ok, object_ids} <- APUtils.get_ids(object),
-         liked <- Utils.prepend_iris(liked, "items", object_ids),
-         {:ok, _updated, _raw_json} <- apply(database, :update, [liked]) do
+         coll_id <- %URI{actor_iri | path: actor_path <> "/liked"},
+         {:ok, _oc} <- apply(database, :update_collection, [coll_id, %{add: object_ids}]) do
       Actor.handle_activity(context, :c2s, activity)
     else
       {:error, reason} -> {:error, reason}

@@ -7,7 +7,6 @@ defmodule FediServer.Activities do
 
   alias Ecto.Changeset
 
-  alias Fedi.ActivityStreams.Type.OrderedCollectionPage
   alias Fedi.Streams.Utils
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.ActivityStreams.Property, as: P
@@ -18,6 +17,7 @@ defmodule FediServer.Activities do
   alias FediServer.Activities.Object
   alias FediServer.Activities.Mailbox
   alias FediServer.Activities.FollowingRelationship
+  alias FediServer.Activities.ObjectAction
   alias FediServer.HTTPClient
   alias FediServer.Repo
 
@@ -25,47 +25,348 @@ defmodule FediServer.Activities do
   @objects_regex ~r/^\/users\/([^\/]+)\/([^\/]+)\/([A-Z0-9]+)$/
 
   @doc """
-  Returns true if the OrderedCollection at 'inbox'
+  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
   contains the specified 'id'.
 
   Called from SideEffectActor post_inbox.
   """
   @impl true
-  def inbox_contains(%URI{} = inbox_iri, %URI{} = id) do
-    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
-      contains? =
-        get_mailbox_items(actor_iri, false)
-        |> Enum.member?(URI.to_string(id))
+  def colletion_contains?(%URI{path: path} = coll_id, %URI{} = id) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_collection(coll_id) do
+      actor_id = URI.to_string(actor_iri)
 
-      {:ok, contains?}
+      query =
+        case collection_type(path) do
+          {:mailbox, outgoing} ->
+            activity_id = URI.to_string(id)
+
+            Mailbox
+            |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
+            |> where([m], m.actor == ^actor_id)
+            |> where([m], m.outgoing == ^outgoing)
+            |> where([m, a], a.ap_id == ^activity_id)
+
+          :liked ->
+            activity_id = URI.to_string(id)
+
+            Activity
+            |> where([a], a.actor == ^actor_id)
+            |> where([a], a.type == "Like")
+            |> where([a], a.ap_id == ^activity_id)
+
+          :following ->
+            following_id = URI.to_string(id)
+
+            FollowingRelationship
+            |> join(:inner, [r], u in User, on: r.following_id == u.id)
+            |> join(:inner, [r], g in User, on: r.follower_id == g.id)
+            |> where([r, u, g], g.ap_id == ^actor_id)
+            |> where([r, u], u.ap_id == ^following_id)
+            |> where([r], r.state == ^:accepted)
+
+          :followers ->
+            follower_id = URI.to_string(id)
+
+            FollowingRelationship
+            |> join(:inner, [r], u in User, on: r.follower_id == u.id)
+            |> join(:inner, [r], g in User, on: r.following_id == g.id)
+            |> where([r, u, g], g.ap_id == ^actor_id)
+            |> where([r, u], u.ap_id == ^follower_id)
+            |> where([r], r.state == ^:accepted)
+
+          _ ->
+            nil
+        end
+
+      if is_nil(query) do
+        {:error, "Can't understand collection #{path}"}
+      else
+        {:ok, Repo.exists?(query)}
+      end
     end
   end
 
   @doc """
-  Returns the first ordered collection page of the inbox at
-  the specified IRI, for prepending new items.
+  Returns the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  at the specified IRI.
   """
   @impl true
-  def get_inbox(%URI{} = inbox_iri, opts \\ []) do
-    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
-      get_mailbox_page(actor_iri, false)
+  def get_collection(%URI{path: path} = coll_id, opts \\ []) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_collection(coll_id) do
+      actor_id = URI.to_string(actor_iri)
+
+      # TODO get :min_id, :max_id from opts
+      page_size = Keyword.get(opts, :page_size, 30)
+
+      query =
+        case collection_type(path) do
+          {:mailbox, outgoing} ->
+            q =
+              Mailbox
+              |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
+              |> where([m], m.actor == ^actor_id)
+              |> where([m], m.outgoing == ^outgoing)
+              |> select([m, a], %{id: a.id, data: a.data})
+              |> order_by([a], desc: a.id)
+              |> limit(^page_size)
+
+            q =
+              case Keyword.get(opts, :min_id) do
+                %URI{} = min_id ->
+                  q |> where([m, a], a.ap_id >= ^min_id)
+
+                _ ->
+                  q
+              end
+
+            case Keyword.get(opts, :max_id) do
+              %URI{} = max_id ->
+                q |> where([m, a], a.ap_id <= ^max_id)
+
+              _ ->
+                q
+            end
+
+          :liked ->
+            q =
+              ObjectAction
+              |> join(:inner, [a], o in Object, on: o.ap_id == a.object)
+              |> where([a], a.actor == ^actor_id)
+              |> where([a], a.type == :like)
+              |> select([a, o], %{id: o.id, data: o.data})
+              |> order_by([a, o], desc: o.id)
+              |> limit(^page_size)
+
+            q =
+              case Keyword.get(opts, :min_id) do
+                %URI{} = min_id ->
+                  q |> where([a, o], o.id >= ^min_id)
+
+                _ ->
+                  q
+              end
+
+            case Keyword.get(opts, :max_id) do
+              %URI{} = max_id ->
+                q |> where([a, o], o.id <= ^max_id)
+
+              _ ->
+                q
+            end
+
+          :following ->
+            q =
+              FollowingRelationship
+              |> where([r], r.follower_id == ^actor_id)
+              |> where([r], r.state == ^:accepted)
+              |> select([r], %{id: r.id, iri: r.following_id})
+              |> order_by([r], desc: r.id)
+              |> limit(^page_size)
+
+            q =
+              case Keyword.get(opts, :min_id) do
+                %URI{} = min_id ->
+                  q |> where([r], r.id >= ^min_id)
+
+                _ ->
+                  q
+              end
+
+            case Keyword.get(opts, :max_id) do
+              %URI{} = max_id ->
+                q |> where([r], r.id <= ^max_id)
+
+              _ ->
+                q
+            end
+
+          :followers ->
+            q =
+              FollowingRelationship
+              |> where([r], r.following_id == ^actor_id)
+              |> where([r], r.state == ^:accepted)
+              |> select([r], %{id: r.id, iri: r.follower_id})
+              |> order_by([r], desc: r.id)
+              |> limit(^page_size)
+
+            q =
+              case Keyword.get(opts, :min_id) do
+                %URI{} = min_id ->
+                  q |> where([r], r.id >= ^min_id)
+
+                _ ->
+                  q
+              end
+
+            case Keyword.get(opts, :max_id) do
+              %URI{} = max_id ->
+                q |> where([r], r.id <= ^max_id)
+
+              _ ->
+                q
+            end
+
+          _ ->
+            nil
+        end
+
+      build_page(query, actor_iri, path, opts)
     end
   end
 
+  def collection_type(path) do
+    case Path.basename(path) do
+      "inbox" -> {:mailbox, false}
+      "outbox" -> {:mailbox, true}
+      "liked" -> :liked
+      "following" -> :following
+      "followers" -> :followers
+      _ -> nil
+    end
+  end
+
+  def build_page(nil, _, path, _) do
+    {:error, "Can't understand collection #{path}"}
+  end
+
+  def build_page(query, actor_iri, path, opts) do
+    result = Repo.all(query)
+
+    ordered_item_iters =
+      Enum.map(result, fn
+        %{iri: iri} when is_binary(iri) ->
+          %P.OrderedItemsIterator{alias: "", iri: URI.parse(iri)}
+
+        %{data: m} when is_map(m) ->
+          case Fedi.Streams.JSONResolver.resolve(m) do
+            {:ok, object} ->
+              %P.OrderedItemsIterator{alias: "", member: object}
+
+            _ ->
+              Logger.error("For #{path} could not resolve #{inspect(m)}")
+              nil
+          end
+
+        item ->
+          Logger.error("For #{path} don't know how to map #{inspect(item)}")
+          nil
+      end)
+      |> Enum.filter(fn iter -> !is_nil(iter) end)
+
+    ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
+
+    type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollectionPage")
+
+    page_id = %URI{actor_iri | path: path, query: "page=true"}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
+
+    coll_id = %URI{actor_iri | path: path}
+    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
+
+    properties = %{
+      "type" => type_prop,
+      "id" => id_prop,
+      "partOf" => part_of_prop,
+      "orderedItems" => ordered_items_prop
+    }
+
+    # TODO: get number of items, prev, etc.
+    properties =
+      case result do
+        [] ->
+          properties
+
+        [%{id: first_id} | _] ->
+          next_id = %URI{actor_iri | path: path, query: "max_id=#{first_id}&page=true"}
+          next_prop = %P.Next{alias: "", iri: next_id}
+          Map.put(properties, "next", next_prop)
+      end
+
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
+  end
+
   @doc """
-  Saves the first ordered collection page of the inbox at
+  Updates the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
   the specified IRI, with new items specified in the
-  :create member of the the updates map prepended.
+  :add member of the the `updates` map prepended.
 
   Note that the new items must not be added
   as independent database entries. Separate calls to Create will do that.
   """
   @impl true
-  def update_inbox(%URI{} = inbox_iri, updates) when is_map(updates) do
-    with {:ok, %URI{} = actor_iri} <- actor_for_inbox(inbox_iri) do
-      update_mailbox(actor_iri, updates, false)
+  def update_collection(%URI{path: path} = coll_id, updates) when is_map(updates) do
+    with {:ok, %URI{} = actor_iri} <- actor_for_collection(coll_id),
+         {:valid_type, type} when not is_nil(type) <- {:valid_type, collection_type(path)} do
+      # TODO Handle deletes, etc.
+      new_items = Map.get(updates, :add, [])
+
+      Enum.reduce_while(new_items, [], fn item, acc ->
+        insert_collection_item(type, actor_iri, item, acc)
+      end)
+      |> case do
+        {:error, reason} -> {:error, reason}
+        _ -> get_collection(coll_id)
+      end
     else
       {:error, reason} -> {:error, reason}
+      {:valid_type, _} -> {:error, "Can't understand collection #{path}"}
+    end
+  end
+
+  def insert_collection_item({:mailbox, outgoing}, %URI{} = actor_iri, activity, acc) do
+    with {:ok, params} <- parse_basic_params(activity) do
+      params =
+        Map.merge(params, %{
+          outgoing: outgoing,
+          activity_id: URI.to_string(params.ap_id),
+          actor: URI.to_string(actor_iri),
+          local: params.local
+        })
+
+      case repo_insert(:mailboxes, params) do
+        {:ok, %Mailbox{id: id} = mailbox} ->
+          {:cont, [{params.ap_id, id} | acc]}
+
+        {:error, changeset} ->
+          {:halt, {:error, describe_errors(changeset)}}
+      end
+    else
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
+  end
+
+  def insert_collection_item(:liked, %URI{} = actor_iri, object_id, acc) do
+    Logger.error("insert #{actor_iri} liked #{object_id}")
+
+    params = %{
+      actor: URI.to_string(actor_iri),
+      object: URI.to_string(object_id)
+    }
+
+    case repo_insert(:likes, params) do
+      {:ok, %ObjectAction{}} ->
+        {:cont, [object_id | acc]}
+
+      {:error, reason} ->
+        {:halt, {:error, reason}}
+    end
+  end
+
+  def insert_collection_item(:following, %URI{} = actor_iri, %URI{} = following_id, acc) do
+    Logger.error("insert #{actor_iri} following #{following_id}")
+
+    case follow(actor_iri, following_id) do
+      {:ok, %FollowingRelationship{}} -> {:cont, [following_id | acc]}
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
+  end
+
+  def insert_collection_item(:followers, %URI{} = actor_iri, %URI{} = follower_id, acc) do
+    Logger.error("insert #{actor_iri} followers #{follower_id}")
+
+    case follow(follower_id, actor_iri) do
+      {:ok, %FollowingRelationship{}} -> {:cont, [follower_id | acc]}
+      {:error, reason} -> {:halt, {:error, reason}}
     end
   end
 
@@ -76,8 +377,27 @@ defmodule FediServer.Activities do
   Used in federated SideEffectActor and Activity callbacks.
   """
   @impl true
-  def owns(%URI{} = id) do
+  def owns?(%URI{} = id) do
     {:ok, local?(id)}
+  end
+
+  @doc """
+  Fetches the actor's IRI for the given collection IRI.
+
+  Used in federated SideEffectActor and `like` Activity callbacks.
+  """
+  @impl true
+  def actor_for_collection(%URI{path: path} = iri) do
+    with true <- local?(iri),
+         {:ok, nickname, :actors} <- parse_ulid_or_nickname(iri) do
+      {:ok, %URI{iri | path: "/users/#{nickname}"}}
+    else
+      false ->
+        {:error, "Not our actor #{iri}"}
+
+      {:error, _} ->
+        {:error, "Invalid collection #{iri}"}
+    end
   end
 
   @doc """
@@ -163,7 +483,7 @@ defmodule FediServer.Activities do
   Used in federated SideEffectActor.
   """
   @impl true
-  def exists(%URI{} = ap_id) do
+  def exists?(%URI{} = ap_id) do
     [:actors, :objects, :activities]
     |> Enum.reduce_while({:ok, false}, fn schema, acc ->
       if repo_ap_id_exists?(schema, ap_id) do
@@ -269,8 +589,8 @@ defmodule FediServer.Activities do
       {:ok, %{schema: :objects} = params} ->
         update_object(as_type, params)
 
-      {:ok, _} ->
-        Logger.error("Don't know how to update #{inspect(as_type)}")
+      {:ok, params} ->
+        Logger.error("Don't know how to update #{inspect(as_type)}, params #{inspect(params)}")
     end
   end
 
@@ -336,46 +656,6 @@ defmodule FediServer.Activities do
   end
 
   @doc """
-  Returns the first ordered collection page of the outbox
-  at the specified IRI, for prepending new items.
-
-  Used in social SideEffectActor post_outbox.
-  """
-  @impl true
-  def get_outbox(%{path: path} = outbox_iri, opts \\ []) do
-    if String.contains?(path, "/liked") do
-      with outbox_iri <-
-             %URI{outbox_iri | path: String.replace(path, "/liked", "/outbox")},
-           {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
-        get_liked_page(actor_iri, opts)
-      end
-    else
-      with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
-        get_mailbox_page(actor_iri, true, opts)
-      end
-    end
-  end
-
-  @doc """
-  Saves the first ordered collection page of the outbox at
-  the specified IRI, with new items specified in the
-  :create member of the the updates map prepended.
-
-  Note that the new items must not be added as independent
-  database entries. Separate calls to Create will do that.
-
-  Used in social SideEffectActor post_outbox.
-  """
-  @impl true
-  def update_outbox(%URI{} = outbox_iri, updates) when is_map(updates) do
-    with {:ok, %URI{} = actor_iri} <- actor_for_outbox(outbox_iri) do
-      update_mailbox(actor_iri, updates, false)
-    else
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @doc """
   Creates a new IRI id for the provided activity or object. The
   implementation does not need to set the 'id' property and simply
   needs to determine the value.
@@ -412,36 +692,6 @@ defmodule FediServer.Activities do
         Logger.error("new_id, actor #{inspect(value)} is not ours")
         {:error, "Internal server error"}
     end
-  end
-
-  @doc """
-  Obtains the Followers Collection for an actor with the given id.
-
-  If modified, the library will then call Update.
-  """
-  @impl true
-  def followers(%URI{} = actor_iri) do
-    get_followers_page(actor_iri)
-  end
-
-  @doc """
-  Obtains the Following Collection for an actor with the given id.
-
-  If modified, the library will then call Update.
-  """
-  @impl true
-  def following(%URI{} = actor_iri) do
-    get_following_page(actor_iri)
-  end
-
-  @doc """
-  Obtains the Liked Collection for an actor with the given id.
-
-  If modified, the library will then call Update.
-  """
-  @impl true
-  def liked(%URI{} = actor_iri) do
-    get_liked_page(actor_iri)
   end
 
   @doc """
@@ -517,224 +767,22 @@ defmodule FediServer.Activities do
 
   ### Implementation
 
-  def update_mailbox(actor_iri, updates, outgoing) do
-    # TODO Handle deletes, etc.
-    new_activities = Map.get(updates, :create)
-
-    result =
-      Enum.reduce_while(new_activities, [], fn activity, acc ->
-        with {:ok, params} <- parse_basic_params(activity) do
-          params =
-            Map.merge(params, %{
-              outgoing: outgoing,
-              activity_id: URI.to_string(params.ap_id),
-              actor: URI.to_string(actor_iri),
-              local: params.local
-            })
-
-          case repo_insert(:mailboxes, params) do
-            {:ok, %Mailbox{id: id} = mailbox} ->
-              {:cont, [{params.ap_id, id} | acc]}
-
-            {:error, changeset} ->
-              {:halt, {:error, describe_errors(changeset)}}
-          end
-        end
-      end)
-
-    case result do
-      {:error, reason} -> {:error, reason}
-      _ -> get_mailbox_page(actor_iri, outgoing)
-    end
-  end
-
-  def get_mailbox_items(%URI{} = actor_iri, outgoing) do
-    actor = URI.to_string(actor_iri)
-
-    query =
-      Mailbox
-      |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
-      |> where([m], m.actor == ^actor and m.outgoing == ^outgoing)
-      |> select([m, a], a.ap_id)
-      |> order_by([m, a], desc: a.id)
-
-    Repo.all(query)
-  end
-
-  def get_mailbox_page(%URI{path: actor_path} = actor_iri, outgoing, opts \\ []) do
-    actor = URI.to_string(actor_iri)
-
-    mailbox_path =
-      if outgoing do
-        actor_path <> "/outbox"
-      else
-        actor_path <> "/inbox"
-      end
-
-    # TODO get :min_id, :max_id from opts
-    page_size = Keyword.get(opts, :page_size, 30)
-
-    query =
-      Mailbox
-      |> join(:inner, [m], a in Activity, on: a.ap_id == m.activity_id)
-      |> where([m], m.actor == ^actor and m.outgoing == ^outgoing)
-      |> select([m, a], a.data)
-      |> order_by([a], desc: a.id)
-      |> limit(^page_size)
-
-    build_page(query, actor_iri, mailbox_path, opts)
-  end
-
-  def get_liked_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
-    actor = URI.to_string(actor_iri)
-
-    liked_path = actor_path <> "/liked"
-
-    # TODO get :min_id, :max_id from opts
-    page_size = Keyword.get(opts, :page_size, 30)
-
-    query =
-      Activity
-      |> where([a], a.actor == ^actor and a.type == "Like")
-      |> select([a], a.data)
-      |> order_by([a], desc: a.id)
-      |> limit(^page_size)
-
-    result = Repo.all(query)
-
-    build_page(query, actor_iri, liked_path, opts)
-  end
-
-  def build_page(query, actor_iri, page_path, opts) do
-    query =
-      case Keyword.get(opts, :min_id) do
-        %URI{} = min_id ->
-          query |> where([m, a], a.ap_id >= ^min_id)
-
-        _ ->
-          query
-      end
-
-    query =
-      case Keyword.get(opts, :max_id) do
-        %URI{} = max_id ->
-          query |> where([m, a], a.ap_id <= ^max_id)
-
-        _ ->
-          query
-      end
-
-    result = Repo.all(query)
-
-    ordered_item_iters =
-      Enum.map(result, &activity_json_to_ordered_item(&1))
-      |> Enum.filter(fn iter -> !is_nil(iter) end)
-
-    ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
-
-    page_id = %URI{actor_iri | path: page_path <> "?page=true"}
-    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
-
-    coll_id = %URI{actor_iri | path: page_path}
-    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
-
-    properties = %{
-      "id" => id_prop,
-      "partOf" => part_of_prop,
-      "orderedItems" => ordered_items_prop
-    }
-
-    properties =
-      case result do
-        [] ->
-          properties
-
-        [first | _] ->
-          max_id = Map.get(first, "id")
-          next_id = %URI{actor_iri | path: page_path <> "?max_id=#{max_id}\u0026page=true"}
-          next_prop = %P.Next{alias: "", iri: next_id}
-          Map.put(properties, "next", next_prop)
-      end
-
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
-  end
-
-  def activity_json_to_ordered_item(activity_json) do
-    case Fedi.Streams.JSONResolver.resolve(activity_json) do
-      {:ok, object} -> %P.OrderedItemsIterator{alias: "", member: object}
-      _ -> nil
-    end
-  end
-
-  def get_following_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
-    actor_id = URI.to_string(actor_iri)
-    path = actor_path <> "/following"
-    coll_id = %URI{actor_iri | path: path}
-    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
+  def get_following_relationship(%URI{} = follower, %URI{} = following) do
+    follower_id = URI.to_string(follower)
+    following_id = URI.to_string(following)
 
     query =
       FollowingRelationship
-      |> join(:inner, [r], u in User, on: r.following_id == u.id)
-      |> join(:inner, [r], g in User, on: r.follower_id == g.id)
-      |> where([r, u, g], g.ap_id == ^actor_id)
-      |> where([r], r.state == ^:accepted)
-      |> select([r, u], u.ap_id)
-
-    result = Repo.all(query) |> Enum.map(&URI.parse(&1))
-    item_iters = Enum.map(result, &relationship_to_item(&1))
-    items_prop = %P.OrderedItems{alias: "", values: item_iters}
-
-    properties = %{
-      "id" => id_prop,
-      "orderedItems" => items_prop
-    }
-
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
-  end
-
-  def get_followers_page(%URI{path: actor_path} = actor_iri, opts \\ []) do
-    actor_id = URI.to_string(actor_iri)
-    path = actor_path <> "/following"
-    coll_id = %URI{actor_iri | path: path}
-    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
-
-    query =
-      FollowingRelationship
-      |> join(:inner, [r], u in User, on: r.follower_id == u.id)
-      |> join(:inner, [r], g in User, on: r.following_id == g.id)
-      |> where([r, u, g], g.ap_id == ^actor_id)
-      |> where([r], r.state == ^:accepted)
-      |> select([r, u], u.ap_id)
-
-    result = Repo.all(query) |> Enum.map(&URI.parse(&1))
-    item_iters = Enum.map(result, &relationship_to_item(&1))
-    items_prop = %P.OrderedItems{alias: "", values: item_iters}
-
-    properties = %{
-      "id" => id_prop,
-      "orderedItems" => items_prop
-    }
-
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
-  end
-
-  def relationship_to_item(actor_iri, alias_ \\ "") do
-    %P.OrderedItemsIterator{alias: alias_, iri: actor_iri}
-  end
-
-  def get_following_relationship(%User{} = follower, %User{} = following) do
-    query =
-      FollowingRelationship
-      |> where([r], r.follower_id == ^follower.id and r.following_id == ^following.id)
+      |> where([r], r.follower_id == ^follower_id and r.following_id == ^following_id)
 
     Repo.one(query)
   end
 
-  def update_following_relationship(%User{} = follower, %User{} = following, :rejected) do
+  def update_following_relationship(%URI{} = follower, %URI{} = following, :rejected) do
     unfollow(follower, following)
   end
 
-  def update_following_relationship(%User{} = follower, %User{} = following, state) do
+  def update_following_relationship(%URI{} = follower, %URI{} = following, state) do
     case get_following_relationship(follower, following) do
       nil ->
         follow(follower, following, state)
@@ -746,13 +794,20 @@ defmodule FediServer.Activities do
     end
   end
 
-  def follow(%User{} = follower, %User{} = following, state \\ :accepted) do
+  def follow(%URI{} = follower, %URI{} = following, state \\ :accepted) do
+    params = %{
+      follower_id: URI.to_string(follower),
+      following_id: URI.to_string(following),
+      state: state
+    }
+
     %FollowingRelationship{}
-    |> FollowingRelationship.changeset(%{follower: follower, following: following, state: state})
-    |> Repo.insert(on_conflict: :nothing)
+    |> FollowingRelationship.changeset(params)
+    |> Repo.insert(on_conflict: :nothing, returning: true)
+    |> log_insert_error(:following)
   end
 
-  def unfollow(%User{} = follower, %User{} = following) do
+  def unfollow(%URI{} = follower, %URI{} = following) do
     case get_following_relationship(follower, following) do
       %FollowingRelationship{} = following_relationship ->
         Repo.delete(following_relationship)
@@ -806,53 +861,67 @@ defmodule FediServer.Activities do
 
   def parse_basic_params(as_type) do
     case Utils.get_id_type_name_and_category(as_type) do
-      {:ok, ap_id, type_name, category} ->
-        if local?(ap_id) do
-          case parse_ulid_or_nickname(ap_id) do
-            {:ok, ulid_or_nickname, schema} ->
-              if schema == :actors do
-                {:ok,
-                 %{
-                   schema: schema,
-                   ap_id: ap_id,
-                   ulid: nil,
-                   nickname: ulid_or_nickname,
-                   local: true,
-                   type: type_name
-                 }}
-              else
-                {:ok,
-                 %{
-                   schema: schema,
-                   ap_id: ap_id,
-                   ulid: ulid_or_nickname,
-                   nickname: nil,
-                   local: true,
-                   type: type_name
-                 }}
-              end
+      {:ok, ap_id, type_name, :collections} ->
+        {:error, "Can't parse params for collection #{Utils.alias_module(as_type.__struct__)}"}
 
-            {:error, reason} ->
-              {:error, reason}
-          end
-        else
-          schema =
-            case category do
-              :activities -> :activities
-              :actors -> :actors
-              _ -> :objects
+      {:ok, ap_id, type_name, :actors} ->
+        case parse_ulid_or_nickname(ap_id) do
+          {:error, reason} ->
+            {:error, reason}
+
+          {:ok, nickname, :actors} ->
+            if local?(ap_id) do
+              Logger.debug("Parsed #{Utils.alias_module(as_type.__struct__)} as local actor")
+
+              {:ok,
+               %{
+                 schema: :actors,
+                 ap_id: ap_id,
+                 ulid: nil,
+                 nickname: nickname,
+                 local: true,
+                 type: type_name
+               }}
+            else
+              Logger.debug("Parsed #{Utils.alias_module(as_type.__struct__)} as remote actor")
+
+              {:ok,
+               %{
+                 schema: :actors,
+                 ulid: nil,
+                 nickname: nil,
+                 ap_id: ap_id,
+                 local: false,
+                 type: type_name
+               }}
             end
 
-          {:ok,
-           %{
-             schema: schema,
-             ulid: nil,
-             nickname: nil,
-             ap_id: ap_id,
-             local: false,
-             type: type_name
-           }}
+          {:ok, _, schema} ->
+            Logger.debug("Parsed #{Utils.alias_module(as_type.__struct__)} as ERROR #{schema}")
+            {:error, "Bad schema #{schema} for #{type_name}"}
         end
+
+      {:ok, ap_id, type_name, :activities} ->
+        {:ok,
+         %{
+           schema: :activities,
+           ap_id: ap_id,
+           ulid: nil,
+           nickname: nil,
+           local: local?(ap_id),
+           type: type_name
+         }}
+
+      {:ok, ap_id, type_name, _} ->
+        {:ok,
+         %{
+           schema: :objects,
+           ap_id: ap_id,
+           ulid: nil,
+           nickname: nil,
+           local: local?(ap_id),
+           type: type_name
+         }}
     end
   end
 
@@ -987,21 +1056,53 @@ defmodule FediServer.Activities do
 
   def repo_insert(:objects, params) do
     ulid = params.ulid || Ecto.ULID.generate()
-    Object.changeset(%Object{id: ulid}, params) |> Repo.insert(returning: true)
+
+    Object.changeset(%Object{id: ulid}, params)
+    |> Repo.insert(returning: true)
+    |> log_insert_error(:objects)
   end
 
   def repo_insert(:activities, params) do
     ulid = params.ulid || Ecto.ULID.generate()
-    Activity.changeset(%Activity{id: ulid}, params) |> Repo.insert(returning: true)
+
+    Activity.changeset(%Activity{id: ulid}, params)
+    |> Repo.insert(returning: true)
+    |> log_insert_error(:objects)
   end
 
   def repo_insert(:actors, params) do
     ulid = Ecto.ULID.generate()
-    User.changeset(%User{id: ulid}, params) |> Repo.insert(returning: true)
+
+    User.changeset(%User{id: ulid}, params)
+    |> Repo.insert(returning: true)
+    |> log_insert_error(:objects)
   end
 
   def repo_insert(:mailboxes, params) do
-    Mailbox.changeset(%Mailbox{}, params) |> Repo.insert(returning: true)
+    Mailbox.changeset(%Mailbox{}, params)
+    |> Repo.insert(returning: true)
+    |> log_insert_error(:objects)
+  end
+
+  def repo_insert(:likes, params) do
+    Logger.error("adding like to db #{inspect(params)}")
+
+    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :like))
+    |> Repo.insert(on_conflict: :nothing, returning: true)
+    |> log_insert_error(:objects)
+  end
+
+  def repo_insert(:shares, params) do
+    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :share))
+    |> Repo.insert(on_conflict: :nothing, returning: true)
+    |> log_insert_error(:objects)
+  end
+
+  def log_insert_error({:ok, data}, _), do: {:ok, data}
+
+  def log_insert_error({:error, changeset}, type) do
+    Logger.error("Failed to insert #{type}: #{describe_errors(changeset)}")
+    {:error, "Internal database error"}
   end
 
   def repo_insert(other, _) do

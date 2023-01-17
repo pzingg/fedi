@@ -14,9 +14,9 @@ defmodule FediServer.Activities.Object do
     timestamps()
   end
 
-  def changeset(%__MODULE__{} = object, params \\ %{}) do
+  def changeset(%__MODULE__{} = object, attrs \\ %{}) do
     object
-    |> cast(params, [:ap_id, :type, :actor, :local, :data])
+    |> cast(attrs, [:ap_id, :type, :actor, :local, :data])
     |> validate_required([:ap_id, :type, :actor, :local, :data])
     |> unique_constraint(:ap_id)
   end

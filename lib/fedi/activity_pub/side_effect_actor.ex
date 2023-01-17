@@ -208,8 +208,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     case Utils.get_json_ld_id(activity) do
       %URI{} = id ->
         # See if we have seen the activity
-        with {:exists, {:ok, false}} <-
-               {:exists, apply(database, :exists, [id])},
+        with {:exists?, {:ok, false}} <-
+               {:exists?, apply(database, :exists?, [id])},
              # Attempt to create the activity entry.
              {:ok, _created, _raw_json} <-
                apply(database, :create, [activity]),
@@ -259,7 +259,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
             {:error, reason}
 
           # We have seen the activity before
-          {:exists, {:ok, _}} ->
+          {:exists?, {:ok, _}} ->
             Logger.debug("No inbox forwarding needed: #{id} has been seen")
             :ok
         end
@@ -284,7 +284,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def owned_recipients(database, activity) do
     with {:ok, recipients} <- APUtils.get_recipients(activity, which: :direct_only) do
       Enum.reduce_while(recipients, [], fn iri, acc ->
-        case apply(database, :owns, [iri]) do
+        case apply(database, :owns?, [iri]) do
           {:error, reason} -> {:halt, {:error, reason}}
           {:ok, true} -> {:cont, [iri | acc]}
           _ -> acc
@@ -473,7 +473,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          # Persist a reference to the activity in the outbox
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
-           apply(database, :update_outbox, [outbox_iri, %{create: [activity]}]) do
+           apply(database, :update_collection, [outbox_iri, %{add: [activity]}]) do
       {:ok, activity}
     else
       {:error, reason} ->
@@ -716,7 +716,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def add_to_inbox_if_new(%{database: database} = _context, %URI{} = inbox_iri, activity) do
     with {:activity_id, %URI{} = id} <- {:activity_id, Utils.get_json_ld_id(activity)},
-         {:exists, {:ok, false}} <- {:exists, apply(database, :inbox_contains, [inbox_iri, id])},
+         {:exists?, {:ok, false}} <-
+           {:exists?, apply(database, :collection_contains?, [inbox_iri, id])},
          # It is a new id
          # Persist the activity
          {:ok, activity, _raw_json} <-
@@ -724,14 +725,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          # Persist a reference to the activity in the inbox
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
-           apply(database, :update_inbox, [inbox_iri, %{create: [activity]}]) do
+           apply(database, :update_collection, [inbox_iri, %{add: [activity]}]) do
       {:ok, true}
     else
       {:error, reason} ->
         {:error, reason}
 
       # If the inbox already contains the URL, early exit.
-      {:exists, {:ok, _}} ->
+      {:exists?, {:ok, _}} ->
         {:ok, false}
 
       {:activity_id, _} ->
@@ -808,7 +809,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   # For IRIs, simply check if we own them.
   def owns_any_iri?(database, iris) do
     Enum.find(iris, fn iri ->
-      case apply(database, :owns, [iri]) do
+      case apply(database, :owns?, [iri]) do
         {:error, reason} -> {:error, reason}
         {:ok, true} -> {:ok, true}
         _ -> false
@@ -821,7 +822,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     Enum.find(types, fn as_value ->
       case Utils.get_json_ld_id(as_value) do
         %URI{} = id ->
-          case apply(database, :owns, [id]) do
+          case apply(database, :owns?, [id]) do
             {:error, reason} -> {:error, reason}
             {:ok, true} -> {:ok, true}
             _ -> false

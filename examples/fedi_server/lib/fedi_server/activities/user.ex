@@ -37,9 +37,9 @@ defmodule FediServer.Activities.User do
     }
   end
 
-  def changeset(%__MODULE__{} = user, params \\ %{}) do
+  def changeset(%__MODULE__{} = user, attrs \\ %{}) do
     user
-    |> cast(params, [:ap_id, :inbox, :name, :nickname, :local, :email, :public_key, :data])
+    |> cast(attrs, [:ap_id, :inbox, :name, :nickname, :local, :email, :public_key, :data])
     |> validate_required([:ap_id, :inbox, :name, :nickname, :local, :data])
     |> unique_constraint(:ap_id)
     |> unique_constraint(:nickname)
