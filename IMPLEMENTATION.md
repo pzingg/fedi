@@ -4,88 +4,88 @@ Adapted from https://socialhub.activitypub.rocks/t/guide-for-new-activitypub-imp
 
 The goal is to write tests for as many of these 85 cases as is applicable.
 
-- [ ] 1. (outbox:accept-activities:MUST) Accepts Activity Objects
-- [ ] 1. (outbox:accept-non-activity-objects:MUST) Accepts non-Activity Objects, and converts to Create Activities per 7.1.1
-- [ ] 1. (outbox:remove-bto-and-bcc:MUST) Removes the 'bto' and 'bcc' properties from Objects before storage and delivery
-- [ ] 1. (outbox:ignore-id:MUST) Ignores id on submitted objects, and generates a new id instead
-- [ ] 1. (outbox:respond-with-201-status:MUST) Responds with status code 201 Created
-- [ ] 1. (outbox:set-location-header:MUST) Response includes Location header whose value is id of new object, unless the Activity is transient
-- [ ] 1. (outbox:trust-submitted-content:SHOULD-NOT) Server does not trust client submitted content
-- [ ] 1. (outbox:validate-content:SHOULD) Validate the content they receive to avoid content spoofing attacks
-- [ ] 1. (outbox:overload-other-servers:SHOULD-NOT) Take care not to overload other servers with delivery submissions
-- [ ] 1. (outbox:upload-media:accept:MUST) Accepts Uploaded Media in submissions
-- [ ] 1. (outbox:upload-media:accept-file-parameter:MUST) Accepts 'uploadedMedia' file parameter
-- [ ] 1. (outbox:upload-media:accept-object-parameter:MUST) Accepts 'uploadedMedia' object parameter
-- [ ] 1. (outbox:upload-media:respond-201-or-202-status:MUST) Responds with status code of 201 Created or 202 Accepted as described in 6.
-- [ ] 1. (outbox:upload-media:respond-location-header:MUST) Response contains a Location header pointing to the to-be-created object's id
-- [ ] 1. (outbox:upload-media:append-id:MUST) Appends an 'id' property to the new object
-- [ ] 1. (outbox:upload-media:include-new-url:SHOULD) After receiving submission with uploaded media, the server should include the upload's new URL in the submitted object's 'url' property
-- [ ] 1. (outbox:update:check-authorization:MUST) Server takes care to be sure that the Update is authorized to modify its object before modifying the server's stored copy
-- [ ] 1. (outbox:update:support-partial-updates:NON-NORMATIVE) Supports partial updates in client-to-server, but not server-to-server, protocol
-- [ ] 1. (outbox:create:merge-audience-properties:SHOULD) Merges audience properties--'to', 'bto', 'cc', 'bcc', 'audience'--with the Create's object's audience properties
-- [ ] 1. (outbox:create:copy-actor-to-attributedTo:SHOULD) Create's 'actor' property is copied to be the value of the object's 'attributedTo' property
-- [ ] 1. (outbox:follow:add-followed-object:SHOULD) Adds followed object to the actor's Following Collection
-- [ ] 1. (outbox:add:add-object-to-target:SHOULD) Adds object to the target Collection, unless not allowed due to requirements in 7.5
-- [ ] 1. (outbox:remove:remove-object-from-target:SHOULD) Remove object from the target Collection, unless not allowed due to requirements in 7.5
-- [ ] 1. (outbox:like:add-object-to-liked:SHOULD) Adds the object to the actor's Liked Collection
-- [ ] 1. (outbox:block:prevent-interaction-with-actor:SHOULD) Prevent the blocked object from interacting with any object posted by the actor
-- [ ] 1. (outbox:undo:be-supported:NON-NORMATIVE) Supports the Undo activity in the client-to-server protocol
-- [ ] 1. (outbox:undo:ensure-activity-and-actor-are-same:MUST) Ensures that the actor in the activity actor is the same in activity being undone
-- [ ] 1. (inbox:delivery:perform-delivery:MUST) Performs delivery on all Activities posted to the outbox
-- [ ] 1. (inbox:delivery:determine-all-recipients:MUST) Utilizes 'to', 'bto', 'cc', and 'bcc' to determine delivery recipients.
-- [ ] 1. (inbox:delivery:add-id:MUST) Provides an id all Activities sent to other servers, unless the activity is intentionally transient
-- [ ] 1. (inbox:delivery:submit-with-credentials:MUST) Dereferences delivery targets with the submitting user's credentials
-- [ ] 1. (inbox:delivery:deliver-to-collection:MUST) Delivers to all items in recipients that are Collections or OrderedCollections
-- [ ] 1. (inbox:delivery:deliver-to-collection:deliver-recursively:MUST) Applies the above, recursively if the Collection contains Collections, and limits recursion depth >= 1
-- [ ] 1. (inbox:delivery:deliver-with-object-for-certain-activities:MUST) Delivers activity with 'object' property if the Activity type is one of Create, Update, Delete, Follow, Add, Remove, Like, Block, Undo
-- [ ] 1. (inbox:delivery:deliver-with-target-for-certain-activities:MUST) Delivers activity with 'target' property if the Activity type is one of Add, Remove
-- [ ] 1. (inbox:delivery:deduplicate-final-recipient-list:MUST) Deduplicates final recipient list
-- [ ] 1. (inbox:delivery:deliver-to-actor:MUST-NOT) Does not deliver to recipients which are the same as the actor of the Activity being notified about
-- [ ] 1. (inbox:delivery:deliver-block:SHOULD-NOT) SHOULD NOT deliver Block Activities to their object
-- [ ] 1. (inbox:delivery:sharedInbox:deliver:MAY) Delivers to 'sharedInbox' endpoints to reduce the number of receiving actors delivered to by identifying all followers which share the same sharedInbox who would otherwise be individual recipients and instead deliver objects to said sharedInbox
-- [ ] 1. (inbox:delivery:sharedInbox:deliver-to-inbox-if-no-sharedInbox:MUST) For servers which deliver to 'sharedInbox': Deliver to actor inboxes and collections otherwise addressed which do not have a sharedInbox
-- [ ] 1. (inbox:accept:deduplicate:MUST) Deduplicates activities returned by the inbox by comparing activity ids
-- [ ] 1. (inbox:accept:special-forward:MUST) Forwards incoming activities to the values of 'to', 'bto', 'cc', 'bcc', and 'audience' if and only if criteria in 7.1.2 are met
-- [ ] 1. (inbox:accept:special-forward:recurse:SHOULD) Recurse through 'to', 'bto', 'cc', 'bcc', and 'audience' object values to determine whether/where to forward according to criteria in 7.1.2
-- [ ] 1. (inbox:accept:special-forward:limit-recursion:SHOULD) Limit recursion in this process
-- [ ] 1. (inbox:accept:create:receive:NON-NORMATIVE) Supports receiving a Create object in an actor's inbox
-- [ ] 1. (inbox:accept:delete:remove-object:SHOULD) Assuming object is owned by sending actor/server, removes object's representation
-- [ ] 1. (inbox:accept:delete:replace-with-tombstone:MAY) replace object's representation with a Tombstone object
-- [ ] 1. (inbox:accept:update:be-authorized:MUST) Take care to be sure that the Update is authorized to modify its object
-- [ ] 1. (inbox:accept:update:completely-replace-activity:SHOULD) Completely replace its copy of the activity with the newly received value)
-- [ ] 1. (inbox:accept:trust-unverified-content:SHOULD-NOT) Don't trust content received from a server other than the content's origin without some form of verification
-- [ ] 1. (inbox:accept:follow:add-actor-to-users-followers:SHOULD) Add the actor to the object user's Followers Collection
-- [ ] 1. (inbox:accept:follow:generate-accept-or-reject:SHOULD) Generates either an Accept or Reject activity with Follow as object and deliver to actor of the Follow
-- [ ] 1. (inbox:accept:accept:add-actor-to-users-following:SHOULD) If in reply to a Follow activity, adds actor to receiver's Following Collection
-- [ ] 1. (inbox:accept:reject:add-actor-to-users-following:MUST-NOT) If in reply to a Follow activity, MUST NOT add actor to receiver's Following Collection
-- [ ] 1. (inbox:accept:add:add-to-collection:SHOULD) Add the object to the Collection specified in the 'target' property, unless not allowed to per requirements in 7.8
-- [ ] 1. (inbox:accept:remove:remove-from-collection:SHOULD) Remove the object from the Collection specified in the 'target' property, unless not allowed per requirements in 7.9
-- [ ] 1. (inbox:accept:like:indicate-like-performed:SHOULD) Perform appropriate indication of the like being performed. See 7.10 for examples.
-- [ ] 1. (inbox:accept:announce:add-to-shares-collection:SHOULD) Increments object's count of shares by adding the received activity to the 'shares' collection if this collection is present
-- [ ] 1. (inbox:accept:undo-federated:NON-NORMATIVE) Performs Undo of object in federated context
-- [ ] 1. (inbox:accept:validate-content:SHOULD) Validate the content they receive to avoid content spoofing attacks
-- [ ] 1. (server:inbox:respond-to-get:NON-NORMATIVE) Server responds to GET request at inbox URL
-- [ ] 1. (server:inbox:be-orderedCollection:MUST) inbox is an OrderedCollection
-- [ ] 1. (server:inbox:filter-per-permissions:SHOULD) Server filters inbox content according to the requester's permission
-- [ ] 1. (server:object-retrieval:dereference-id:MAY) Allow dereferencing Object ids by responding to HTTP GET requests with a representation of the Object
-- [ ] 1. (server:object-retrieval:respond-with-ld+json:MUST) Respond with the ActivityStreams object representation in response to requests that primarily Accept the media type application/ld+json; profile="https://www.w3.org/ns/activitystreams"
-- [ ] 1. (server:object-retrieval:respond-with-activity+json:SHOULD) Respond with the ActivityStreams object representation in response to requests that primarily Accept the media type application/activity+json
-- [ ] 1. (server:object-retrieval:deleted-object:respond-with-tombstone:MAY) Responds with response body that is an ActivityStreams Object of type Tombstone, if the server is choosing to disclose that the object has been removed
-- [ ] 1. (server:object-retrieval:deleted-object:respond-with-410-status:SHOULD) Respond with 410 Gone status code if Tombstone is in response body, otherwise responds with 404 Not Found
-- [ ] 1. (server:object-retrieval:deleted-object:respond-with-404-status:SHOULD) Respond with 404 status code for Object URIs that have never existed
-- [ ] 1. (server:object-retrieval:respond-with-private-403-or-404-status:SHOULD) Respond with a 403 Forbidden status code to all requests that access Objects considered Private; or 404 if the server does not want to disclose the existence of the object; or another HTTP status code if specified by the authorization method
-- [ ] 1. (server:security-considerations:verify-content-posted-by-actor:NON-NORMATIVE) Server verifies that the new content is really posted by the actor indicated in Objects received in inbox and outbox
-- [ ] 1. (server:security-considerations:not-deliver-to-localhost:NON-NORMATIVE) By default, implementation does not make HTTP requests to localhost when delivering Activities
-- [ ] 1. (server:security-considerations:apply-uri-scheme-whitelist:NON-NORMATIVE) Implementation applies a whitelist of allowed URI protocols before issuing requests, e.g. for inbox delivery
-- [ ] 1. (server:security-considerations:filter-incoming-content:NON-NORMATIVE) Server filters incoming content both by local untrusted users and any remote users through some sort of spam filter
-- [ ] 1. (server:security-considerations:sanitize-fields:NON-NORMATIVE) Implementation takes care to sanitize fields containing markup to prevent cross site scripting attacks)
-- [ ] 1. (client:submission:discover-url-from-profile:MUST) Client discovers the URL of a user's outbox from their profile
-- [ ] 1. (client:submission:submit-post-with-content-type:MUST) Client submits activity by sending an HTTP post request to the outbox URL with the Content-Type of application/ld+json; profile="https://www.w3.org/ns/activitystreams"
-- [ ] 1. (client:submission:submit-objects:MUST) Client submission request body is either a single Activity or a single non-Activity Object
-- [ ] 1. (client:submission:submit-objects:provide-object:MUST) Clients provide the 'object' property when submitting the following activity types to an outbox: Create, Update, Delete, Follow, Add, Remove, Like, Block, Undo
-- [ ] 1. (client:submission:submit-objects:provide-target:MUST) Clients provide the 'target' property when submitting the following activity types to an outbox: Add, Remove.
-- [ ] 1. (client:submission:be-authenticated:MUST) Client submission request is authenticated with the credentials of the user to whom the outbox belongs
-- [ ] 1. (client:submission:support-uploading-media:MUST) Client supports uploading media by sending a multipart/form-data request body
-- [ ] 1. (client:submission:recursively-add-targets:SHOULD) Before submitting a new activity or object, Client infers appropriate target audience by recursively looking at certain properties--e.g. 'inReplyTo', See Section 7--and adds these targets to the new submission's audience
-- [ ] 1. (client:submission:recursively-add-targets:limit-depth:SHOULD) Client limits depth of this recursion
-- [ ] 1. (client:retrieval:accept-ld+json-header:MUST) When retrieving objects, Client specifies an Accept header with the application/ld+json; profile="https://www.w3.org/ns/activitystreams" media type
+- [ ] 1. (outbox:accept-activities:MUST) Accepts Activity Objects. test "outbox MUST accept activities" in module TODO_Test
+- [ ] 1. (outbox:accept-non-activity-objects:MUST) Accepts non-Activity Objects, and converts to Create Activities per 7.1.1. test "outbox MUST accept non activity objects" in module TODO_Test
+- [ ] 1. (outbox:remove-bto-and-bcc:MUST) Removes the 'bto' and 'bcc' properties from Objects before storage and delivery. test "outbox MUST remove bto and bcc" in module TODO_Test
+- [ ] 1. (outbox:ignore-id:MUST) Ignores id on submitted objects, and generates a new id instead. test "outbox MUST ignore id" in module TODO_Test
+- [ ] 1. (outbox:respond-with-201-status:MUST) Responds with status code 201 Created. test "outbox MUST respond with 201 status" in module TODO_Test
+- [ ] 1. (outbox:set-location-header:MUST) Response includes Location header whose value is id of new object, unless the Activity is transient. test "outbox MUST set location header" in module TODO_Test
+- [ ] 1. (outbox:trust-submitted-content:SHOULD-NOT) Server does not trust client submitted content. test "outbox SHOULD NOT trust submitted content" in module TODO_Test
+- [ ] 1. (outbox:validate-content:SHOULD) Validate the content they receive to avoid content spoofing attacks. test "outbox SHOULD validate content" in module TODO_Test
+- [ ] 1. (outbox:overload-other-servers:SHOULD-NOT) Take care not to overload other servers with delivery submissions. test "outbox SHOULD NOT overload other servers" in module TODO_Test
+- [ ] 1. (outbox:upload-media:accept:MUST) Accepts Uploaded Media in submissions. test "outbox upload media MUST accept" in module TODO_Test
+- [ ] 1. (outbox:upload-media:accept-file-parameter:MUST) Accepts 'uploadedMedia' file parameter. test "outbox upload media MUST accept file parameter" in module TODO_Test
+- [ ] 1. (outbox:upload-media:accept-object-parameter:MUST) Accepts 'uploadedMedia' object parameter. test "outbox upload media MUST accept object parameter" in module TODO_Test
+- [ ] 1. (outbox:upload-media:respond-201-or-202-status:MUST) Responds with status code of 201 Created or 202 Accepted as described in 6.. test "outbox upload media MUST respond 201 or 202 status" in module TODO_Test
+- [ ] 1. (outbox:upload-media:respond-location-header:MUST) Response contains a Location header pointing to the to-be-created object's id. test "outbox upload media MUST respond location header" in module TODO_Test
+- [ ] 1. (outbox:upload-media:append-id:MUST) Appends an 'id' property to the new object. test "outbox upload media MUST append id" in module TODO_Test
+- [ ] 1. (outbox:upload-media:include-new-url:SHOULD) After receiving submission with uploaded media, the server should include the upload's new URL in the submitted object's 'url' property. test "outbox upload media SHOULD include new url" in module TODO_Test
+- [ ] 1. (outbox:update:check-authorization:MUST) Server takes care to be sure that the Update is authorized to modify its object before modifying the server's stored copy. test "outbox update MUST check authorization" in module TODO_Test
+- [ ] 1. (outbox:update:support-partial-updates:NON-NORMATIVE) Supports partial updates in client-to-server, but not server-to-server, protocol. test "outbox update MAY support partial updates (non-normative)" in module TODO_Test
+- [ ] 1. (outbox:create:merge-audience-properties:SHOULD) Merges audience properties--'to', 'bto', 'cc', 'bcc', 'audience'--with the Create's object's audience properties. test "outbox create SHOULD merge audience properties" in module TODO_Test
+- [ ] 1. (outbox:create:copy-actor-to-attributedTo:SHOULD) Create's 'actor' property is copied to be the value of the object's 'attributedTo' property. test "outbox create SHOULD copy actor to attributedTo" in module TODO_Test
+- [ ] 1. (outbox:follow:add-followed-object:SHOULD) Adds followed object to the actor's Following Collection. test "outbox follow SHOULD add followed object" in module TODO_Test
+- [ ] 1. (outbox:add:add-object-to-target:SHOULD) Adds object to the target Collection, unless not allowed due to requirements in 7.5. test "outbox add SHOULD add object to target" in module TODO_Test
+- [ ] 1. (outbox:remove:remove-object-from-target:SHOULD) Remove object from the target Collection, unless not allowed due to requirements in 7.5. test "outbox remove SHOULD remove object from target" in module TODO_Test
+- [ ] 1. (outbox:like:add-object-to-liked:SHOULD) Adds the object to the actor's Liked Collection. test "outbox like SHOULD add object to liked" in module TODO_Test
+- [ ] 1. (outbox:block:prevent-interaction-with-actor:SHOULD) Prevent the blocked object from interacting with any object posted by the actor. test "outbox block SHOULD prevent interaction with actor" in module TODO_Test
+- [ ] 1. (outbox:undo:be-supported:NON-NORMATIVE) Supports the Undo activity in the client-to-server protocol. test "outbox undo MAY be supported (non-normative)" in module TODO_Test
+- [ ] 1. (outbox:undo:ensure-activity-and-actor-are-same:MUST) Ensures that the actor in the activity actor is the same in activity being undone. test "outbox undo MUST ensure activity and actor are same" in module TODO_Test
+- [ ] 1. (inbox:delivery:perform-delivery:MUST) Performs delivery on all Activities posted to the outbox. test "inbox delivery MUST perform delivery" in module TODO_Test
+- [ ] 1. (inbox:delivery:determine-all-recipients:MUST) Utilizes 'to', 'bto', 'cc', and 'bcc' to determine delivery recipients.. test "inbox delivery MUST determine all recipients" in module TODO_Test
+- [ ] 1. (inbox:delivery:add-id:MUST) Provides an id all Activities sent to other servers, unless the activity is intentionally transient. test "inbox delivery MUST add id" in module TODO_Test
+- [ ] 1. (inbox:delivery:submit-with-credentials:MUST) Dereferences delivery targets with the submitting user's credentials. test "inbox delivery MUST submit with credentials" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-to-collection:MUST) Delivers to all items in recipients that are Collections or OrderedCollections. test "inbox delivery MUST deliver to collection" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-to-collection:deliver-recursively:MUST) Applies the above, recursively if the Collection contains Collections, and limits recursion depth >= 1. test "inbox delivery deliver to collection MUST deliver recursively" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-with-object-for-certain-activities:MUST) Delivers activity with 'object' property if the Activity type is one of Create, Update, Delete, Follow, Add, Remove, Like, Block, Undo. test "inbox delivery MUST deliver with object for certain activities" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-with-target-for-certain-activities:MUST) Delivers activity with 'target' property if the Activity type is one of Add, Remove. test "inbox delivery MUST deliver with target for certain activities" in module TODO_Test
+- [ ] 1. (inbox:delivery:deduplicate-final-recipient-list:MUST) Deduplicates final recipient list. test "inbox delivery MUST deduplicate final recipient list" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-to-actor:MUST-NOT) Does not deliver to recipients which are the same as the actor of the Activity being notified about. test "inbox delivery MUST NOT deliver to actor" in module TODO_Test
+- [ ] 1. (inbox:delivery:deliver-block:SHOULD-NOT) SHOULD NOT deliver Block Activities to their object. test "inbox delivery SHOULD NOT deliver block" in module TODO_Test
+- [ ] 1. (inbox:delivery:sharedInbox:deliver:MAY) Delivers to 'sharedInbox' endpoints to reduce the number of receiving actors delivered to by identifying all followers which share the same sharedInbox who would otherwise be individual recipients and instead deliver objects to said sharedInbox. test "inbox delivery sharedInbox MAY deliver" in module TODO_Test
+- [ ] 1. (inbox:delivery:sharedInbox:deliver-to-inbox-if-no-sharedInbox:MUST) For servers which deliver to 'sharedInbox': Deliver to actor inboxes and collections otherwise addressed which do not have a sharedInbox. test "inbox delivery sharedInbox MUST deliver to inbox if no sharedInbox" in module TODO_Test
+- [ ] 1. (inbox:accept:deduplicate:MUST) Deduplicates activities returned by the inbox by comparing activity ids. test "inbox accept MUST deduplicate" in module TODO_Test
+- [ ] 1. (inbox:accept:special-forward:MUST) Forwards incoming activities to the values of 'to', 'bto', 'cc', 'bcc', and 'audience' if and only if criteria in 7.1.2 are met. test "inbox accept MUST special forward" in module TODO_Test
+- [ ] 1. (inbox:accept:special-forward:recurse:SHOULD) Recurse through 'to', 'bto', 'cc', 'bcc', and 'audience' object values to determine whether/where to forward according to criteria in 7.1.2. test "inbox accept special forward SHOULD recurse" in module TODO_Test
+- [ ] 1. (inbox:accept:special-forward:limit-recursion:SHOULD) Limit recursion in this process. test "inbox accept special forward SHOULD limit recursion" in module TODO_Test
+- [ ] 1. (inbox:accept:create:receive:NON-NORMATIVE) Supports receiving a Create object in an actor's inbox. test "inbox accept create MAY receive (non-normative)" in module TODO_Test
+- [ ] 1. (inbox:accept:delete:remove-object:SHOULD) Assuming object is owned by sending actor/server, removes object's representation. test "inbox accept delete SHOULD remove object" in module TODO_Test
+- [ ] 1. (inbox:accept:delete:replace-with-tombstone:MAY) replace object's representation with a Tombstone object. test "inbox accept delete MAY replace with tombstone" in module TODO_Test
+- [ ] 1. (inbox:accept:update:be-authorized:MUST) Take care to be sure that the Update is authorized to modify its object. test "inbox accept update MUST be authorized" in module TODO_Test
+- [ ] 1. (inbox:accept:update:completely-replace-activity:SHOULD) Completely replace its copy of the activity with the newly received value). test "inbox accept update SHOULD completely replace activity" in module TODO_Test
+- [ ] 1. (inbox:accept:trust-unverified-content:SHOULD-NOT) Don't trust content received from a server other than the content's origin without some form of verification. test "inbox accept SHOULD NOT trust unverified content" in module TODO_Test
+- [ ] 1. (inbox:accept:follow:add-actor-to-users-followers:SHOULD) Add the actor to the object user's Followers Collection. test "inbox accept follow SHOULD add actor to users followers" in module TODO_Test
+- [ ] 1. (inbox:accept:follow:generate-accept-or-reject:SHOULD) Generates either an Accept or Reject activity with Follow as object and deliver to actor of the Follow. test "inbox accept follow SHOULD generate accept or reject" in module TODO_Test
+- [ ] 1. (inbox:accept:accept:add-actor-to-users-following:SHOULD) If in reply to a Follow activity, adds actor to receiver's Following Collection. test "inbox accept accept SHOULD add actor to users following" in module TODO_Test
+- [ ] 1. (inbox:accept:reject:add-actor-to-users-following:MUST-NOT) If in reply to a Follow activity, MUST NOT add actor to receiver's Following Collection. test "inbox accept reject MUST NOT add actor to users following" in module TODO_Test
+- [ ] 1. (inbox:accept:add:add-to-collection:SHOULD) Add the object to the Collection specified in the 'target' property, unless not allowed to per requirements in 7.8. test "inbox accept add SHOULD add to collection" in module TODO_Test
+- [ ] 1. (inbox:accept:remove:remove-from-collection:SHOULD) Remove the object from the Collection specified in the 'target' property, unless not allowed per requirements in 7.9. test "inbox accept remove SHOULD remove from collection" in module TODO_Test
+- [ ] 1. (inbox:accept:like:indicate-like-performed:SHOULD) Perform appropriate indication of the like being performed. See 7.10 for examples.. test "inbox accept like SHOULD indicate like performed" in module TODO_Test
+- [ ] 1. (inbox:accept:announce:add-to-shares-collection:SHOULD) Increments object's count of shares by adding the received activity to the 'shares' collection if this collection is present. test "inbox accept announce SHOULD add to shares collection" in module TODO_Test
+- [ ] 1. (inbox:accept:undo-federated:NON-NORMATIVE) Performs Undo of object in federated context. test "inbox accept MAY undo federated (non-normative)" in module TODO_Test
+- [ ] 1. (inbox:accept:validate-content:SHOULD) Validate the content they receive to avoid content spoofing attacks. test "inbox accept SHOULD validate content" in module TODO_Test
+- [ ] 1. (server:inbox:respond-to-get:NON-NORMATIVE) Server responds to GET request at inbox URL. test "server inbox MAY respond to get (non-normative)" in module TODO_Test
+- [ ] 1. (server:inbox:be-orderedCollection:MUST) inbox is an OrderedCollection. test "server inbox MUST be orderedCollection" in module TODO_Test
+- [ ] 1. (server:inbox:filter-per-permissions:SHOULD) Server filters inbox content according to the requester's permission. test "server inbox SHOULD filter per permissions" in module TODO_Test
+- [ ] 1. (server:object-retrieval:dereference-id:MAY) Allow dereferencing Object ids by responding to HTTP GET requests with a representation of the Object. test "server object retrieval MAY dereference id" in module TODO_Test
+- [ ] 1. (server:object-retrieval:respond-with-ld+json:MUST) Respond with the ActivityStreams object representation in response to requests that primarily Accept the media type application/ld+json; profile="https://www.w3.org/ns/activitystreams". test "server object retrieval MUST respond with ld+json" in module TODO_Test
+- [ ] 1. (server:object-retrieval:respond-with-activity+json:SHOULD) Respond with the ActivityStreams object representation in response to requests that primarily Accept the media type application/activity+json. test "server object retrieval SHOULD respond with activity+json" in module TODO_Test
+- [ ] 1. (server:object-retrieval:deleted-object:respond-with-tombstone:MAY) Responds with response body that is an ActivityStreams Object of type Tombstone, if the server is choosing to disclose that the object has been removed. test "server object retrieval deleted object MAY respond with tombstone" in module TODO_Test
+- [ ] 1. (server:object-retrieval:deleted-object:respond-with-410-status:SHOULD) Respond with 410 Gone status code if Tombstone is in response body, otherwise responds with 404 Not Found. test "server object retrieval deleted object SHOULD respond with 410 status" in module TODO_Test
+- [ ] 1. (server:object-retrieval:deleted-object:respond-with-404-status:SHOULD) Respond with 404 status code for Object URIs that have never existed. test "server object retrieval deleted object SHOULD respond with 404 status" in module TODO_Test
+- [ ] 1. (server:object-retrieval:respond-with-private-403-or-404-status:SHOULD) Respond with a 403 Forbidden status code to all requests that access Objects considered Private; or 404 if the server does not want to disclose the existence of the object; or another HTTP status code if specified by the authorization method. test "server object retrieval SHOULD respond with private 403 or 404 status" in module TODO_Test
+- [ ] 1. (server:security-considerations:verify-content-posted-by-actor:NON-NORMATIVE) Server verifies that the new content is really posted by the actor indicated in Objects received in inbox and outbox. test "server security considerations MAY verify content posted by actor (non-normative)" in module TODO_Test
+- [ ] 1. (server:security-considerations:not-deliver-to-localhost:NON-NORMATIVE) By default, implementation does not make HTTP requests to localhost when delivering Activities. test "server security considerations MAY not deliver to localhost (non-normative)" in module TODO_Test
+- [ ] 1. (server:security-considerations:apply-uri-scheme-whitelist:NON-NORMATIVE) Implementation applies a whitelist of allowed URI protocols before issuing requests, e.g. for inbox delivery. test "server security considerations MAY apply uri scheme whitelist (non-normative)" in module TODO_Test
+- [ ] 1. (server:security-considerations:filter-incoming-content:NON-NORMATIVE) Server filters incoming content both by local untrusted users and any remote users through some sort of spam filter. test "server security considerations MAY filter incoming content (non-normative)" in module TODO_Test
+- [ ] 1. (server:security-considerations:sanitize-fields:NON-NORMATIVE) Implementation takes care to sanitize fields containing markup to prevent cross site scripting attacks). test "server security considerations MAY sanitize fields (non-normative)" in module TODO_Test
+- [ ] 1. (client:submission:discover-url-from-profile:MUST) Client discovers the URL of a user's outbox from their profile. test "client submission MUST discover url from profile" in module TODO_Test
+- [ ] 1. (client:submission:submit-post-with-content-type:MUST) Client submits activity by sending an HTTP post request to the outbox URL with the Content-Type of application/ld+json; profile="https://www.w3.org/ns/activitystreams". test "client submission MUST submit post with content type" in module TODO_Test
+- [ ] 1. (client:submission:submit-objects:MUST) Client submission request body is either a single Activity or a single non-Activity Object. test "client submission MUST submit objects" in module TODO_Test
+- [ ] 1. (client:submission:submit-objects:provide-object:MUST) Clients provide the 'object' property when submitting the following activity types to an outbox: Create, Update, Delete, Follow, Add, Remove, Like, Block, Undo. test "client submission submit objects MUST provide object" in module TODO_Test
+- [ ] 1. (client:submission:submit-objects:provide-target:MUST) Clients provide the 'target' property when submitting the following activity types to an outbox: Add, Remove.. test "client submission submit objects MUST provide target" in module TODO_Test
+- [ ] 1. (client:submission:be-authenticated:MUST) Client submission request is authenticated with the credentials of the user to whom the outbox belongs. test "client submission MUST be authenticated" in module TODO_Test
+- [ ] 1. (client:submission:support-uploading-media:MUST) Client supports uploading media by sending a multipart/form-data request body. test "client submission MUST support uploading media" in module TODO_Test
+- [ ] 1. (client:submission:recursively-add-targets:SHOULD) Before submitting a new activity or object, Client infers appropriate target audience by recursively looking at certain properties--e.g. 'inReplyTo', See Section 7--and adds these targets to the new submission's audience. test "client submission SHOULD recursively add targets" in module TODO_Test
+- [ ] 1. (client:submission:recursively-add-targets:limit-depth:SHOULD) Client limits depth of this recursion. test "client submission recursively add targets SHOULD limit depth" in module TODO_Test
+- [ ] 1. (client:retrieval:accept-ld+json-header:MUST) When retrieving objects, Client specifies an Accept header with the application/ld+json; profile="https://www.w3.org/ns/activitystreams" media type. test "client retrieval MUST accept ld+json header" in module TODO_Test
