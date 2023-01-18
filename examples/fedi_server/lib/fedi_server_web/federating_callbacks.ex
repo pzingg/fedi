@@ -42,7 +42,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   to `post_inbox` will do so when handling the error.
   """
   @impl true
-  def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
+  def post_inbox_request_body_hook(_context, %Plug.Conn{} = conn, _activity) do
     # TODO IMPL
     {:ok, conn}
   end
@@ -65,7 +65,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   @impl true
-  def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
+  def authenticate_post_inbox(_context, %Plug.Conn{} = conn) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
@@ -91,7 +91,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   @impl true
-  def authorize_post_inbox(context, %Plug.Conn{} = conn) do
+  def authorize_post_inbox(context, %Plug.Conn{} = conn, _activity) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
     {:ok, conn, true}
@@ -112,9 +112,9 @@ defmodule FediServerWeb.FederatingCallbacks do
   Request status is sent in the response.
   """
   @impl true
-  def post_inbox(context, %Plug.Conn{} = conn, %URI{} = inbox_iri, activity) do
+  def post_inbox(context, %URI{} = inbox_iri, activity) do
     # TODO IMPL
-    {:ok, conn}
+    :ok
   end
 
   @doc """
@@ -140,7 +140,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   @impl true
   def inbox_fowarding(context, %URI{} = inbox_iri, activity) do
     # TODO IMPL
-    {:error, "Unimplemented"}
+    :ok
   end
 
   @doc """
@@ -202,6 +202,15 @@ defmodule FediServerWeb.FederatingCallbacks do
   @impl true
   def max_delivery_recursion_depth(context) do
     {:ok, 4}
+  end
+
+  @doc """
+  Determines what action to take for this particular callback
+  if a Follow activity is handled.
+  """
+  @impl true
+  def on_follow(context) do
+    {:ok, :automatically_accept}
   end
 
   @doc """

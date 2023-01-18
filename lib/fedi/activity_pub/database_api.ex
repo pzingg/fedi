@@ -5,13 +5,13 @@ defmodule Fedi.ActivityPub.DatabaseApi do
 
   alias Fedi.ActivityPub.Actor
 
-  @type transport_params() :: Actor.c2s_data() | Actor.s2s_data()
+  @type transport_params() :: ActorFacade.c2s_data() | ActorFacade.s2s_data()
 
   @doc """
   Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
   contains the specified 'id'.
   """
-  @callback colletion_contains?(inbox :: struct(), coll_id :: URI.t()) ::
+  @callback collection_contains?(inbox :: struct(), coll_id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
 
   @doc """

@@ -7,7 +7,9 @@ defmodule Fedi.ActivityPub.SocialApi do
   server protocol, or "Social API".
   """
 
-  @type context() :: Fedi.ActivityPub.Actor.c2s_context()
+  alias Fedi.ActivityPub.ActorFacade
+
+  @type context() :: ActorFacade.c2s_context()
 
   @doc """
   Hook callback after parsing the request body for a client request
@@ -30,7 +32,7 @@ defmodule Fedi.ActivityPub.SocialApi do
   @callback post_outbox_request_body_hook(
               context :: context(),
               conn :: Plug.Conn.t(),
-              data :: term()
+              activity :: struct()
             ) ::
               {:ok, response :: Plug.Conn.t()} | {:error, term()}
 
@@ -87,5 +89,5 @@ defmodule Fedi.ActivityPub.SocialApi do
   default_callback.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}
+              :pass | {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}
 end

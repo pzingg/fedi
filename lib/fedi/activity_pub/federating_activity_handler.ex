@@ -10,20 +10,20 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
-  alias Fedi.ActivityPub.Actor
+  alias Fedi.ActivityPub.ActorFacade
   alias Fedi.ActivityPub.Utils, as: APUtils
 
   @doc """
   Implements the federating Create activity side effects.
   """
   @impl true
-  def create(%{database: database} = context, activity)
+  def create(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, created} when is_list(created) <- create_objects(context, values),
-         {:ok, _created, _raw_json} <- apply(database, :create, [activity]) do
-      Actor.handle_activity(context, :s2s, activity)
+         {:ok, _created, _raw_json} <- ActorFacade.db_create(context, activity) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -31,13 +31,13 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def create_objects(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
         values
       )
       when is_list(values) do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
-        case apply(database, :create, [as_type]) do
+        case ActorFacade.db_create(context, as_type) do
           {:ok, created, _raw_json} ->
             {:cont, [created | acc]}
 
@@ -46,9 +46,9 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
         end
 
       %{iri: %URI{} = iri}, acc ->
-        with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+        with {:ok, m} <- ActorFacade.db_dereference(context, inbox_iri, app_agent, iri),
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
-          case apply(database, :create, [as_type]) do
+          case ActorFacade.db_create(context, as_type) do
             {:ok, created, _raw_json} ->
               {:cont, [created | acc]}
 
@@ -72,24 +72,24 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Update activity side effects.
   """
   @impl true
-  def update(%{database: database} = context, activity) when is_struct(activity) do
+  def update(context, activity) when is_struct(activity) do
     with {:ok, %{values: values}} <-
            APUtils.objects_match_activity_origin?(activity),
          {:ok, _updated} <-
-           update_objects(database, values),
-         {:ok, _updated, _raw_json} <-
-           apply(database, :update, [activity]) do
-      Actor.handle_activity(context, :s2s, activity)
+           update_objects(context, values),
+         {:ok, _updated} <-
+           ActorFacade.db_update(context, activity) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
     end
   end
 
-  def update_objects(database, values) do
+  def update_objects(context, values) do
     Enum.reduce_while(values, [], fn
       %{member: as_type}, acc when is_struct(as_type) ->
-        case apply(database, :update, [as_type]) do
-          {:ok, updated, _raw_json} -> {:cont, [updated | acc]}
+        case ActorFacade.db_update(context, as_type) do
+          {:ok, updated} -> {:cont, [updated | acc]}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
@@ -106,31 +106,27 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Delete activity side effects.
   """
   @impl true
-  def delete(%{database: database} = context, activity) when is_struct(activity) do
+  def delete(context, activity) when is_struct(activity) do
     with {:ok, %{values: values}} <- APUtils.objects_match_activity_origin?(activity),
-         {:ok, _deleted} <- delete_objects(database, values),
-         {:ok, _} <- apply(database, :delete, [activity]) do
-      Actor.handle_activity(context, :s2s, activity)
+         :ok <- delete_objects(context, values),
+         :ok <- ActorFacade.db_delete(context, activity) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
     end
   end
 
-  def delete_objects(database, values) do
-    Enum.reduce_while(values, [], fn
+  def delete_objects(context, values) do
+    Enum.reduce_while(values, :ok, fn
       %{member: as_type}, acc when is_struct(as_type) ->
-        case apply(database, :delete, [as_type]) do
-          {:ok, deleted} -> {:cont, [deleted | acc]}
+        case ActorFacade.db_delete(context, as_type) do
+          :ok -> {:cont, acc}
           {:error, reason} -> {:halt, {:error, reason}}
         end
 
       _, _ ->
         {:halt, {:error, "Update requires an object to be wholly provided"}}
     end)
-    |> case do
-      {:error, reason} -> {:error, reason}
-      deleted -> {:ok, Enum.reverse(deleted)}
-    end
   end
 
   @doc """
@@ -149,32 +145,27 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   """
   @impl true
   def follow(
-        %{database: database, data: %{on_follow: on_follow, inbox_iri: inbox_iri}} = context,
+        %{data: %{on_follow: on_follow, box_iri: %URI{} = inbox_iri}} = context,
         %{__struct__: _, alias: alias_} = activity
       ) do
-    Logger.error("S2S Follow")
-
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
-         {:ok, %URI{} = actor_iri} <- apply(database, :actor_for_inbox, [inbox_iri]) do
+         {:ok, %URI{} = actor_iri} <- ActorFacade.db_actor_for_inbox(context, inbox_iri) do
       case is_me?(values, actor_iri, on_follow != :do_nothing) do
         {:error, reason} ->
           {:error, reason}
 
         true ->
-          Logger.error("S2S Follow: it's me!")
-
           case prepare_and_deliver_follow(context, activity, actor_iri, on_follow, alias_) do
             {:error, reason} ->
               {:error, reason}
 
             _ ->
-              Actor.handle_activity(context, :s2s, activity)
+              ActorFacade.handle_s2s_activity(context, activity)
           end
 
         _ ->
-          Logger.error("S2S Follow: it's not me")
-          Actor.handle_activity(context, :s2s, activity)
+          ActorFacade.handle_s2s_activity(context, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -205,7 +196,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def prepare_and_deliver_follow(
-        %{database: database, data: %{box_iri: _box_iri}} = context,
+        %{data: %{box_iri: inbox_iri}} = context,
         follow,
         actor_iri,
         on_follow,
@@ -251,13 +242,21 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
         # If automatically rejecting, do not update the
         # followers collection.
-        update_collection(database, "/followers", actor_iri, recipients)
+        update_collection(context, "/followers", actor_iri, recipients)
       else
         :ok
       end
       |> case do
-        {:error, reason} -> {:error, reason}
-        _ -> Actor.delegate(context, :s2s, :deliver, [response])
+        {:error, reason} ->
+          {:error, reason}
+
+        _ ->
+          with {:ok, outbox_iri} <- ActorFacade.db_outbox_for_inbox(context, inbox_iri),
+               {:ok, response} <- ActorFacade.add_new_ids(context, response) do
+            ActorFacade.deliver(context, outbox_iri, response)
+          else
+            {:error, reason} -> {:error, reason}
+          end
       end
     else
       {:error, reason} -> {:error, reason}
@@ -265,22 +264,22 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     end
   end
 
-  def update_collection(database, collection, %URI{path: path} = actor_iri, recipients) do
+  def update_collection(context, collection, %URI{path: path} = actor_iri, recipients) do
     coll_id = %URI{actor_iri | path: path <> collection}
     Logger.error("S2S update collection #{coll_id} with #{inspect(recipients)}")
-    apply(database, :update_collection, [coll_id, %{add: recipients}])
+    ActorFacade.db_update_collection(context, coll_id, %{add: recipients})
   end
 
   @doc """
   Implements the federating Accept activity side effects.
   """
   @impl true
-  def accept(%{database: database, inbox_iri: inbox_iri} = context, %{alias: alias_} = activity)
+  def accept(%{data: %{box_iri: inbox_iri}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, actor_iri} <-
-           apply(database, :actor_for_inbox, [inbox_iri]),
+           ActorFacade.db_actor_for_inbox(context, inbox_iri),
          # Determine if we are in a follow on the 'object' property.
          # TODO Handle Accept multiple Follow
          {:ok, _follow, follow_id} <-
@@ -296,7 +295,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          # Follow above.
          # TODO Separate this logic to avoid redundancy
          {:ok, follow} <-
-           apply(database, :get, [follow_id]),
+           ActorFacade.db_get(context, follow_id),
          # Ensure that we are one of the actors on the Follow.
          {:ok, %URI{}} <-
            follow_is_me?(follow, actor_iri),
@@ -312,17 +311,17 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
            {:all_on_original,
             MapSet.subset?(MapSet.new(accept_actors), MapSet.new(follow_actors))},
          {:ok, _} <-
-           update_collection(database, "/following", actor_iri, accept_actors) do
-      Actor.handle_activity(context, :s2s, activity)
+           update_collection(context, "/following", actor_iri, accept_actors) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} ->
         {:error, reason}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: activity)
+        {:error, Utils.err_object_required(activity: activity)}
 
       {:activity_actor, _} ->
-        Utils.err_actor_required(activity: activity)
+        {:error, Utils.err_actor_required(activity: activity)}
 
       {:follow_object, _} ->
         {:error, "No object in original Follow activity"}
@@ -334,14 +333,14 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def find_follow(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
         values,
         %URI{} = actor_iri
       ) do
     Enum.reduce_while(values, {:error, "Not found"}, fn
       # Attempt to dereference the IRI instead
       %{iri: %URI{} = iri}, acc ->
-        with {:ok, m} <- apply(database, :dereference, [inbox_iri, app_agent, iri]),
+        with {:ok, m} <- ActorFacade.db_dereference(context, inbox_iri, app_agent, iri),
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
           case follow_is_me?(as_type, actor_iri) do
             {:error, reason} -> {:halt, {:error, reason}}
@@ -385,21 +384,21 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   """
   @impl true
   def reject(context, activity) when is_struct(context) and is_struct(activity) do
-    Actor.handle_activity(context, :s2s, activity)
+    ActorFacade.handle_s2s_activity(context, activity)
   end
 
   @doc """
   Implements the federating Add activity side effects.
   """
   @impl true
-  def add(%{database: database} = context, activity)
+  def add(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
-         :ok <- APUtils.add(database, object, target) do
-      Actor.handle_activity(context, :s2s, activity)
+         :ok <- APUtils.add(context, object, target) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -411,14 +410,14 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Remove activity side effects.
   """
   @impl true
-  def remove(%{database: database} = context, activity)
+  def remove(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
-         :ok <- APUtils.remove(database, object, target) do
-      Actor.handle_activity(context, :s2s, activity)
+         :ok <- APUtils.remove(context, object, target) do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -430,7 +429,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Like activity side effects.
   """
   @impl true
-  def like(%{database: database} = context, activity)
+  def like(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
@@ -439,9 +438,9 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, op_ids} <-
            APUtils.get_ids(object_prop) do
       Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [obj_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, obj_id)},
              {:ok, %{alias: alias_, properties: properties} = like} <-
-               apply(database, :get, [obj_id]) do
+               ActorFacade.db_get(context, obj_id) do
           # Get 'likes' property on the object, creating default if
           # necessary.
           # Get 'likes' value, defaulting to a collection.
@@ -471,7 +470,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           with col when is_struct(col) <- col,
                prop <- struct(prop, member: col),
                like <- struct(like, properties: Map.put(properties, "likes", prop)),
-               {:ok, _updated, _raw_json} <- apply(database, :update, [like]) do
+               {:ok, _updated} <- ActorFacade.db_update(context, like) do
             {:cont, acc}
           else
             {:error, reason} -> {:halt, {:error, reason}}
@@ -484,7 +483,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end)
       |> case do
         {:error, reason} -> {:error, reason}
-        _ -> Actor.handle_activity(context, :s2s, activity)
+        _ -> ActorFacade.handle_s2s_activity(context, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -497,7 +496,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Announce activity side effects.
   """
   @impl true
-  def announce(%{database: database} = context, activity)
+  def announce(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
@@ -506,9 +505,9 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, op_ids} <-
            APUtils.get_ids(object_prop) do
       Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [obj_id])},
+        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, obj_id)},
              {:ok, %{alias: alias_, properties: properties} = share} <-
-               apply(database, :get, [obj_id]) do
+               ActorFacade.db_get(context, obj_id) do
           # Get 'shares' property on the object, creating default if
           # necessary.
           # Get 'shares' value, defaulting to a collection.
@@ -538,7 +537,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
           with col when is_struct(col) <- col,
                prop <- struct(prop, member: col),
                share <- struct(share, properties: Map.put(properties, "shares", prop)),
-               {:ok, _updated, _raw_json} <- apply(database, :update, [share]) do
+               {:ok, _updated} <- ActorFacade.db_update(context, share) do
             {:cont, acc}
           else
             {:error, reason} -> {:halt, {:error, reason}}
@@ -551,7 +550,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end)
       |> case do
         {:error, reason} -> {:error, reason}
-        _ -> Actor.handle_activity(context, :s2s, activity)
+        _ -> ActorFacade.handle_s2s_activity(context, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -566,7 +565,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @impl true
   def undo(context, activity) when is_struct(activity) do
     with :ok <- APUtils.object_actors_match_activity_actors?(context, activity) do
-      Actor.handle_activity(context, :s2s, activity)
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
     end
@@ -580,7 +579,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      Actor.handle_activity(context, :s2s, activity)
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)

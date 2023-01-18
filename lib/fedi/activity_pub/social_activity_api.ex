@@ -16,6 +16,8 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   type and extension. The unhandled ones are passed to `default_callback/2`.
   """
 
+  alias Fedi.ActivityPub.ActorFacade
+
   @optional_callbacks [
     create: 2,
     update: 2,
@@ -28,9 +30,8 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
     block: 2
   ]
 
-  @type context() :: Fedi.ActivityPub.Actor.c2s_context()
-  @type handler_result() ::
-          :pass | {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}
+  @type context() :: ActorFacade.c2s_context()
+  @type handler_result() :: ActorFacade.c2s_handler_result()
 
   @doc """
   Handles additional side effects for the Create ActivityStreams
@@ -40,7 +41,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   property and copies recipients between the Create activity and all
   objects. It then saves the entry in the database.
   """
-  @callback create(actor :: context(), activity :: struct()) :: handler_result()
+  @callback create(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Update ActivityStreams
@@ -50,7 +51,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   the stored objects. Any top-level null literals will be deleted on
   the stored objects as well.
   """
-  @callback update(actor :: context(), activity :: struct()) :: handler_result()
+  @callback update(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Delete ActivityStreams
@@ -59,7 +60,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   The wrapping callback replaces the object(s) with tombstones in the
   database.
   """
-  @callback delete(actor :: context(), activity :: struct()) :: handler_result()
+  @callback delete(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Follow ActivityStreams
@@ -68,7 +69,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   The wrapping callback only ensures the 'Follow' has at least one
   'object' entry, but otherwise has no default side effect.
   """
-  @callback follow(actor :: context(), activity :: struct()) :: handler_result()
+  @callback follow(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Add ActivityStreams
@@ -78,7 +79,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   'target' collection if the 'target' collection(s) live on this
   server.
   """
-  @callback add(actor :: context(), activity :: struct()) :: handler_result()
+  @callback add(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Remove ActivityStreams
@@ -88,7 +89,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   'target' collection if the 'target' collection(s) live on this
   server.
   """
-  @callback remove(actor :: context(), activity :: struct()) :: handler_result()
+  @callback remove(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Like ActivityStreams
@@ -97,7 +98,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   The wrapping function will add the objects on the activity to the
   "liked" collection of this actor.
   """
-  @callback like(actor :: context(), activity :: struct()) :: handler_result()
+  @callback like(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Undo ActivityStreams
@@ -111,7 +112,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   It is expected that the application will implement the proper
   reversal of activities that are being undone.
   """
-  @callback undo(actor :: context(), activity :: struct()) :: handler_result()
+  @callback undo(context :: context(), activity :: struct()) :: handler_result()
 
   @doc """
   Handles additional side effects for the Block ActivityStreams
@@ -125,5 +126,5 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
   Note that the library does not federate 'Block' activities received in the
   Social API.
   """
-  @callback block(actor :: context(), activity :: struct()) :: handler_result()
+  @callback block(context :: context(), activity :: struct()) :: handler_result()
 end

@@ -49,7 +49,7 @@ defmodule FediServerWeb.SocialCallbacks do
   to post_outbox will do so when handling the error.
   """
   @impl true
-  def post_outbox_request_body_hook(context, %Plug.Conn{} = conn, data) do
+  def post_outbox_request_body_hook(_context, %Plug.Conn{} = conn, _activity) do
     {:ok, conn}
   end
 
@@ -63,7 +63,8 @@ defmodule FediServerWeb.SocialCallbacks do
   """
   @impl true
   def add_new_ids(context, activity) do
-    :pass
+    # Handled by SideEffectActor.
+    {:error, "Unexpected"}
   end
 
   @doc """
@@ -98,8 +99,8 @@ defmodule FediServerWeb.SocialCallbacks do
   """
   @impl true
   def wrap_in_create(context, value, %URI{} = outbox_iri) do
-    # {:ok, create}
-    {:error, "Unimplemented"}
+    # Handled by SideEffectActor.
+    {:error, "Unexpected"}
   end
 
   @doc """
@@ -119,7 +120,7 @@ defmodule FediServerWeb.SocialCallbacks do
   def follow(context, activity) do
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
-         {:follwer_id, %URI{} = follower_id} <- {:follwer_id, APUtils.to_id(actor)},
+         {:follower_id, %URI{} = follower_id} <- {:follower_id, APUtils.to_id(actor)},
          {:following_id, %URI{} = following_id} <- {:following_id, APUtils.to_id(object)},
          {:ok, %User{}} <- Activities.ensure_user(follower_id, true),
          # Insert remote following user if not in db

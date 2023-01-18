@@ -337,26 +337,26 @@ defmodule FediServer.HTTPClient do
     end
   end
 
-  def validate_uri(%URI{scheme: scheme, host: host, path: path} = uri) do
-    if Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
-         !is_nil(path) && String.length(path) > 1 do
-      uri
-    else
-      nil
-    end
+  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = uri) do
+    Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
+      !is_nil(path) && String.length(path) > 1
   end
 
+  @doc """
+  We expect key_id to be something like "@pzingg@mastodon.cloud".
+  """
   def key_id_to_actor_id(key_id) do
-    with %URI{} = actor_id <-
-           key_id
-           |> URI.parse()
-           |> Map.put(:fragment, nil)
-           |> remove_suffix(@known_public_key_suffixes)
-           |> validate_uri(),
-         %{"ap_id" => ap_id} <- WebFinger.finger(actor_id) do
-      {:ok, ap_id}
-    else
-      _ ->
+    account =
+      key_id
+      |> URI.parse()
+      |> Map.put(:fragment, nil)
+      |> remove_suffix(@known_public_key_suffixes)
+
+    case WebFinger.finger(account) do
+      {:ok, %{"ap_id" => ap_id}} ->
+        {:ok, ap_id}
+
+      {:error, _reason} ->
         {:error, "Could not finger #{key_id}"}
     end
   end

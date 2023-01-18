@@ -9,7 +9,7 @@ defmodule FediServerWeb.FollowingController do
   def following(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # TODO Check authentication and authorization
     handle_collection(conn, actor)
@@ -18,7 +18,7 @@ defmodule FediServerWeb.FollowingController do
   def followers(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # TODO Check authentication and authorization
     handle_collection(conn, actor)

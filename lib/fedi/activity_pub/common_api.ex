@@ -7,7 +7,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   application.
   """
 
-  @type context :: Fedi.ActivityPub.Actor.context()
+  @type context :: Fedi.ActivityPub.ActorFacade.context()
 
   @doc """
   Delegates the authentication of a GET to an inbox.

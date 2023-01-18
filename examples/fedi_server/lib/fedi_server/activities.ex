@@ -31,7 +31,7 @@ defmodule FediServer.Activities do
   Called from SideEffectActor post_inbox.
   """
   @impl true
-  def colletion_contains?(%URI{path: path} = coll_id, %URI{} = id) do
+  def collection_contains?(%URI{path: path} = coll_id, %URI{} = id) do
     with {:ok, %URI{} = actor_iri} <- actor_for_collection(coll_id) do
       actor_id = URI.to_string(actor_iri)
 
@@ -327,8 +327,8 @@ defmodule FediServer.Activities do
         {:ok, %Mailbox{id: id} = mailbox} ->
           {:cont, [{params.ap_id, id} | acc]}
 
-        {:error, changeset} ->
-          {:halt, {:error, describe_errors(changeset)}}
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     else
       {:error, reason} -> {:halt, {:error, reason}}
@@ -543,16 +543,11 @@ defmodule FediServer.Activities do
              data: json_data
            }) do
       case repo_insert(params.schema, params) do
-        {:ok, object} ->
-          {:ok, as_type, json_data}
+        {:error, reason} ->
+          {:error, reason}
 
-        {:error, %Ecto.Changeset{} = changeset} ->
-          if unique_constraint_error(changeset) do
-            {:ok, as_type, json_data}
-          else
-            Logger.error("Create failed: #{describe_errors(changeset)}")
-            {:error, "Internal database error"}
-          end
+        {:ok, _object} ->
+          {:ok, as_type, json_data}
       end
     else
       {:get_actor, _} ->
@@ -608,7 +603,7 @@ defmodule FediServer.Activities do
              data: json_data
            }),
          {:ok, object} <- repo_update(params.schema, params) do
-      {:ok, as_type, json_data}
+      {:ok, object}
     else
       {:get_actor, _} ->
         {:error, "Missing actor in activity"}
@@ -631,7 +626,7 @@ defmodule FediServer.Activities do
              data: json_data
            }),
          {:ok, object} <- repo_update(params.schema, params) do
-      {:ok, as_type, json_data}
+      {:ok, object}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         Logger.error("Update failed: #{describe_errors(changeset)}")
@@ -804,7 +799,7 @@ defmodule FediServer.Activities do
     %FollowingRelationship{}
     |> FollowingRelationship.changeset(params)
     |> Repo.insert(on_conflict: :nothing, returning: true)
-    |> log_insert_error(:following)
+    |> handle_insert_result(:following)
   end
 
   def unfollow(%URI{} = follower, %URI{} = following) do
@@ -1059,7 +1054,7 @@ defmodule FediServer.Activities do
 
     Object.changeset(%Object{id: ulid}, params)
     |> Repo.insert(returning: true)
-    |> log_insert_error(:objects)
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(:activities, params) do
@@ -1067,7 +1062,7 @@ defmodule FediServer.Activities do
 
     Activity.changeset(%Activity{id: ulid}, params)
     |> Repo.insert(returning: true)
-    |> log_insert_error(:objects)
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(:actors, params) do
@@ -1075,13 +1070,13 @@ defmodule FediServer.Activities do
 
     User.changeset(%User{id: ulid}, params)
     |> Repo.insert(returning: true)
-    |> log_insert_error(:objects)
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(:mailboxes, params) do
     Mailbox.changeset(%Mailbox{}, params)
     |> Repo.insert(returning: true)
-    |> log_insert_error(:objects)
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(:likes, params) do
@@ -1089,24 +1084,28 @@ defmodule FediServer.Activities do
 
     ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :like))
     |> Repo.insert(on_conflict: :nothing, returning: true)
-    |> log_insert_error(:objects)
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(:shares, params) do
     ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :share))
     |> Repo.insert(on_conflict: :nothing, returning: true)
-    |> log_insert_error(:objects)
-  end
-
-  def log_insert_error({:ok, data}, _), do: {:ok, data}
-
-  def log_insert_error({:error, changeset}, type) do
-    Logger.error("Failed to insert #{type}: #{describe_errors(changeset)}")
-    {:error, "Internal database error"}
+    |> handle_insert_result(:objects)
   end
 
   def repo_insert(other, _) do
     {:error, "Invalid schema for insert #{other}"}
+  end
+
+  def handle_insert_result({:ok, data}, _), do: {:ok, data}
+
+  def handle_insert_result({:error, %Ecto.Changeset{} = changeset}, type) do
+    if unique_constraint_error(changeset) do
+      {:ok, :already_inserted}
+    else
+      Logger.error("Failed to insert #{type}: #{describe_errors(changeset)}")
+      {:error, "Internal database error"}
+    end
   end
 
   def repo_update(:objects, params) do
@@ -1137,7 +1136,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_update(:mailboxes, params) do
-    User.changeset(%Mailbox{id: params.ulid}, params) |> Repo.update(returning: true)
+    Mailbox.changeset(%Mailbox{id: params.ulid}, params) |> Repo.update(returning: true)
   end
 
   def repo_update(other, _) do

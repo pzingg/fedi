@@ -17,7 +17,9 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   implementation is completely provided out of the box.
   """
 
-  @type context() :: Fedi.ActivityPub.Actor.context()
+  alias Fedi.ActivityPub.ActorFacade
+
+  @type context() :: ActorFacade.context()
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -37,7 +39,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   send a response to the connection as is expected that the caller
   to `post_inbox` will do so when handling the error.
   """
-  @callback post_inbox_request_body_hook(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback post_inbox_request_body_hook(
+              context :: context(),
+              conn :: Plug.Conn.t(),
+              activity :: struct()
+            ) ::
               {:ok, Plug.Conn.t()} | {:error, term()}
 
   @doc """
@@ -58,7 +64,11 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   send a response to the connection as is expected that the caller
   to `post_outbox` will do so when handling the error.
   """
-  @callback post_outbox_request_body_hook(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback post_outbox_request_body_hook(
+              context :: context(),
+              conn :: Plug.Conn.t(),
+              activity :: struct()
+            ) ::
               {:ok, Plug.Conn.t()} | {:error, term()}
 
   @doc """
@@ -78,7 +88,10 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   authenticated must be true. The request will continue
   to be processed.
   """
-  @callback authenticate_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback authenticate_post_inbox(
+              context :: context(),
+              conn :: Plug.Conn.t()
+            ) ::
               {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
 
   @doc """

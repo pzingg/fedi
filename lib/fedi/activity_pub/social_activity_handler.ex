@@ -7,10 +7,10 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
 
   require Logger
 
-  alias Fedi.ActivityPub.Actor
-  alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
+  alias Fedi.ActivityPub.ActorFacade
+  alias Fedi.ActivityPub.Utils, as: APUtils
 
   @doc """
   Implements the social Create activity side effects.
@@ -36,10 +36,9 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   """
   @impl true
   def create(
-        %{database: database, data: context_data} = context,
+        %{data: context_data} = context,
         %{alias: alias_, properties: _} = activity
-      )
-      when is_atom(database) do
+      ) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
@@ -90,7 +89,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
             %{member: %{__struct__: _, properties: _} = as_type}, acc ->
               case APUtils.get_id(as_type) do
                 %URI{} = _id ->
-                  case apply(database, :create, [as_type]) do
+                  case ActorFacade.db_create(context, as_type) do
                     {:ok, _created, _raw_json} ->
                       {:cont, acc}
 
@@ -109,7 +108,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           end)
           |> case do
             {:error, reason} -> {:error, reason}
-            _ -> Actor.handle_activity(context, :c2s, activity)
+            _ -> ActorFacade.handle_c2s_activity(context, activity)
           end
 
         {:error, reason} ->
@@ -126,7 +125,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Update activity side effects.
   """
   @impl true
-  def update(%{database: database, data: %{raw_activity: raw_activity}} = context, activity)
+  def update(%{data: %{raw_activity: raw_activity}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)} do
@@ -135,7 +134,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
         %{member: object_type} = object_iter, acc when is_struct(object_type) ->
           case APUtils.get_id(object_iter) do
             %URI{} = id ->
-              with {:ok, as_type} <- apply(database, :get, [id]),
+              with {:ok, as_type} <- ActorFacade.db_get(context, id),
                    {:ok, m} <- Fedi.Streams.Serializer.serialize(as_type),
                    {:ok, new_m} <- Fedi.Streams.Serializer.serialize(object_type),
                    m <- Map.merge(m, new_m),
@@ -149,7 +148,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
                        end
                      end),
                    {:ok, new_type} <- Fedi.Streams.JSONResolver.resolve(m),
-                   {:ok, _updated, _raw_json} <- apply(database, :update, [new_type]) do
+                   {:ok, _updated} <- ActorFacade.db_update(context, new_type) do
                 {:cont, acc}
               else
                 {:error, reason} -> {:halt, {:error, reason}}
@@ -167,7 +166,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           {:error, reason}
 
         _ ->
-          Actor.handle_activity(context, :c2s, activity)
+          ActorFacade.handle_c2s_activity(context, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -184,7 +183,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   reference the deleted object.
   """
   @impl true
-  def delete(%{database: database} = context, activity)
+  def delete(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)} do
@@ -193,9 +192,9 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
         %{member: object_type} = object_iter, acc when is_struct(object_type) ->
           case APUtils.get_id(object_iter) do
             %URI{} = id ->
-              with {:ok, as_type} <- apply(database, :get, [id]),
+              with {:ok, as_type} <- ActorFacade.db_get(context, id),
                    tomb <- APUtils.to_tombstone(as_type, id),
-                   {:ok, _updated, _raw_json} <- apply(database, :update, [tomb]) do
+                   {:ok, _updated} <- ActorFacade.db_update(context, tomb) do
                 {:cont, acc}
               else
                 {:error, reason} -> {:halt, {:error, reason}}
@@ -213,7 +212,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           {:error, reason}
 
         _ ->
-          Actor.handle_activity(context, :c2s, activity)
+          ActorFacade.handle_c2s_activity(context, activity)
       end
     else
       {:error, reason} -> {:error, reason}
@@ -225,18 +224,16 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Follow activity side effects.
   """
   @impl true
-  def follow(%{database: database, data: %{box_iri: box_iri}} = context, activity)
+  def follow(%{data: %{box_iri: box_iri}} = context, activity)
       when is_struct(context) and is_struct(activity) do
-    Logger.error("C2S Follow")
-
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, following_ids} <- APUtils.get_ids(object),
          {:ok, %URI{path: actor_path} = actor_iri} <-
-           apply(database, :actor_for_outbox, [box_iri]),
+           ActorFacade.db_actor_for_outbox(context, box_iri),
          coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
-         apply(database, :update_collection, [coll_id, %{add: following_ids}]) do
-      Actor.handle_activity(context, :c2s, activity)
+         ActorFacade.db_update_collection(context, coll_id, %{add: following_ids}) do
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -258,7 +255,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.add(context, object, target) do
-      Actor.handle_activity(context, :c2s, activity)
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -277,7 +274,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:activity_target, %P.Target{values: [_ | _]} = target} <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.remove(context, object, target) do
-      Actor.handle_activity(context, :c2s, activity)
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -289,16 +286,16 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Like activity side effects.
   """
   @impl true
-  def like(%{database: database, data: %{box_iri: outbox_iri}} = context, activity)
+  def like(%{data: %{box_iri: outbox_iri}} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, %URI{path: actor_path} = actor_iri} <-
-           apply(database, :actor_for_outbox, [outbox_iri]),
+           ActorFacade.db_actor_for_outbox(context, outbox_iri),
          {:ok, object_ids} <- APUtils.get_ids(object),
          coll_id <- %URI{actor_iri | path: actor_path <> "/liked"},
-         {:ok, _oc} <- apply(database, :update_collection, [coll_id, %{add: object_ids}]) do
-      Actor.handle_activity(context, :c2s, activity)
+         {:ok, _oc} <- ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -318,7 +315,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
       context_data = Map.put(context_data, :deliverable, true)
       context = Map.put(context, :data, context_data)
-      Actor.handle_activity(context, :c2s, activity)
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
@@ -335,7 +332,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
            {:activity_object, Utils.get_object(activity)} do
       context_data = Map.put(context_data, :deliverable, true)
       context = Map.put(context, :data, context_data)
-      Actor.handle_activity(context, :c2s, activity)
+      ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)

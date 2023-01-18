@@ -16,12 +16,13 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   type and extension. The unhandled ones are passed to `default_callback/2`.
   """
 
+  alias Fedi.ActivityPub.ActorFacade
+
   @optional_callbacks [
     create: 2,
     update: 2,
     delete: 2,
     follow: 2,
-    on_follow: 1,
     add: 2,
     remove: 2,
     like: 2,
@@ -29,16 +30,8 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
     block: 2
   ]
 
-  @type context() :: Actor.s2s_context()
-  @type on_follow() :: Actor.on_follow()
-  @type handler_result() :: :pass | :ok | {:error, term()}
-
-  @doc """
-  Determines what action to take for this particular callback
-  if a Follow activity is handled.
-  """
-  @callback on_follow(context :: context()) ::
-              {:ok, on_follow()} | {:error, term()}
+  @type context() :: ActorFacade.s2s_context()
+  @type handler_result() :: ActorFacade.s2s_handler_result()
 
   @doc """
   Handles additional side effects for the Create ActivityStreams

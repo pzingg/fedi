@@ -8,14 +8,14 @@ defmodule FediServerWeb.OutboxController do
   def get_outbox(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
     handle_get_outbox(conn, actor, params)
   end
 
   def liked(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # Filtering on liked activities will be done
     # in Activities.get_outbox
@@ -50,7 +50,7 @@ defmodule FediServerWeb.OutboxController do
   def post_outbox(conn, %{"nickname" => nickname} = _params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # Pass the connection to the fedi Actor logic
     case Fedi.ActivityPub.Actor.handle_post_outbox(actor, conn) do

@@ -7,6 +7,7 @@ defmodule Fedi.ActivityPub.Utils do
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
+  alias Fedi.ActivityPub.ActorFacade
 
   @content_type_header "content-type"
   @accept_header "accept"
@@ -654,7 +655,7 @@ defmodule Fedi.ActivityPub.Utils do
   the 'object' property are all listed in the 'actor' property.
   """
   def object_actors_match_activity_actors?(
-        %{database: database} = context,
+        context,
         activity
       ) do
     with {:ok, box_iri, app_agent} <-
@@ -670,7 +671,7 @@ defmodule Fedi.ActivityPub.Utils do
         with {:object_id, %URI{} = iri} <- {:object_id, to_id(prop)},
              # Attempt to dereference the IRI, regardless whether it is a
              # type or IRI
-             {:ok, m} <- apply(database, :dereference, [box_iri, app_agent, iri]),
+             {:ok, m} <- ActorFacade.db_dereference(context, box_iri, app_agent, iri),
              {:ok, actor_type} <- Fedi.Streams.JSONResolver.resolve(m),
              {:object_actor, %{values: _} = object_actor_prop} when is_list(values) <-
                {:object_actor, Utils.get_actor(actor_type)},
@@ -682,6 +683,9 @@ defmodule Fedi.ActivityPub.Utils do
             {:halt, {:error, "Activity does not have all actors from its object's actors"}}
           end
         else
+          {:error, reason} ->
+            {:error, reason}
+
           {:object_id, _} ->
             {:halt, {:error, Utils.err_id_required(activity: activity)}}
 
@@ -717,12 +721,12 @@ defmodule Fedi.ActivityPub.Utils do
   Implements the logic of adding object ids to a target Collection or
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.
   """
-  def add(database, object_prop, target_prop) do
+  def add(context, object_prop, target_prop) do
     with {:ok, op_ids} <- get_ids(object_prop),
          {:ok, target_ids} <- get_ids(target_prop) do
       Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [target_id])},
-             {:ok, as_value} <- apply(database, :get, [target_id]) do
+        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, target_id)},
+             {:ok, as_value} <- ActorFacade.db_get(context, target_id) do
           cond do
             is_or_extends?(as_value, "OrderedCollection") ->
               Utils.append_iris(as_value, "orderedItems", op_ids)
@@ -738,9 +742,9 @@ defmodule Fedi.ActivityPub.Utils do
               {:halt, {:error, reason}}
 
             updated_value ->
-              case apply(database, :update, [updated_value]) do
+              case ActorFacade.db_update(context, updated_value) do
                 {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _updated, _raw_json} -> {:cont, acc}
+                {:ok, _updated} -> {:cont, acc}
               end
           end
         else
@@ -756,12 +760,12 @@ defmodule Fedi.ActivityPub.Utils do
   Implements the logic of removing object ids to a target Collection or
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.
   """
-  def remove(database, object_prop, target_prop) do
+  def remove(context, object_prop, target_prop) do
     with {:ok, op_ids} <- get_ids(object_prop),
          {:ok, target_ids} <- get_ids(target_prop) do
       Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, apply(database, :owns?, [target_id])},
-             {:ok, as_value} <- apply(database, :get, [target_id]) do
+        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, target_id)},
+             {:ok, as_value} <- ActorFacade.db_get(context, target_id) do
           cond do
             is_or_extends?(as_value, "OrderedCollection") ->
               Utils.remove_iris(as_value, "orderedItems", op_ids)
@@ -777,9 +781,9 @@ defmodule Fedi.ActivityPub.Utils do
               {:halt, {:error, reason}}
 
             updated_value ->
-              case apply(database, :update, [updated_value]) do
+              case ActorFacade.db_update(context, updated_value) do
                 {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _updated, _raw_json} -> {:cont, acc}
+                {:ok, _updated} -> {:cont, acc}
               end
           end
         else

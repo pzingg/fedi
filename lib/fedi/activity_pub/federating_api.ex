@@ -7,7 +7,10 @@ defmodule Fedi.ActivityPub.FederatingApi do
   server, or federating, protocol.
   """
 
-  @type context() :: Fedi.ActivityPub.Actor.s2s_context()
+  alias Fedi.ActivityPub.ActorFacade
+
+  @type context() :: ActorFacade.s2s_context()
+  @type on_follow() :: ActorFacade.on_follow()
 
   @doc """
   Hook callback after parsing the request body for a federated request
@@ -74,7 +77,11 @@ defmodule Fedi.ActivityPub.FederatingApi do
   authorized must be true and error nil. The request will continue
   to be processed.
   """
-  @callback authorize_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
+  @callback authorize_post_inbox(
+              context :: context(),
+              conn :: Plug.Conn.t(),
+              activity :: struct()
+            ) ::
               {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
 
   @doc """
@@ -93,11 +100,10 @@ defmodule Fedi.ActivityPub.FederatingApi do
   """
   @callback post_inbox(
               context :: context(),
-              conn :: Plug.Conn.t(),
               inbox_iri :: URI.t(),
               activity :: struct()
             ) ::
-              {:ok, response :: Plug.Conn.t()} | {:error, term()}
+              :ok | {:error, term()}
 
   @doc """
   Delegates inbox forwarding logic when a POST request
@@ -145,7 +151,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   default_callback.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
-              {:ok, activity :: struct()} | {:error, term()}
+              :pass | {:ok, activity :: struct()} | {:error, term()}
 
   @doc """
   Determines whether to permit a set of actors given by
@@ -182,6 +188,13 @@ defmodule Fedi.ActivityPub.FederatingApi do
   Zero or negative numbers indicate infinite recursion.
   """
   @callback max_delivery_recursion_depth(context :: context()) :: {:ok, integer()}
+
+  @doc """
+  Determines what action to take for this particular callback
+  if a Follow activity is handled.
+  """
+  @callback on_follow(context :: context()) ::
+              {:ok, on_follow()} | {:error, term()}
 
   @doc """
   Allows the implementation to apply business logic

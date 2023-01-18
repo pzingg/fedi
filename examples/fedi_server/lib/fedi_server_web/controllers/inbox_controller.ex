@@ -8,7 +8,7 @@ defmodule FediServerWeb.InboxController do
   def get_inbox(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # Pass the connection to the fedi Actor logic
     case Fedi.ActivityPub.Actor.handle_get_inbox(actor, conn) do
@@ -37,7 +37,7 @@ defmodule FediServerWeb.InboxController do
   def post_inbox(conn, %{"nickname" => nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
-    actor = Fedi.ActivityPub.Actor.get_actor!(conn)
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # Pass the connection to the fedi Actor logic
     case Fedi.ActivityPub.Actor.handle_post_inbox(actor, conn) do

@@ -14,7 +14,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   alias Fedi.Streams.Utils
   alias Fedi.ActivityStreams.Property, as: P
-  alias Fedi.ActivityPub.Actor
+  alias Fedi.ActivityPub.ActorFacade
   alias Fedi.ActivityPub.Utils, as: APUtils
 
   @enforce_keys [:common]
@@ -93,16 +93,16 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Defers to the S2S delegate.
   """
   @impl true
-  def post_inbox_request_body_hook(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :s2s, :post_inbox_request_body_hook, [conn])
+  def post_inbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
+    ActorFacade.post_inbox_request_body_hook(context, conn, activity)
   end
 
   @doc """
   Defers to the C2S delegate.
   """
   @impl true
-  def post_outbox_request_body_hook(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :c2s, :post_outbox_request_body_hook, [conn])
+  def post_outbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
+    ActorFacade.post_outbox_request_body_hook(context, conn, activity)
   end
 
   @doc """
@@ -110,7 +110,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :s2s, :authenticate_post_inbox, [conn])
+    ActorFacade.authenticate_post_inbox(context, conn)
   end
 
   @doc """
@@ -118,7 +118,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def authenticate_get_inbox(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :common, :authenticate_get_inbox, [conn])
+    ActorFacade.authenticate_get_inbox(context, conn)
   end
 
   @doc """
@@ -126,7 +126,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def authenticate_post_outbox(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :c2s, :authenticate_post_outbox, [conn])
+    ActorFacade.authenticate_post_outbox(context, conn)
   end
 
   @doc """
@@ -134,7 +134,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def authenticate_get_outbox(context, %Plug.Conn{} = conn) do
-    Actor.delegate(context, :common, :authenticate_get_outbox, [conn])
+    ActorFacade.authenticate_get_outbox(context, conn)
   end
 
   @doc """
@@ -148,7 +148,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
            {:activity_actor, Utils.get_actor(activity)},
          {:ok, actor_ids} <- APUtils.get_ids(actor_prop) do
       # Determine if the actor(s) sending this request are blocked.
-      case Actor.delegate(context, :s2s, :blocked, [actor_ids]) do
+      case ActorFacade.blocked(context, actor_ids) do
         {:ok, unauthorized} ->
           {:ok, conn, !unauthorized}
 
@@ -182,10 +182,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
       {:ok, true} ->
         # A new activity was added to the inbox
-        if Actor.protocol_supported?(context, :s2s) do
+        if ActorFacade.protocol_supported?(context, :s2s) do
           context = wrap_for_federated_protocol(context, inbox_iri)
 
-          case Actor.handle_activity(context, :s2s, activity, top_level: true) do
+          case ActorFacade.handle_s2s_activity(context, activity, top_level: true) do
             {:error, reason} -> {:error, reason}
             _ -> :ok
           end
@@ -203,23 +203,23 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Ref: [AP Section 7.1.2](https://w3.org/TR/activitypub/#inbox-forwarding)
   """
   @impl true
-  def inbox_forwarding(%{database: database} = context, %URI{} = inbox_iri, activity) do
+  def inbox_forwarding(context, %URI{} = inbox_iri, activity) do
     # Ref: This is the first time the server has seen this Activity.
     case Utils.get_json_ld_id(activity) do
       %URI{} = id ->
         # See if we have seen the activity
         with {:exists?, {:ok, false}} <-
-               {:exists?, apply(database, :exists?, [id])},
+               {:exists?, ActorFacade.db_exists?(context, id)},
              # Attempt to create the activity entry.
              {:ok, _created, _raw_json} <-
-               apply(database, :create, [activity]),
+               ActorFacade.db_create(context, activity),
              # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
              {:ok, my_iris} <-
-               owned_recipients(database, activity),
+               owned_recipients(context, activity),
              # Finally, load our IRIs to determine if they are a Collection or
              # OrderedCollection.
              {:ok, col_iris, cols, ocols} <-
-               get_collection_types(database, my_iris) do
+               get_collection_types(context, my_iris) do
           # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
           # then no need to do inbox forwarding. We have nothing to forward to.
           if Enum.empty?(col_iris) do
@@ -233,7 +233,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
             # This is only a boolean trigger: As soon as we get
             # a hit that we own something, then we should do inbox forwarding.
             with {:ok, max_depth} <-
-                   Actor.delegate(context, :s2s, :max_inbox_forwarding_recursion_depth, []),
+                   ActorFacade.max_inbox_forwarding_recursion_depth(context),
                  {:ok, owns_value} <-
                    has_inbox_forwarding_values(context, inbox_iri, activity, max_depth, 0) do
               # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
@@ -281,10 +281,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   The 'to', 'bto', 'cc', 'bcc' or 'audience' fields if their values are individuals
   or Collections owned by the actor.
   """
-  def owned_recipients(database, activity) do
+  def owned_recipients(context, activity) do
     with {:ok, recipients} <- APUtils.get_recipients(activity, which: :direct_only) do
       Enum.reduce_while(recipients, [], fn iri, acc ->
-        case apply(database, :owns?, [iri]) do
+        case ActorFacade.db_owns?(context, iri) do
           {:error, reason} -> {:halt, {:error, reason}}
           {:ok, true} -> {:cont, [iri | acc]}
           _ -> acc
@@ -301,10 +301,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Loads the recipient IRIs and separates them into OrderedCollection and
   Collection values.
   """
-  def get_collection_types(database, iris) do
+  def get_collection_types(context, iris) do
     # Load the unfiltered IRIs.
     Enum.reduce_while(iris, {[], %{}, %{}}, fn iri, {iri_acc, col_acc, ocol_acc} = acc ->
-      case apply(database, :get, [iri]) do
+      case ActorFacade.db_get(context, iri) do
         {:error, reason} ->
           {:halt, {:error, reason}}
 
@@ -347,7 +347,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   or Collections owned by the actor.
   """
   def get_collection_recipients(context, col_iris, cols, ocols, activity) do
-    case Actor.delegate(context, :s2s, :filter_forwarding, [col_iris, activity]) do
+    case ActorFacade.filter_forwarding(context, col_iris, activity) do
       {:error, reason} ->
         {:error, reason}
 
@@ -386,10 +386,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
-    with true <- Actor.protocol_supported?(context, :c2s),
+    with true <- ActorFacade.protocol_supported?(context, :c2s),
          context <- wrap_for_social_api(context, outbox_iri, raw_json),
          {:ok, deliverable} <-
-           Actor.handle_activity(context, :c2s, activity, top_level: true) do
+           ActorFacade.handle_c2s_activity(context, activity, top_level: true) do
       {activity, deliverable}
     else
       {:error, reason} ->
@@ -449,8 +449,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Wraps an object with a Create activity.
   """
   @impl true
-  def wrap_in_create(%{database: database} = _context, activity, %URI{} = outbox_iri) do
-    with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]) do
+  def wrap_in_create(context, activity, %URI{} = outbox_iri) do
+    with {:ok, actor_iri} <- ActorFacade.db_actor_for_outbox(context, outbox_iri) do
       {:ok, APUtils.wrap_in_create(activity, actor_iri)}
     end
   end
@@ -464,16 +464,16 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
   The server MUST then add this new Activity to the outbox collection.
   """
-  def add_to_outbox(%{database: database}, %URI{} = outbox_iri, activity)
+  def add_to_outbox(context, %URI{} = outbox_iri, activity)
       when is_struct(activity) do
     with {:activity_id, %URI{} = _id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
          {:ok, activity, _raw_json} <-
-           apply(database, :create, [activity]),
+           ActorFacade.db_create(context, activity),
          # Persist a reference to the activity in the outbox
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
-           apply(database, :update_collection, [outbox_iri, %{add: [activity]}]) do
+           ActorFacade.db_update_collection(context, outbox_iri, %{add: [activity]}) do
       {:ok, activity}
     else
       {:error, reason} ->
@@ -491,7 +491,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Only called if both the Social API and Federated Protocol are supported.
   """
-  def prepare(%{database: database} = context, %URI{} = outbox_iri, %{properties: _} = activity) do
+  def prepare(context, %URI{} = outbox_iri, %{properties: _} = activity) do
     # Get inboxes of recipients ("to", "bto", "cc", "bcc" and "audience")
     with {:ok, activity_recipients} <- APUtils.get_recipients(activity) do
       # 1. When an object is being delivered to the originating actor's
@@ -510,7 +510,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       # from our list of actor IRIs.
       {found_actors, found_inboxes} =
         Enum.reduce(non_public_recipients, [], fn actor_iri, acc ->
-          case apply(database, :inbox_for_actor, [actor_iri]) do
+          case ActorFacade.db_inbox_for_actor(context, actor_iri) do
             {:ok, %URI{} = inbox_iri} ->
               [{actor_iri, inbox_iri} | acc]
 
@@ -533,11 +533,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           # find these by making dereference calls to remote instances
           app_agent = Fedi.Application.app_agent()
 
-          with {:ok, transport} <- apply(database, :new_transport, [outbox_iri, app_agent]),
+          with {:ok, transport} <- ActorFacade.db_new_transport(context, outbox_iri, app_agent),
                {:ok, max_depth} <-
-                 Actor.delegate(context, :s2s, :max_delivery_recursion_depth, []),
+                 ActorFacade.max_delivery_recursion_depth(context),
                {:ok, remote_actors} <-
-                 resolve_actors(database, transport, actors_to_resolve, 0, max_depth),
+                 resolve_actors(context, transport, actors_to_resolve, 0, max_depth),
                {:ok, remote_inboxes} <- APUtils.get_inboxes(remote_actors) do
             remote_inboxes
           end
@@ -556,8 +556,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
             targets ->
               # Verify the inbox on the sender.
-              with {:ok, actor_iri} <- apply(database, :actor_for_outbox, [outbox_iri]),
-                   {:ok, this_actor} <- apply(database, :get, [actor_iri]),
+              with {:ok, actor_iri} <- ActorFacade.db_actor_for_outbox(context, outbox_iri),
+                   {:ok, this_actor} <- ActorFacade.db_get(context, actor_iri),
                    # Post-processing
                    {:get_inbox, %URI{} = ignore} <- {:get_inbox, APUtils.get_inbox(this_actor)} do
                 case dedupe_iris(targets, [ignore]) do
@@ -603,14 +603,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Note that this also applies to CollectionPage and OrderedCollectionPage.
   """
-  def resolve_actors(database, transport, actor_ids, depth, max_depth, acc \\ [])
+  def resolve_actors(context, transport, actor_ids, depth, max_depth, acc \\ [])
 
-  def resolve_actors(_database, _transport, [], 0, _max_depth, _acc) do
+  def resolve_actors(_context, _transport, [], 0, _max_depth, _acc) do
     {:error, "No actor ids to be resolved"}
   end
 
   def resolve_actors(
-        database,
+        context,
         transport,
         actor_ids,
         depth,
@@ -628,7 +628,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       # collections owned by peer servers
       {actors, more} =
         Enum.reduce(actor_ids, {actors, []}, fn iri, {actor_acc, coll_acc} = acc ->
-          case dereference_for_resolving_inboxes(database, transport, iri) do
+          case dereference_for_resolving_inboxes(context, transport, iri) do
             {:ok, actor, []} ->
               {[actor | actor_acc], coll_acc}
 
@@ -652,7 +652,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         end
       else
         # Recurse
-        resolve_actors(database, transport, more, depth + 1, max_depth, actors)
+        resolve_actors(context, transport, more, depth + 1, max_depth, actors)
       end
     end
   end
@@ -663,8 +663,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   The returned actor could be nil, if it wasn't an actor (ex: a Collection or
   OrderedCollection).
   """
-  def dereference_for_resolving_inboxes(database, transport, %URI{} = actor_id) do
-    with {:ok, m} <- apply(database, :dereference, [transport, actor_id]),
+  def dereference_for_resolving_inboxes(context, transport, %URI{} = actor_id) do
+    with {:ok, m} <- ActorFacade.db_dereference(context, transport, actor_id),
          {:ok, %{properties: properties} = actor} <-
            Fedi.Streams.JSONResolver.resolve(m) do
       # Attempt to see if the 'actor' is really some sort of type that has
@@ -695,14 +695,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   of an actor.
   """
   def deliver_to_recipients(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
         activity,
         recipients
       )
       when is_list(recipients) do
     with {:ok, m} <- Fedi.Streams.Serializer.serialize(activity),
          {:ok, json_body} <- Jason.encode(m) do
-      apply(database, :batch_deliver, [inbox_iri, app_agent, json_body, recipients])
+      ActorFacade.db_batch_deliver(context, inbox_iri, app_agent, json_body, recipients)
     end
   end
 
@@ -714,18 +714,18 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
   Returns true when the activity is novel.
   """
-  def add_to_inbox_if_new(%{database: database} = _context, %URI{} = inbox_iri, activity) do
+  def add_to_inbox_if_new(context, %URI{} = inbox_iri, activity) do
     with {:activity_id, %URI{} = id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          {:exists?, {:ok, false}} <-
-           {:exists?, apply(database, :collection_contains?, [inbox_iri, id])},
+           {:exists?, ActorFacade.db_collection_contains?(context, inbox_iri, id)},
          # It is a new id
          # Persist the activity
          {:ok, activity, _raw_json} <-
-           apply(database, :create, [activity]),
+           ActorFacade.db_create(context, activity),
          # Persist a reference to the activity in the inbox
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
-           apply(database, :update_collection, [inbox_iri, %{add: [activity]}]) do
+           ActorFacade.db_update_collection(context, inbox_iri, %{add: [activity]}) do
       {:ok, true}
     else
       {:error, reason} ->
@@ -752,7 +752,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
   def has_inbox_forwarding_values(
-        %{data: %{box_iri: box_iri, app_agent: _}, database: database} = context,
+        %{data: %{box_iri: box_iri, app_agent: _}} = context,
         %URI{} = inbox_iri,
         val,
         max_depth,
@@ -775,14 +775,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
       cond do
         # For IRIs, simply check if we own them.
-        owns_one_iri = owns_any_iri?(database, iris) ->
+        owns_one_iri = owns_any_iri?(context, iris) ->
           case owns_one_iri do
             {:error, reason} -> {:error, reason}
             {:ok, true} -> {:ok, true}
           end
 
         # For embedded literals, check the id.
-        owns_one_id = owns_any_id?(database, types) ->
+        owns_one_id = owns_any_id?(context, types) ->
           case owns_one_id do
             {:error, reason} -> {:error, reason}
             {:ok, true} -> {:ok, true}
@@ -807,9 +807,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   # For IRIs, simply check if we own them.
-  def owns_any_iri?(database, iris) do
+  def owns_any_iri?(context, iris) do
     Enum.find(iris, fn iri ->
-      case apply(database, :owns?, [iri]) do
+      case ActorFacade.db_owns?(context, iri) do
         {:error, reason} -> {:error, reason}
         {:ok, true} -> {:ok, true}
         _ -> false
@@ -818,11 +818,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   # For embedded literals, check the id.
-  def owns_any_id?(database, types) do
+  def owns_any_id?(context, types) do
     Enum.find(types, fn as_value ->
       case Utils.get_json_ld_id(as_value) do
         %URI{} = id ->
-          case apply(database, :owns?, [id]) do
+          case ActorFacade.db_owns?(context, id) do
             {:error, reason} -> {:error, reason}
             {:ok, true} -> {:ok, true}
             _ -> false
@@ -838,12 +838,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Recursion preparation: Try fetching the IRIs so we can recurse into them.
   """
   def dereference_iris(
-        %{data: %{box_iri: box_iri, app_agent: app_agent}, database: database},
+        %{data: %{box_iri: box_iri, app_agent: app_agent}} = context,
         iris
       ) do
     Enum.reduce(iris, [], fn iri, acc ->
       # Dereferencing the IRI.
-      with {:ok, m} <- apply(database, :dereference, [box_iri, app_agent, iri]),
+      with {:ok, m} <- ActorFacade.db_dereference(context, box_iri, app_agent, iri),
            {:ok, type} <- Fedi.Streams.JSONResolver.resolve(m) do
         [type | acc]
       else
@@ -861,8 +861,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   If an Activity is submitted with a value in the id property,
   servers MUST ignore this and generate a new id for the Activity.
   """
-  def set_object_id(%{database: database} = _context, object) do
-    with {:ok, %URI{} = id} <- apply(database, :new_id, [object]) do
+  def set_object_id(context, object) do
+    with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do
       Utils.set_json_ld_id(object, id)
     end
   end
@@ -883,9 +883,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def wrap_for_social_api(context, box_iri, raw_json) do
     app_agent = Fedi.Application.app_agent()
 
+    context_data =
+      case Map.get(context, :data) do
+        m when is_map(m) -> m
+        nil -> %{}
+      end
+
     struct(context,
       data:
-        Map.merge(context.data || %{}, %{
+        Map.merge(context_data, %{
           box_iri: box_iri,
           app_agent: app_agent,
           raw_activity: raw_json,
@@ -913,16 +919,22 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def wrap_for_federated_protocol(context, box_iri) do
     on_follow =
-      case Actor.delegate(context, :s2s, :on_follow, []) do
+      case ActorFacade.on_follow(context) do
         {:ok, value} when is_atom(value) -> value
         _ -> :do_nothing
       end
 
     app_agent = Fedi.Application.app_agent()
 
+    context_data =
+      case Map.get(context, :data) do
+        m when is_map(m) -> m
+        nil -> %{}
+      end
+
     struct(context,
       data:
-        Map.merge(context.data || %{}, %{
+        Map.merge(context_data, %{
           box_iri: box_iri,
           app_agent: app_agent,
           on_follow: on_follow

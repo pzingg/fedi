@@ -191,17 +191,26 @@ defmodule FediServerWeb.WebFinger do
 
   defp get_address_from_domain(_, _), do: {:error, :webfinger_no_domain}
 
+  def finger(%URI{host: domain} = account) do
+    if HTTPClient.is_http_uri?(account) do
+      finger(URI.to_string(account), domain)
+    else
+      {:error, "WebFinger: account is not an HTTP URL"}
+    end
+  end
+
   def finger(account) when is_binary(account) do
     account = String.trim_leading(account, "@")
 
-    domain =
-      with [_name, domain] <- String.split(account, "@") do
-        domain
-      else
-        _e ->
-          URI.parse(account).host
-      end
+    with [_name, domain] <- String.split(account, "@") do
+      finger(account, domain)
+    else
+      _ ->
+        {:error, "WebFinger: account is not an '@' address"}
+    end
+  end
 
+  def finger(account, domain) do
     encoded_account = URI.encode("acct:#{account}")
     address = get_address_from_domain(domain, encoded_account)
 
