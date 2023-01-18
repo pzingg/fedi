@@ -10,20 +10,20 @@
 # We recommend using the bang functions (`insert!`, `update!`
 # and so on) as they will fail if something goes wrong.
 
+alias Fedi.Streams.Utils
 alias FediServer.Repo
-alias FediServer.Activities
-alias FediServer.Activities.User
+alias FediServer.Accounts.User
 
 # Add a remote user
 {:ok, contents} = Path.join(:code.priv_dir(:fedi_server), "ben.json") |> File.read()
 {:ok, data} = Jason.decode(contents)
 
-User.new_from_masto_data(data)
+User.new_remote_user(data)
 |> User.changeset()
 |> Repo.insert!()
 
 # Add a local user
-endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
 %User{
   ap_id: %URI{endpoint_uri | path: "/users/alyssa"} |> URI.to_string(),
@@ -31,6 +31,7 @@ endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
   name: "Alyssa Activa",
   nickname: "alyssa",
   email: "alyssa@example.com",
+  password: "pass",
   local: true,
   data: %{}
 }

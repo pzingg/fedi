@@ -13,7 +13,7 @@ defmodule Fedi.ActivityPub.Utils do
   @accept_header "accept"
   @content_type_value "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\""
   @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
-  @public_activity_streams_iri URI.parse(@public_activity_streams)
+  @public_activity_streams_iri Utils.to_uri(@public_activity_streams)
   @public_json_ld "Public"
   @public_json_ld_as "as:Public"
 
@@ -96,9 +96,9 @@ defmodule Fedi.ActivityPub.Utils do
          {:ok, json} <- Jason.decode(body) do
       {:ok, conn, json}
     else
-      {:error, reason} ->
-        Logger.error("bad body #{reason}")
-        {:error, reason}
+      {:error, _reason} ->
+        Logger.error("Invalid json body")
+        {:error, "Invalid json body"}
     end
   end
 
@@ -197,7 +197,7 @@ defmodule Fedi.ActivityPub.Utils do
   # For type
   def get_href(%{properties: properties} = as_value) when is_map(properties) do
     with true <- Utils.has_href?(as_value),
-         %Fedi.ActivityStreams.Property.Href{xsd_any_uri_member: %URI{} = href} <-
+         %P.Href{xsd_any_uri_member: %URI{} = href} <-
            Map.get(properties, "href") do
       href
     else
@@ -294,93 +294,44 @@ defmodule Fedi.ActivityPub.Utils do
   Any to, bto, cc, bcc, and audience properties specified on the object
   MUST be copied over to the new Create activity by the server.
   """
-  def wrap_in_create(%{properties: properties} = object, %URI{} = actor_iri)
-      when is_map(properties) do
-    # Object Property
+  def wrap_in_create(%{properties: object_props, unknown: unknown} = object, %URI{} = actor_iri)
+      when is_map(object_props) do
+    type_prop = Fedi.JSONLD.Property.Type.new_type("Create")
+
+    # Hoist @context into Create Activity
+    {as_context, unknown} = Map.pop(unknown, "@context")
+    object = struct(object, unknown: unknown)
     object_prop = %P.Object{alias: "", values: [%P.ObjectIterator{alias: "", member: object}]}
 
-    # Actor Property
     actor_prop = %P.Actor{alias: "", values: [%P.ActorIterator{alias: "", iri: actor_iri}]}
 
-    create_props = %{"object" => object_prop, "actor" => actor_prop}
+    create_props = %{
+      "type" => type_prop,
+      "object" => object_prop,
+      "actor" => actor_prop
+    }
 
-    # Copying over properties
+    # Copy properties from object to activity
     create_props =
       ["published", "to", "bto", "cc", "bcc", "audience"]
       |> Enum.reduce(create_props, fn prop_name, acc ->
-        copy_property(acc, properties, prop_name)
+        copy_property(acc, object_props, prop_name)
       end)
 
-    %T.Create{alias: "", properties: create_props}
+    as_context = as_context || "https://www.w3.org/ns/activitystreams"
+    %T.Create{alias: "", properties: create_props, unknown: %{"@context" => as_context}}
   end
 
   def copy_property(dest, source, prop_name) do
-    case {Map.get(source, prop_name), prop_name} do
-      {%{xsd_date_time_member: %DateTime{} = published}, "published"} ->
-        Map.put(dest, prop_name, %P.Published{
-          alias: "",
-          xsd_date_time_member: published,
-          has_date_time_member?: true
-        })
+    case {prop_name, Map.get(source, prop_name)} do
+      {"published", %P.Published{xsd_date_time_member: %DateTime{}} = published_prop} ->
+        Map.put(dest, prop_name, published_prop)
 
-      {%{values: [%{iri: _} = iter_prop | _]}, "to"} ->
-        case to_id(iter_prop) do
-          %URI{} = id ->
-            Map.put(dest, prop_name, %P.To{
-              alias: "",
-              values: [%P.ToIterator{alias: "", iri: id}]
-            })
-
-          _ ->
-            dest
-        end
-
-      {%{values: [%{iri: _} = iter_prop | _]}, "bto"} ->
-        case to_id(iter_prop) do
-          %URI{} = id ->
-            Map.put(dest, prop_name, %P.Bto{
-              alias: "",
-              values: [%P.BtoIterator{alias: "", iri: id}]
-            })
-
-          _ ->
-            dest
-        end
-
-      {%{values: [%{iri: _} = iter_prop | _]}, "cc"} ->
-        case to_id(iter_prop) do
-          %URI{} = id ->
-            Map.put(dest, prop_name, %P.Cc{
-              alias: "",
-              values: [%P.CcIterator{alias: "", iri: id}]
-            })
-
-          _ ->
-            dest
-        end
-
-      {%{values: [%{iri: _} = iter_prop | _]}, "bcc"} ->
-        case to_id(iter_prop) do
-          %URI{} = id ->
-            Map.put(dest, prop_name, %P.Bcc{
-              alias: "",
-              values: [%P.BccIterator{alias: "", iri: id}]
-            })
-
-          _ ->
-            dest
-        end
-
-      {%{values: [%{iri: _} = iter_prop | _]}, "audience"} ->
-        case to_id(iter_prop) do
-          %URI{} = id ->
-            Map.put(dest, prop_name, %P.Audience{
-              alias: "",
-              values: [%P.AudienceIterator{alias: "", iri: id}]
-            })
-
-          _ ->
-            dest
+      {prop_name, %{values: [_ | _]} = iter_prop} ->
+        if Enum.member?(["to", "bto", "cc", "bcc", "audience"], prop_name) do
+          Map.put(dest, prop_name, iter_prop)
+        else
+          dest
         end
 
       _ ->
@@ -424,7 +375,7 @@ defmodule Fedi.ActivityPub.Utils do
         end
 
       _ ->
-        {:error, "No orderedItems in collection"}
+        {:ok, ordered_collection}
     end
   end
 
@@ -452,18 +403,39 @@ defmodule Fedi.ActivityPub.Utils do
     end)
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, status, %Error{} = error) do
-    send_json_resp(conn, status, Error.response_message(error))
+  def send_json_resp(conn, status_or_error, opts \\ [])
+
+  def send_json_resp(%Plug.Conn{} = conn, status, opts) when is_atom(status) do
+    send_json_resp(
+      conn,
+      status,
+      Error.message_from_status(status),
+      Keyword.get(opts, :actor_state)
+    )
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, status, body) when is_binary(body) do
+  def send_json_resp(%Plug.Conn{} = conn, %Error{status: :bad_request, message: message}, opts) do
+    send_json_resp(
+      conn,
+      :bad_request,
+      "Bad request: #{message}",
+      Keyword.get(opts, :actor_state)
+    )
+  end
+
+  def send_json_resp(%Plug.Conn{} = conn, %Error{status: status}, opts) do
+    send_json_resp(
+      conn,
+      status,
+      Error.message_from_status(status),
+      Keyword.get(opts, :actor_state)
+    )
+  end
+
+  def send_json_resp(%Plug.Conn{} = conn, status, body, nil) when is_binary(body) do
     conn
     |> Plug.Conn.put_resp_header(@content_type_header, "application/json")
     |> Plug.Conn.send_resp(status, body)
-  end
-
-  def send_json_resp(%Plug.Conn{} = conn, status, %Error{} = error, actor_state) do
-    send_json_resp(conn, status, Error.response_message(error), actor_state)
   end
 
   def send_json_resp(%Plug.Conn{} = conn, status, body, actor_state) when is_binary(body) do
@@ -483,7 +455,11 @@ defmodule Fedi.ActivityPub.Utils do
   end
 
   # TODO ONTOLOGY Change to one function call, `metadata(:is_or_extends?)`
-  def is_or_extends?(as_value, type_name) do
+  def is_or_extends?(as_value, type_names) when is_struct(as_value) and is_list(type_names) do
+    Enum.find(type_names, &is_or_extends?(as_value, &1))
+  end
+
+  def is_or_extends?(as_value, type_name) when is_struct(as_value) and is_binary(type_name) do
     case get_type_meta(as_value) do
       nil ->
         false
@@ -502,7 +478,7 @@ defmodule Fedi.ActivityPub.Utils do
   @doc """
   Verifies that a value is an Activity with a valid id.
   """
-  def valid_activity?(as_value) when is_struct(as_value) do
+  def validate_activity(as_value) when is_struct(as_value) do
     if is_or_extends?(as_value, "Activity") do
       case Utils.get_json_ld_id(as_value) do
         %URI{} = id ->
@@ -516,7 +492,7 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
-  def valid_activity?(as_value) do
+  def validate_activity(as_value) do
     {:error, "#{inspect(as_value)} is not a struct"}
   end
 
@@ -655,12 +631,10 @@ defmodule Fedi.ActivityPub.Utils do
   the 'object' property are all listed in the 'actor' property.
   """
   def object_actors_match_activity_actors?(
-        context,
+        %{box_iri: %URI{}} = context,
         activity
       ) do
-    with {:ok, box_iri, app_agent} <-
-           get_dereference_data(context),
-         {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
+    with {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
          {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %P.Actor{values: _} = actor_prop} when is_list(values) <-
@@ -671,7 +645,7 @@ defmodule Fedi.ActivityPub.Utils do
         with {:object_id, %URI{} = iri} <- {:object_id, to_id(prop)},
              # Attempt to dereference the IRI, regardless whether it is a
              # type or IRI
-             {:ok, m} <- ActorFacade.db_dereference(context, box_iri, app_agent, iri),
+             {:ok, m} <- ActorFacade.db_dereference(context, iri),
              {:ok, actor_type} <- Fedi.Streams.JSONResolver.resolve(m),
              {:object_actor, %{values: _} = object_actor_prop} when is_list(values) <-
                {:object_actor, Utils.get_actor(actor_type)},
@@ -701,20 +675,6 @@ defmodule Fedi.ActivityPub.Utils do
       {:actor_ids, _} -> {:error, "No id in activity's actor"}
       {_, {:error, reason}} -> {:error, reason}
     end
-  end
-
-  def get_dereference_data(%{data: %{box_iri: box_iri, app_agent: app_agent}}) do
-    {:ok, box_iri, app_agent}
-  end
-
-  def get_dereference_data(%{data: _} = context) do
-    Logger.error("No inbox or outbox in #{inspect(context)}")
-    {:error, "Internal server error"}
-  end
-
-  def get_dereference_data(context) do
-    Logger.error("No data in #{inspect(context)}")
-    {:error, "Internal server error"}
   end
 
   @doc """
@@ -748,11 +708,27 @@ defmodule Fedi.ActivityPub.Utils do
               end
           end
         else
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:owns?, {:ok, _}} -> {:cont, acc}
-          {:owns?, {:error, reason}} -> {:halt, {:error, reason}}
+          {:error, reason} ->
+            {:halt, {:error, reason}}
+
+          {:owns?, {:ok, _}} ->
+            Logger.error("Local collection #{target_id} not found")
+
+            {:halt,
+             {:error,
+              %Error{
+                code: :unknown_collection,
+                status: :bad_request,
+                message: "Local collection #{target_id} not found"
+              }}}
+
+          {:owns?, {:error, reason}} ->
+            {:halt, {:error, reason}}
         end
       end)
+    else
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -811,13 +787,62 @@ defmodule Fedi.ActivityPub.Utils do
   likewise with copying recipients from the object to the wrapping Create
   activity.
   """
-  def normalize_recipients(activity) when is_struct(activity) do
+  def normalize_recipients(%{properties: activity_props} = activity) do
     # Phase 0: Acquire all recipients on the activity.
     # Obtain the actor_to, _bto, _cc, _bcc, and _audience maps
+    with {:activity_object,
+          %P.Object{alias: alias_, values: [%{member: object_value} | _]} = object}
+         when is_struct(object_value) <-
+           {:activity_object, Utils.get_object(activity)},
+         {:ok, activity_recipients_map} <- make_maps(activity) do
+      %{properties: object_props} =
+        new_value =
+        ["to", "bto", "cc", "bcc", "audience"]
+        |> Enum.reduce(object_value, fn prop_name, acc ->
+          # Phase 1: Acquire all existing recipients on the object.
+          {_prop, prop_iters, prop_mod, id_map} = property_and_id_map(object_value, prop_name)
+          prop_map = Map.get(activity_recipients_map, prop_name, %{})
+          # Phase 2: Apply missing recipients to the object from the activity.
+          new_iters =
+            Enum.reduce(prop_map, [], fn {k, v}, iter_acc ->
+              if !Map.has_key?(id_map, k) do
+                [Utils.new_iri_iter(prop_mod, v, alias_) | iter_acc]
+              else
+                iter_acc
+              end
+            end)
 
+          if Enum.empty?(new_iters) do
+            acc
+          else
+            Utils.append_iters(acc, prop_name, prop_iters ++ Enum.reverse(new_iters))
+          end
+        end)
+
+      object = %P.Object{
+        object
+        | values: [%P.ObjectIterator{alias: alias_, member: new_value}]
+      }
+
+      # Phase 3: Copy (now complete) object recipients to the activity
+      activity_props =
+        ["to", "bto", "cc", "bcc", "audience"]
+        |> Enum.reduce(activity_props, fn prop_name, acc ->
+          copy_property(acc, object_props, prop_name)
+        end)
+        |> Map.put("object", object)
+
+      {:ok, struct(activity, properties: activity_props)}
+    else
+      {:error, reason} -> {:error, reason}
+      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+    end
+  end
+
+  def make_maps(as_type) do
     ["to", "bto", "cc", "bcc", "audience"]
     |> Enum.reduce_while([], fn prop_name, acc ->
-      case make_id_map(activity, prop_name) do
+      case make_id_map(as_type, prop_name) do
         {:ok, map} -> {:cont, [{prop_name, map} | acc]}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -827,73 +852,7 @@ defmodule Fedi.ActivityPub.Utils do
         {:error, reason}
 
       elements when is_list(elements) ->
-        with {:activity_object, %P.Object{alias: alias_, values: [%{member: value} | _]} = object}
-             when is_struct(value) <-
-               {:activity_object, Utils.get_object(activity)},
-             actor_maps <- Map.new(elements) do
-          # Obtain the objects maps for each recipient type.
-          {new_value, object_maps} =
-            ["to", "bto", "cc", "bcc", "audience"]
-            |> Enum.reduce({value, %{}}, fn prop_name, {acc, m} ->
-              # Phase 1: Acquire all existing recipients on the object.
-              {_prop, prop_iters, prop_mod, id_map} = property_and_id_map(value, prop_name)
-              actor_map = actor_maps[prop_name]
-
-              # Phase 2: Apply missing recipients to the object from the activity.
-              new_iters =
-                Enum.reduce(actor_map, [], fn {k, v}, iter_acc ->
-                  if !Map.has_key?(id_map, k) do
-                    [Utils.new_iri_iter(prop_mod, v, alias_) | iter_acc]
-                  else
-                    iter_acc
-                  end
-                end)
-
-              if Enum.empty?(new_iters) do
-                {acc, m}
-              else
-                updated_value =
-                  Utils.append_iters(acc, prop_name, prop_iters ++ Enum.reverse(new_iters))
-
-                {updated_value, Map.put(m, prop_name, id_map)}
-              end
-            end)
-
-          new_object = %P.Object{
-            object
-            | values: [%P.ObjectIterator{alias: alias_, member: new_value}]
-          }
-
-          activity =
-            struct(activity, properties: Map.put(activity.properties, "object", new_object))
-
-          # Phase 3: Apply missing recipients to the activity from the objects.
-          activity =
-            ["to", "bto", "cc", "bcc", "audience"]
-            |> Enum.reduce(activity, fn prop_name, acc ->
-              {_prop, prop_iters, prop_mod, id_map} = property_and_id_map(activity, prop_name)
-              object_map = Map.get(object_maps, prop_name, %{})
-
-              new_iters =
-                Enum.reduce(object_map, [], fn {k, v}, iter_acc ->
-                  if !Map.has_key?(id_map, k) do
-                    [Utils.new_iri_iter(prop_mod, v, alias_) | iter_acc]
-                  else
-                    iter_acc
-                  end
-                end)
-
-              if Enum.empty?(new_iters) do
-                acc
-              else
-                Utils.append_iters(acc, prop_name, prop_iters ++ Enum.reverse(new_iters))
-              end
-            end)
-
-          {:ok, activity}
-        else
-          {:activity_object, _} -> Utils.err_object_required(activity: activity)
-        end
+        {:ok, Map.new(elements)}
     end
   end
 
@@ -930,11 +889,53 @@ defmodule Fedi.ActivityPub.Utils do
 
   def get_inbox(%{properties: properties} = value) when is_map(properties) do
     with true <- Utils.has_inbox?(value),
-         %Fedi.ActivityStreams.Property.Inbox{} = inbox <-
+         %P.Inbox{} = inbox <-
            Map.get(properties, "inbox") do
       to_id(inbox)
     else
       _ -> nil
+    end
+  end
+
+  def get_actor_id(activity, %{current_user: current_user}) when is_struct(activity) do
+    case Utils.get_iri(activity, "actor") do
+      %URI{} = id ->
+        {:ok, id}
+
+      _ ->
+        if is_nil(current_user) || current_user.ap_id == "" do
+          {:error, "No actor id in activity or context"}
+        else
+          {:ok, URI.parse(current_user.ap_id)}
+        end
+    end
+  end
+
+  def get_object_id(%{properties: properties}) when is_map(properties) do
+    with %P.Object{values: [%P.ObjectIterator{} = prop]} <- Map.get(properties, "object"),
+         %URI{} = id <- to_id(prop) do
+      {:ok, id}
+    else
+      _ -> {:error, "No object id in activity"}
+    end
+  end
+
+  def get_visibility(activity, %URI{path: actor_path} = actor_iri) do
+    case get_recipients(activity, direct: true, as_map: true) do
+      {:ok, recipients} ->
+        to = Map.get(recipients, "to", []) |> List.wrap()
+        cc = Map.get(recipients, "cc", []) |> List.wrap()
+        followers_id = %URI{actor_iri | path: actor_path <> "/followers"}
+
+        cond do
+          Enum.any?(to, fn iri -> public?(iri) end) -> :public
+          Enum.any?(cc, fn iri -> public?(iri) end) -> :unlisted
+          Enum.member?(to ++ cc, followers_id) -> :followers_only
+          true -> :direct
+        end
+
+      _ ->
+        :direct
     end
   end
 
@@ -950,23 +951,26 @@ defmodule Fedi.ActivityPub.Utils do
   addressing originally stored on the bto / bcc properties for determining
   recipients in delivery.
   """
-  def strip_hidden_recipients(%{properties: properties} = activity) do
+  def strip_hidden_recipients(%{__struct__: _, properties: properties} = activity) do
     activity =
       case Map.get(properties, "object") do
-        %Fedi.ActivityStreams.Property.Object{values: [%{member: value} | _]} = object_prop
-        when is_struct(value) ->
-          value =
-            value
-            |> Utils.set_iri("bto", nil)
-            |> Utils.set_iri("bcc", nil)
+        %P.Object{values: object_iters} = object ->
+          stripped_iters =
+            Enum.map(object_iters, fn
+              %{member: value} = object_prop when is_struct(value) ->
+                value =
+                  value
+                  |> Utils.set_iri("bto", nil)
+                  |> Utils.set_iri("bcc", nil)
 
-          struct(activity,
-            properties:
-              Map.put(properties, "object", %Fedi.ActivityStreams.Property.Object{
-                object_prop
-                | values: [value]
-              })
-          )
+                struct(object_prop, member: value)
+
+              other ->
+                other
+            end)
+
+          object = struct(object, values: stripped_iters)
+          struct(activity, properties: Map.put(properties, "object", object))
 
         _ ->
           activity
@@ -977,13 +981,72 @@ defmodule Fedi.ActivityPub.Utils do
     |> Utils.set_iri("bcc", nil)
   end
 
-  def get_attributed_to(%{properties: properties} = _as_value) do
-    case Map.get(properties, "attributedTo") do
-      %{values: [%{iri: %URI{} = iri}]} ->
-        iri
+  def strip_hidden_recipients(m) when is_map(m) do
+    # Same version for json
+    m = Map.drop(m, ["bto", "bcc"])
 
-      _ ->
-        nil
+    if is_nil(m["object"]) do
+      m
+    else
+      List.wrap(m["object"])
+      |> Enum.map(fn
+        omap when is_map(omap) -> strip_hidden_recipients(omap)
+        o -> o
+      end)
+      |> case do
+        [] -> Map.delete(m, "object")
+        [object] -> Map.put(m, "object", object)
+        objects -> Map.put(m, "object", objects)
+      end
+    end
+  end
+
+  def verify_no_hidden_recipients(%{__struct__: _, properties: activity_props}) do
+    if Map.has_key?(activity_props, "bto") || Map.has_key?(activity_props, "bcc") do
+      {:halt, {:error, "Activity has hidden recipients"}}
+    else
+      case Map.get(activity_props, "object") do
+        %P.Object{values: object_iters} ->
+          Enum.reduce_while(object_iters, :ok, fn
+            %{member: %{__struct__: _, properties: object_props}}, acc ->
+              if Map.has_key?(object_props, "bto") || Map.has_key?(object_props, "bcc") do
+                {:halt, {:error, "Object has hidden recipients"}}
+              else
+                {:cont, acc}
+              end
+
+            _non_member, acc ->
+              {:cont, acc}
+          end)
+
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  def verify_no_hidden_recipients(m, label) when is_map(m) do
+    activity_keys = Map.keys(m)
+
+    cond do
+      "bto" in activity_keys || "bcc" in activity_keys ->
+        {:error, "Leaking bto/bcc in #{label}"}
+
+      is_nil(m["object"]) ->
+        :ok
+
+      true ->
+        List.wrap(m["object"])
+        |> Enum.reduce_while(:ok, fn
+          omap, acc when is_map(omap) ->
+            case verify_no_hidden_recipients(omap, "object") do
+              {:error, reason} -> {:halt, {:error, reason}}
+              :ok -> {:cont, acc}
+            end
+
+          _, acc ->
+            {:cont, acc}
+        end)
     end
   end
 
@@ -992,9 +1055,10 @@ defmodule Fedi.ActivityPub.Utils do
   property, recursively.
 
   `opts` can contain one of these boolean flags:
-  * `:to_only` - only gather "to" property values
-  * `:direct_only` - only gather "to", "cc" and "audience" values
-  * `:all` - gather "to", "bto", "cc", "bcc" and "audience" values
+  * `:to_only` - only gather 'to' property values
+  * `:direct_only` - only gather 'to', 'cc', and 'audience' values
+  * `:all` - gather 'to', 'bto', 'cc', 'bcc', and 'audience' values
+  * `:as_map - return values in a map, keyed by property name
 
   `opts` can also contain an `:empty_ok` boolean flag. If not
   supplied or if false, `get_recpients/2` will return an error
@@ -1032,12 +1096,21 @@ defmodule Fedi.ActivityPub.Utils do
           ["to", "bto", "cc", "bcc", "audience"]
       end
 
+    as_map = Keyword.get(opts, :as_map, false)
+
     Enum.reduce_while(prop_names, [], fn prop_name, acc ->
       case Map.get(properties, prop_name) do
         %{values: values} = prop when is_list(values) ->
           case get_ids(prop) do
-            {:ok, ids} -> {:cont, acc ++ ids}
-            {:error, reason} -> {:halt, {:error, reason}}
+            {:ok, ids} ->
+              if as_map do
+                {:cont, [{prop_name, ids} | acc]}
+              else
+                {:cont, acc ++ ids}
+              end
+
+            {:error, reason} ->
+              {:halt, {:error, reason}}
           end
 
         _ ->
@@ -1050,14 +1123,22 @@ defmodule Fedi.ActivityPub.Utils do
 
       [] ->
         if Keyword.get(opts, :empty_ok, false) do
-          {:ok, []}
+          if as_map do
+            {:ok, %{}}
+          else
+            {:ok, []}
+          end
         else
           prop_names = Enum.join(prop_names, ", ")
           {:error, "No recipients found in #{prop_names}"}
         end
 
       recipients ->
-        {:ok, recipients}
+        if as_map do
+          {:ok, Map.new(recipients)}
+        else
+          {:ok, recipients}
+        end
     end
   end
 
@@ -1081,8 +1162,8 @@ defmodule Fedi.ActivityPub.Utils do
             end
           end)
 
-        new_object = struct(object, values: new_values)
-        {:ok, struct(activity, properties: Map.put(properties, "object", new_object))}
+        object = struct(object, values: new_values)
+        {:ok, struct(activity, properties: Map.put(properties, "object", object))}
 
       _ ->
         Logger.warn("Activity has no object property, so no objects were updated")
@@ -1105,7 +1186,7 @@ defmodule Fedi.ActivityPub.Utils do
     # changes conn.scheme from "https" to "http", so we need to use the endpoint_url
     # argument to fix things.
     endpoint_url = endpoint_url || Fedi.Application.endpoint_url()
-    endpoint_uri = URI.parse(endpoint_url)
+    endpoint_uri = Utils.to_uri(endpoint_url)
 
     query =
       if query == "" do
@@ -1115,5 +1196,45 @@ defmodule Fedi.ActivityPub.Utils do
       end
 
     %URI{endpoint_uri | path: path, query: query}
+  end
+
+  @doc """
+  Sanitize query params for collection URLs
+  """
+  def collection_opts(params) when is_map(params) do
+    [:max_id, :min_id, :page, :first, :page_size]
+    |> Enum.reduce([], fn key, acc ->
+      case {key, Map.get(params, Atom.to_string(key))} do
+        {_, nil} ->
+          nil
+
+        {:page_size, v} ->
+          case Integer.parse(v) do
+            {i, ""} -> i
+            _ -> nil
+          end
+
+        {:page, v} ->
+          if v == "true" do
+            true
+          else
+            nil
+          end
+
+        {:first, v} ->
+          if v == "true" do
+            true
+          else
+            nil
+          end
+
+        {_, v} ->
+          v
+      end
+      |> case do
+        nil -> acc
+        v -> Keyword.put(acc, key, v)
+      end
+    end)
   end
 end

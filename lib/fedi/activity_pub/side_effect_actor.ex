@@ -17,7 +17,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   alias Fedi.ActivityPub.ActorFacade
   alias Fedi.ActivityPub.Utils, as: APUtils
 
-  @enforce_keys [:common]
+  @enforce_keys [:common, :database, :app_agent]
   defstruct [
     :common,
     :c2s,
@@ -28,7 +28,13 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :database,
     :social_api_enabled?,
     :federated_protocol_enabled?,
-    :data
+    :current_user,
+    :app_agent,
+    :box_iri,
+    :raw_activity,
+    deliverable: true,
+    on_follow: :do_nothing,
+    data: %{}
   ]
 
   @type t() :: %__MODULE__{
@@ -41,22 +47,17 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           database: module() | nil,
           social_api_enabled?: boolean(),
           federated_protocol_enabled?: boolean(),
-          data: term()
+          current_user: ActorFacade.current_user(),
+          app_agent: String.t(),
+          box_iri: URI.t() | nil,
+          raw_activity: map() | nil,
+          deliverable: boolean(),
+          on_follow: ActorFacade.on_follow(),
+          data: map()
         }
 
   # Same as above but just a map
-  @type context() :: %{
-          common: module(),
-          c2s: module() | nil,
-          s2s: module() | nil,
-          c2s_activity_handler: module() | nil,
-          s2s_activity_handler: module() | nil,
-          fallback: module() | nil,
-          database: module() | nil,
-          social_api_enabled?: boolean(),
-          federated_protocol_enabled?: boolean(),
-          data: term()
-        }
+  @type context() :: ActorFacade.context()
 
   @doc """
   Builds a `SideEffectActor` struct, plugging in modules for the delegates and
@@ -388,7 +389,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
     with true <- ActorFacade.protocol_supported?(context, :c2s),
          context <- wrap_for_social_api(context, outbox_iri, raw_json),
-         {:ok, deliverable} <-
+         {:ok, activity, deliverable} <-
            ActorFacade.handle_c2s_activity(context, activity, top_level: true) do
       {activity, deliverable}
     else
@@ -419,9 +420,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     case set_object_id(context, activity) do
       {:ok, activity} ->
         if APUtils.is_or_extends?(activity, "Create") do
-          APUtils.update_objects(activity, fn object ->
-            set_object_id(context, object)
-          end)
+          case APUtils.get_actor_id(activity, context) do
+            {:ok, actor_id} ->
+              APUtils.update_objects(activity, fn object ->
+                set_object_attributed_to_and_id(context, actor_id, object)
+              end)
+
+            {:error, reason} ->
+              {:error, reason}
+          end
         else
           {:ok, activity}
         end
@@ -531,9 +538,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         actors_to_resolve ->
           # Look for any actors' inboxes that weren't already discovered above;
           # find these by making dereference calls to remote instances
-          app_agent = Fedi.Application.app_agent()
-
-          with {:ok, transport} <- ActorFacade.db_new_transport(context, outbox_iri, app_agent),
+          with {:ok, transport} <- ActorFacade.db_new_transport(context),
                {:ok, max_depth} <-
                  ActorFacade.max_delivery_recursion_depth(context),
                {:ok, remote_actors} <-
@@ -567,6 +572,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
                   recipients ->
                     activity = APUtils.strip_hidden_recipients(activity)
+                    # Logger.debug("prepare #{Utils.get_json_ld_id(activity)}")
                     {:ok, context, activity, recipients}
                 end
               else
@@ -695,14 +701,15 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   of an actor.
   """
   def deliver_to_recipients(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
+        %{box_iri: %URI{}} = context,
         activity,
         recipients
       )
       when is_list(recipients) do
     with {:ok, m} <- Fedi.Streams.Serializer.serialize(activity),
+         :ok <- APUtils.verify_no_hidden_recipients(m, "activity"),
          {:ok, json_body} <- Jason.encode(m) do
-      ActorFacade.db_batch_deliver(context, inbox_iri, app_agent, json_body, recipients)
+      ActorFacade.db_batch_deliver(context, json_body, recipients)
     end
   end
 
@@ -752,7 +759,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
   def has_inbox_forwarding_values(
-        %{data: %{box_iri: box_iri, app_agent: _}} = context,
+        %{box_iri: box_iri} = context,
         %URI{} = inbox_iri,
         val,
         max_depth,
@@ -838,12 +845,12 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Recursion preparation: Try fetching the IRIs so we can recurse into them.
   """
   def dereference_iris(
-        %{data: %{box_iri: box_iri, app_agent: app_agent}} = context,
+        %{box_iri: _box_iri, app_agent: _app_agent} = context,
         iris
       ) do
     Enum.reduce(iris, [], fn iri, acc ->
       # Dereferencing the IRI.
-      with {:ok, m} <- ActorFacade.db_dereference(context, box_iri, app_agent, iri),
+      with {:ok, m} <- ActorFacade.db_dereference(context, iri),
            {:ok, type} <- Fedi.Streams.JSONResolver.resolve(m) do
         [type | acc]
       else
@@ -867,6 +874,22 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     end
   end
 
+  def set_object_attributed_to_and_id(context, %URI{} = actor_id, object) do
+    # FIXME This will happen later in SocialActivityHandler.create
+    # but db_new_id requires an actor to build the id.
+    # Perhaps take it out of the context instead?
+    object =
+      if Utils.get_iri(object, "attributedTo") do
+        object
+      else
+        Utils.set_iri(object, "attributedTo", actor_id)
+      end
+
+    with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do
+      Utils.set_json_ld_id(object, id)
+    end
+  end
+
   @doc """
   Adds the side channel data to the context for Social API
   activity handlers.
@@ -881,22 +904,10 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     be used when a custom function is called.
   """
   def wrap_for_social_api(context, box_iri, raw_json) do
-    app_agent = Fedi.Application.app_agent()
-
-    context_data =
-      case Map.get(context, :data) do
-        m when is_map(m) -> m
-        nil -> %{}
-      end
-
     struct(context,
-      data:
-        Map.merge(context_data, %{
-          box_iri: box_iri,
-          app_agent: app_agent,
-          raw_activity: raw_json,
-          deliverable: true
-        })
+      box_iri: box_iri,
+      raw_activity: raw_json,
+      deliverable: true
     )
   end
 
@@ -924,21 +935,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         _ -> :do_nothing
       end
 
-    app_agent = Fedi.Application.app_agent()
-
-    context_data =
-      case Map.get(context, :data) do
-        m when is_map(m) -> m
-        nil -> %{}
-      end
-
     struct(context,
-      data:
-        Map.merge(context_data, %{
-          box_iri: box_iri,
-          app_agent: app_agent,
-          on_follow: on_follow
-        })
+      box_iri: box_iri,
+      on_follow: on_follow
     )
   end
 end

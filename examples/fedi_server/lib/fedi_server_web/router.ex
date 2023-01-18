@@ -1,12 +1,16 @@
 defmodule FediServerWeb.Router do
   use FediServerWeb, :router
 
-  # Note: make sure to configure all these types in config.exs!
+  import FediServerWeb.UserAuth
+
   pipeline :api do
     plug(:accepts, ["json"])
+    plug(:fetch_session)
+    plug(:fetch_current_user)
     plug(:set_actor)
   end
 
+  # Note: make sure to configure all these types in config.exs!
   pipeline :xrd do
     plug(:accepts, ["xml", "xrd+xml"])
   end
@@ -71,7 +75,8 @@ defmodule FediServerWeb.Router do
         FediServerWeb.SocialCallbacks,
         FediServer.Activities,
         c2s: FediServerWeb.SocialCallbacks,
-        s2s: FediServerWeb.FederatingCallbacks
+        s2s: FediServerWeb.FederatingCallbacks,
+        current_user: conn.assigns[:current_user]
       )
 
     Plug.Conn.put_private(conn, :actor, actor)

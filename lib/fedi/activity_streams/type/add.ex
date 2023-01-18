@@ -46,7 +46,7 @@ defmodule Fedi.ActivityStreams.Type.Add do
     def type_name, do: "Add"
     def disjoint_with, do: ["Link", "Mention"]
     def extended_by, do: []
-    def extends, do: ["Activity, Object"]
+    def extends, do: ["Activity", "Object"]
   end
 
   @enforce_keys [:alias]

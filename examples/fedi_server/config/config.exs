@@ -29,7 +29,7 @@ config :logger, :console,
 config :phoenix, :json_library, Jason
 
 # Configure Akkoma's http_signatures library
-config :http_signatures, adapter: Fedi.ActivityPub.HTTPSignatureTransport
+config :http_signatures, adapter: FediServer.HTTPClient
 
 # Configure all the "Accept" types we will handle
 config :mime, :types, %{

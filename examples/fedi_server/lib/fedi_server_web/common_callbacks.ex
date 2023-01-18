@@ -17,7 +17,7 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `get_inbox`. In this case, the implementation must not send a
+  `Actor.handle_get_inbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -33,7 +33,7 @@ defmodule FediServerWeb.CommonCallbacks do
   def authenticate_get_inbox(context, %Plug.Conn{} = conn) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
-    {:ok, conn, true}
+    {:ok, context, conn, true}
   end
 
   @doc """
@@ -41,7 +41,7 @@ defmodule FediServerWeb.CommonCallbacks do
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
-  authenticate_get_inbox will be called prior to this.
+  `authenticate_get_inbox/2` will be called prior to this.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
@@ -49,7 +49,7 @@ defmodule FediServerWeb.CommonCallbacks do
   def get_inbox(context, %Plug.Conn{} = conn, params) do
     inbox_iri = APUtils.request_id(conn)
 
-    with {:ok, oc} <- Activities.get_collection(inbox_iri, collection_opts(params)) do
+    with {:ok, oc} <- Activities.get_collection(inbox_iri, APUtils.collection_opts(params)) do
       {:ok, conn, oc}
     end
   end
@@ -61,7 +61,7 @@ defmodule FediServerWeb.CommonCallbacks do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  get_outbox. In this case, the implementation must not send a
+  `Actor.handle_get_outbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -77,7 +77,7 @@ defmodule FediServerWeb.CommonCallbacks do
   def authenticate_get_outbox(context, %Plug.Conn{} = conn) do
     # For this example we allow anyone to do anything.
     # Should check conn for a cookie or private token or something.
-    {:ok, conn, true}
+    {:ok, context, conn, true}
   end
 
   @doc """
@@ -85,7 +85,7 @@ defmodule FediServerWeb.CommonCallbacks do
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
-  authenticate_get_outbox will be called prior to this.
+  `authenticate_get_outbox/2` will be called prior to this.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
@@ -94,21 +94,9 @@ defmodule FediServerWeb.CommonCallbacks do
     outbox_iri = APUtils.request_id(conn)
 
     # TODO Parse max_id and min_id from params, add to opts
-    with {:ok, oc} <- Activities.get_collection(outbox_iri, collection_opts(params)) do
+    with {:ok, oc} <- Activities.get_collection(outbox_iri, APUtils.collection_opts(params)) do
       {:ok, conn, oc}
     end
-  end
-
-  def collection_opts(%{}), do: []
-
-  def collection_opts(params) do
-    [{"max_id", :max_id}, {"min_id", :min_id}]
-    |> Enum.reduce([], fn {name, key}, acc ->
-      case Map.get(params, name) do
-        nil -> acc
-        v -> Keyword.put(acc, key, v)
-      end
-    end)
   end
 
   @doc """

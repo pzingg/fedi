@@ -39,6 +39,19 @@ defmodule FediServerWeb.ConnCase do
     %Plug.Conn{conn | scheme: String.to_atom(scheme), host: host, port: port}
   end
 
+  @doc """
+  Logs the given `user` into the `conn`.
+
+  It returns an updated `conn`.
+  """
+  def log_in_user(conn, user) do
+    token = FediServer.Accounts.generate_user_session_token(user)
+
+    conn
+    |> Phoenix.ConnTest.init_test_session(%{})
+    |> Plug.Conn.put_session(:user_token, token)
+  end
+
   setup tags do
     FediServer.DataCase.setup_sandbox(tags)
 

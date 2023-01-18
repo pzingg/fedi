@@ -11,7 +11,7 @@ defmodule Fedi.ActivityPub.Actor do
   alias Fedi.ActivityPub.ActorFacade
   alias Fedi.ActivityPub.Utils, as: APUtils
 
-  @enforce_keys [:common]
+  @enforce_keys [:common, :database, :app_agent]
   defstruct [
     :common,
     :c2s,
@@ -22,7 +22,13 @@ defmodule Fedi.ActivityPub.Actor do
     :database,
     :social_api_enabled?,
     :federated_protocol_enabled?,
-    :data
+    :current_user,
+    :app_agent,
+    :box_iri,
+    :raw_activity,
+    deliverable: true,
+    on_follow: :do_nothing,
+    data: %{}
   ]
 
   @type t() :: %__MODULE__{
@@ -35,7 +41,13 @@ defmodule Fedi.ActivityPub.Actor do
           database: module() | nil,
           social_api_enabled?: boolean(),
           federated_protocol_enabled?: boolean(),
-          data: term()
+          current_user: ActorFacade.current_user(),
+          app_agent: String.t(),
+          box_iri: URI.t() | nil,
+          raw_activity: map() | nil,
+          deliverable: boolean(),
+          on_follow: ActorFacade.on_follow(),
+          data: map()
         }
 
   @doc """
@@ -92,7 +104,8 @@ defmodule Fedi.ActivityPub.Actor do
       fallback: fallback,
       social_api_enabled?: !is_nil(c2s),
       federated_protocol_enabled?: !is_nil(s2s),
-      data: Keyword.get(opts, :data)
+      current_user: Keyword.get(opts, :current_user),
+      app_agent: Fedi.Application.app_agent()
     )
   end
 
@@ -103,14 +116,18 @@ defmodule Fedi.ActivityPub.Actor do
   """
   def handle_post_inbox(
         %{federated_protocol_enabled?: federated_protocol_enabled?} = context,
-        %Plug.Conn{} = conn
+        %Plug.Conn{} = conn,
+        _params \\ %{}
       ) do
+    inbox_iri = APUtils.request_id(conn)
+    context = struct(context, box_iri: inbox_iri)
+
     with {:is_activity_pub_post, true} <-
            {:is_activity_pub_post, APUtils.is_activity_pub_post(conn)},
          {:protocol_enabled, true} <-
            {:protocol_enabled, federated_protocol_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, conn, true}} <-
+         {:authenticated, {:ok, context, conn, true}} <-
            {:authenticated, ActorFacade.authenticate_post_inbox(context, conn, top_level: true)},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
@@ -120,17 +137,16 @@ defmodule Fedi.ActivityPub.Actor do
          {:matched_type, {:ok, as_value}} <-
            {:matched_type, JSONResolver.resolve(m)},
          {:valid_activity, {:ok, activity, _activity_id}} <-
-           {:valid_activity, APUtils.valid_activity?(as_value)},
+           {:valid_activity, APUtils.validate_activity(as_value)},
 
          # Allow server implementations to set context data with a hook.
-         {:ok, conn} <-
+         {:ok, context} <-
            ActorFacade.post_inbox_request_body_hook(context, conn, activity, top_level: true),
 
          # Check authorization of the activity.
          {:authorized, {:ok, conn, true}} <-
            {:authorized,
             ActorFacade.authorize_post_inbox(context, conn, activity, top_level: true)},
-         inbox_iri <- APUtils.request_id(conn),
 
          # Post the activity to the actor's inbox and trigger side effects for
          # that particular Activity type. It is up to the delegate to resolve
@@ -156,36 +172,18 @@ defmodule Fedi.ActivityPub.Actor do
       # If the Federated Protocol is not enabled, then this endpoint is not
       # enabled.
       {:protocol_enabled, _} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :method_not_allowed,
-           "Method not allowed",
-           :protocol_enabled
-         )}
+        {:ok, APUtils.send_json_resp(conn, :method_not_allowed, actor_state: :protocol_enabled)}
 
       # Not authenticated
-      {:authenticated, {:ok, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
+      {:authenticated, {:ok, _, conn, _}} ->
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, actor_state: :authenticated)}
 
       # Respond with bad request -- we do not understand the type.
       {:matched_type, {:error, %Error{code: :unhandled_type}}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           "Bad request",
-           :matched_type
-         )}
+        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :matched_type)}
 
       {:valid_activity, {:error, %Error{code: :missing_id}}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           "Bad request",
-           :valid_activity
-         )}
+        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :valid_activity)}
 
       {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
@@ -194,22 +192,10 @@ defmodule Fedi.ActivityPub.Actor do
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
       {:post_inbox, {:error, %Error{code: :object_required}}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           "Bad request",
-           :post_inbox
-         )}
+        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :post_inbox)}
 
       {:post_inbox, {:error, %Error{code: :target_required}}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           "Bad request",
-           :post_inbox
-         )}
+        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :post_inbox)}
     end
   end
 
@@ -218,12 +204,15 @@ defmodule Fedi.ActivityPub.Actor do
   actor's inbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def handle_get_inbox(%{} = context, %Plug.Conn{} = conn, params \\ %{}) do
+  def handle_get_inbox(context, %Plug.Conn{} = conn, params \\ %{}) do
+    inbox_iri = APUtils.request_id(conn)
+    context = struct(context, box_iri: inbox_iri)
+
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, conn, true}} <-
+         {:authenticated, {:ok, context, conn, true}} <-
            {:authenticated, ActorFacade.authenticate_get_inbox(context, conn, top_level: true)},
 
          # Everything is good to begin processing the request.
@@ -253,7 +242,7 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, conn, _}} ->
+      {:authenticated, {:ok, _, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
     end
   end
@@ -264,16 +253,20 @@ defmodule Fedi.ActivityPub.Actor do
   implement application specific functionality.
   """
   def handle_post_outbox(
-        %{social_api_enabled?: social_api_enabled?} = actor,
-        %Plug.Conn{} = conn
+        %{social_api_enabled?: social_api_enabled?} = context,
+        %Plug.Conn{} = conn,
+        _params \\ %{}
       ) do
+    outbox_iri = APUtils.request_id(conn)
+    context = struct(context, box_iri: outbox_iri)
+
     with {:is_activity_pub_post, true} <-
            {:is_activity_pub_post, APUtils.is_activity_pub_post(conn)},
          {:protocol_enabled, true} <-
            {:protocol_enabled, social_api_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_post_outbox(actor, conn, top_level: true)},
+         {:authenticated, {:ok, context, conn, true}} <-
+           {:authenticated, ActorFacade.authenticate_post_outbox(context, conn, top_level: true)},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
          # activities.
@@ -281,18 +274,16 @@ defmodule Fedi.ActivityPub.Actor do
            APUtils.decode_json_body(conn),
          {:matched_type, {:ok, as_value}} <-
            {:matched_type, JSONResolver.resolve(m)},
+         # It's ok to post just an object
          {:valid_activity, {:ok, activity, activity_id}} <-
-           {:valid_activity, APUtils.valid_activity?(as_value)},
-
+           {:valid_activity, ensure_activity(context, as_value, outbox_iri)},
          # Allow server implementations to set context data with a hook.
-         {:ok, conn} <-
-           ActorFacade.post_outbox_request_body_hook(actor, conn, activity, top_level: true),
-
+         {:ok, context} <-
+           ActorFacade.post_outbox_request_body_hook(context, conn, activity, top_level: true),
          # The HTTP request steps are complete, complete the rest of the outbox
          # and delivery process.
-         outbox_id <- APUtils.request_id(conn),
          {:delivered, :ok} <-
-           {:delivered, deliver(actor, outbox_id, activity, m)} do
+           {:delivered, deliver(context, outbox_iri, activity, m)} do
       # Respond to the request with the new Activity's IRI location.
       #
       # Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
@@ -319,40 +310,22 @@ defmodule Fedi.ActivityPub.Actor do
       # Attempts to submit objects to servers not implementing client to
       # server support SHOULD result in a 405 Method Not Allowed response.
       {:protocol_enabled, _} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :method_not_allowed,
-           "Method not allowed",
-           :protocol_enabled
-         )}
+        {:ok, APUtils.send_json_resp(conn, :method_not_allowed, actor_state: :protocol_enabled)}
 
       # Not authenticated
-      {:authenticated, {:ok, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
+      {:authenticated, {:ok, _, conn, _}} ->
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, actor_state: :autenticated)}
 
       # We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
 
       # Send the rejection to the client.
       {:matched_type, {:error, %Error{code: :unhandled_type} = error}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           error,
-           :matched_type
-         )}
+        {:ok, APUtils.send_json_resp(conn, error, actor_state: :matched_type)}
 
       # Send the rejection to the client.
       {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           error,
-           :valid_activity
-         )}
+        {:ok, APUtils.send_json_resp(conn, error, actor_state: :valid_activity)}
 
       {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
@@ -361,33 +334,18 @@ defmodule Fedi.ActivityPub.Actor do
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
       {:delivered, {:error, %Error{code: :object_required} = error}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           error,
-           :delivered
-         )}
+        {:ok, APUtils.send_json_resp(conn, error, actor_state: :delivered)}
 
       {:delivered, {:error, %Error{code: :target_required} = error}} ->
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :bad_request,
-           error,
-           :delivered
-         )}
+        {:ok, APUtils.send_json_resp(conn, error, actor_state: :delivered)}
 
-      {:delivered, {:error, reason}} ->
-        Logger.error("deliver failed #{reason}")
+      {step, {:error, %Error{} = error}} ->
+        Logger.error("failed in step #{step}: #{error}")
+        {:ok, APUtils.send_json_resp(conn, error, actor_state: step)}
 
-        {:ok,
-         APUtils.send_json_resp(
-           conn,
-           :internal_server_error,
-           "Internal server error",
-           :delivered
-         )}
+      {step, {:error, reason}} ->
+        Logger.error("failed in step #{step}: #{reason}")
+        {:ok, APUtils.send_json_resp(conn, :internal_server_error, actor_state: step)}
     end
   end
 
@@ -396,17 +354,20 @@ defmodule Fedi.ActivityPub.Actor do
   actor's outbox independent on an application. It relies on a delegate to
   implement application specific functionality.
   """
-  def handle_get_outbox(%{} = actor, %Plug.Conn{} = conn, params \\ %{}) do
+  def handle_get_outbox(context, %Plug.Conn{} = conn, params \\ %{}) do
+    outbox_iri = APUtils.request_id(conn)
+    context = struct(context, box_iri: outbox_iri)
+
     with {:is_activity_pub_get, true} <-
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_get_outbox(actor, conn, top_level: true)},
+         {:authenticated, {:ok, context, conn, true}} <-
+           {:authenticated, ActorFacade.authenticate_get_outbox(context, conn, top_level: true)},
 
          # Everything is good to begin processing the request.
          {:ok, conn, oc} <-
-           ActorFacade.get_outbox(actor, conn, params, top_level: true),
+           ActorFacade.get_outbox(context, conn, params, top_level: true),
 
          # Request has been processed. Begin responding to the request.
          # Serialize the OrderedCollection.
@@ -427,7 +388,7 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, conn, _}} ->
+      {:authenticated, {:ok, _, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
     end
   end
@@ -476,17 +437,8 @@ defmodule Fedi.ActivityPub.Actor do
       when is_struct(as_value) do
     # If the value is not an Activity or type extending from Activity, then
     # we need to wrap it in a Create Activity.
-    with {:ok, activity} <-
+    with {:ok, activity, _activity_id} <-
            ensure_activity(actor, as_value, outbox_iri),
-         # At this point, this should be a safe conversion. If this error is
-         # triggered, then there is either a bug in the delegation of
-         # WrapInCreate, behavior is not lining up in the generated ExtendedBy
-         # code, or something else is incorrect with the type system.
-         {:valid_activity, true} <-
-           {:valid_activity, APUtils.is_or_extends?(activity, "Activity")},
-         # Delegate generating new IDs for the activity and all new objects.
-         {:ok, activity} <-
-           ActorFacade.add_new_ids(actor, activity, top_level: true),
          # Post the activity to the actor's outbox and trigger side effects for
          # that particular Activity type.
          # Since 'm' is nil-able and side effects may need access to literal nil
@@ -523,10 +475,26 @@ defmodule Fedi.ActivityPub.Actor do
   wrapping Create and its wrapped Object.
   """
   def ensure_activity(actor, as_value, outbox) when is_struct(as_value) do
-    if APUtils.is_or_extends?(as_value, "Activity") do
-      {:ok, as_value}
+    activity_result =
+      if APUtils.is_or_extends?(as_value, "Activity") do
+        {:ok, as_value}
+      else
+        ActorFacade.wrap_in_create(actor, as_value, outbox, top_level: true)
+      end
+
+    with {:ok, activity} <- activity_result,
+         # At this point, this should be a safe conversion. If this error is
+         # triggered, then there is either a bug in the delegation of
+         # WrapInCreate, behavior is not lining up in the generated ExtendedBy
+         # code, or something else is incorrect with the type system.
+         {:is_activity, true} <- {:is_activity, APUtils.is_or_extends?(activity, "Activity")},
+         # Delegate generating new IDs for the activity and all new objects.
+         {:ok, activity} <-
+           ActorFacade.add_new_ids(actor, activity, top_level: true) do
+      APUtils.validate_activity(activity)
     else
-      ActorFacade.wrap_in_create(actor, as_value, outbox, top_level: true)
+      {:error, result} -> {:error, result}
+      {:is_activity, _} -> {:error, "Not an activity"}
     end
   end
 

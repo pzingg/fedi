@@ -23,8 +23,9 @@ defmodule FediServer.HTTPClient do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias FediServer.Activities
-  alias FediServer.Activities.User
+  alias FediServer.Accounts.User
   alias FediServerWeb.WebFinger
 
   # @accept_header_value is the Accept header value indicating that the
@@ -86,15 +87,13 @@ defmodule FediServer.HTTPClient do
     }
   end
 
-  @doc """
-  Sends a GET request signed with an HTTP Signature to obtain an
-    ActivityStreams value.
-  """
-  def dereference(
-        %__MODULE__{private_key: private_key, public_key_id: public_key_id} = transport,
-        %URI{host: host, path: path} = url
-      )
-      when is_tuple(private_key) and is_binary(public_key_id) do
+  def signed_headers(
+        %URI{host: host, path: path} = url,
+        private_key,
+        public_key_id,
+        user_agent,
+        nil
+      ) do
     date_str = Fedi.ActivityPub.Utils.date_header_value()
 
     headers_for_signature =
@@ -107,13 +106,59 @@ defmodule FediServer.HTTPClient do
 
     signature = HTTPSignatures.sign(private_key, public_key_id, headers_for_signature)
 
-    headers = [
+    [
       {"accept", @accept_header_value},
       {"accept-charset", "utf-8"},
-      {"user-agent", "#{transport.app_agent} #{transport.user_agent}"},
+      {"user-agent"},
       {"date", date_str},
       {"signature", signature}
     ]
+  end
+
+  def signed_headers(
+        %URI{host: host, path: path} = url,
+        private_key,
+        public_key_id,
+        user_agent,
+        body
+      ) do
+    date_str = Fedi.ActivityPub.Utils.date_header_value()
+    digest = "SHA-256=" <> (:crypto.hash(:sha256, body) |> Base.encode64())
+    content_length = byte_size(body) |> to_string()
+
+    headers_for_signature =
+      [
+        {"(request-target)", "post #{path}"},
+        {"host", host},
+        {"date", date_str},
+        {"content-length", content_length},
+        {"digest", digest}
+      ]
+      |> Map.new()
+
+    signature = HTTPSignatures.sign(private_key, public_key_id, headers_for_signature)
+
+    [
+      {"content-type", "application/activity+json"},
+      {"user-agent", user_agent},
+      {"date", date_str},
+      {"content-length", content_length},
+      {"digest", digest},
+      {"signature", signature}
+    ]
+  end
+
+  @doc """
+  Sends a GET request signed with an HTTP Signature to obtain an
+    ActivityStreams value.
+  """
+  def dereference(
+        %__MODULE__{private_key: private_key, public_key_id: public_key_id} = transport,
+        %URI{} = url
+      )
+      when is_tuple(private_key) and is_binary(public_key_id) do
+    user_agent = "#{transport.app_agent} #{transport.user_agent}"
+    headers = signed_headers(url, private_key, public_key_id, user_agent, nil)
 
     opts = [
       method: :get,
@@ -149,32 +194,11 @@ defmodule FediServer.HTTPClient do
   def deliver(
         %__MODULE__{private_key: private_key, public_key_id: public_key_id} = transport,
         body,
-        %URI{host: host, path: path} = url
+        %URI{} = url
       )
       when is_tuple(private_key) and is_binary(public_key_id) and is_binary(body) do
-    date_str = Fedi.ActivityPub.Utils.date_header_value()
-    digest = "SHA-256=" <> (:crypto.hash(:sha256, body) |> Base.encode64())
-
-    headers_for_signature =
-      [
-        {"(request-target)", "post #{path}"},
-        {"host", host},
-        {"date", date_str},
-        {"content-length", byte_size(body)},
-        {"digest", digest}
-      ]
-      |> Map.new()
-
-    signature = HTTPSignatures.sign(private_key, public_key_id, headers_for_signature)
-
-    headers = [
-      {"content-type", "application/activity+json"},
-      {"user-agent", "#{transport.app_agent} #{transport.user_agent}"},
-      {"date", date_str},
-      {"content-length", byte_size(body)},
-      {"digest", digest},
-      {"signature", signature}
-    ]
+    user_agent = "#{transport.app_agent} #{transport.user_agent}"
+    headers = signed_headers(url, private_key, public_key_id, user_agent, body)
 
     opts = [
       method: :post,
@@ -298,13 +322,28 @@ defmodule FediServer.HTTPClient do
     {:ok, private_key_pem, public_key_pem}
   end
 
+  def public_key_from_pem(public_key_pem) do
+    if is_binary(public_key_pem) && public_key_pem != "" do
+      with [public_key_code | _] <- :public_key.pem_decode(public_key_pem),
+           public_key <- :public_key.pem_entry_decode(public_key_code) do
+        {:ok, public_key}
+      else
+        _ ->
+          {:error, "Could not decode public key"}
+      end
+    else
+      {:error, "Missing public key"}
+    end
+  end
+
   def keys_from_pem(pem) when is_binary(pem) do
-    with [private_key_code] <- :public_key.pem_decode(pem),
+    with [private_key_code | _] <- :public_key.pem_decode(pem),
          private_key <- :public_key.pem_entry_decode(private_key_code),
          {:RSAPrivateKey, _, modulus, exponent, _, _, _, _, _, _, _} <- private_key do
       {:ok, private_key, {:RSAPublicKey, modulus, exponent}}
     else
-      error -> {:error, error}
+      _ ->
+        {:error, "Could not decode private key"}
     end
   end
 
@@ -314,10 +353,14 @@ defmodule FediServer.HTTPClient do
   Fetch a public key, given a `Plug.Conn` structure.
   """
   def fetch_public_key(%Plug.Conn{} = conn) do
-    with %{"keyId" => key_id} <- HTTPSignatures.signature_for_conn(conn),
+    with {:fetch_signature, %{"keyId" => key_id} = signature} <-
+           {:fetch_signature, HTTPSignatures.signature_for_conn(conn)},
          {:ok, actor_id} <- key_id_to_actor_id(key_id),
          {:ok, public_key} <- Activities.get_public_key(actor_id) do
       {:ok, public_key}
+    else
+      {:error, reason} -> {:error, reason}
+      {:fetch_signature, _} -> {:error, "No signature in connection"}
     end
   end
 
@@ -326,14 +369,14 @@ defmodule FediServer.HTTPClient do
   Called when the initial key supplied failed to validate the signature.
   """
   def refetch_public_key(%Plug.Conn{} = conn) do
-    with %{"keyId" => key_id} <- HTTPSignatures.signature_for_conn(conn),
+    with {:fetch_signature, %{"keyId" => key_id}} <-
+           {:fetch_signature, HTTPSignatures.signature_for_conn(conn)},
          {:ok, actor_id} <- key_id_to_actor_id(key_id),
-         {:ok, %User{public_key: public_key}} <- Activities.resolve_and_insert_user(actor_id) do
-      if is_binary(public_key) && public_key != "" do
-        {:ok, public_key}
-      else
-        {:error, "No public key found"}
-      end
+         {:ok, %User{} = user} <- Activities.resolve_and_insert_user(actor_id) do
+      User.get_public_key(user)
+    else
+      {:error, reason} -> {:error, reason}
+      {:fetch_signature, _} -> {:error, "No signature in connection"}
     end
   end
 
@@ -348,13 +391,13 @@ defmodule FediServer.HTTPClient do
   def key_id_to_actor_id(key_id) do
     account =
       key_id
-      |> URI.parse()
-      |> Map.put(:fragment, nil)
+      |> Utils.to_uri()
+      |> Utils.base_uri()
       |> remove_suffix(@known_public_key_suffixes)
 
     case WebFinger.finger(account) do
       {:ok, %{"ap_id" => ap_id}} ->
-        {:ok, ap_id}
+        {:ok, Utils.to_uri(ap_id)}
 
       {:error, _reason} ->
         {:error, "Could not finger #{key_id}"}

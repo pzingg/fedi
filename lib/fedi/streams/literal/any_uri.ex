@@ -1,6 +1,8 @@
 defmodule Fedi.Streams.Literal.AnyURI do
   @moduledoc false
 
+  alias Fedi.Streams.Utils
+
   # serialize converts a anyURI value to an interface representation suitable
   # for marshalling into a text or binary format.
   def serialize(%URI{} = uri) do
@@ -12,7 +14,7 @@ defmodule Fedi.Streams.Literal.AnyURI do
   def deserialize(v) do
     case Fedi.Streams.Literal.String.maybe_to_string(v) do
       {:ok, s} ->
-        uri = URI.parse(s)
+        uri = Utils.to_uri(s)
 
         if is_nil(uri.scheme) do
           {:error, "#{s} cannot be interpreted as a xsd:anyURI: no scheme"}

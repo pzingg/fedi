@@ -9,10 +9,12 @@ defmodule FediServerWeb.SocialCallbacks do
 
   require Logger
 
+  alias Fedi.Streams.Error
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.ActorFacade
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
-  alias FediServer.Activities.User
+  alias FediServer.Accounts.User
   alias FediServerWeb.CommonCallbacks
 
   @impl true
@@ -34,23 +36,130 @@ defmodule FediServerWeb.SocialCallbacks do
   Hook callback after parsing the request body for a client request
   to the Actor's outbox.
 
-  Can be used to set contextual information based on the
-  ActivityStreams object received.
-
   Only called if the Social API is enabled.
 
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
+  Can be used to set contextual information or to prevent further processing
+  based on the Activity received, such as when the current user
+  is not authorized to post the activity.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the ActorBehavior implementation must not
-  send a response to the connection as is expected that the caller
-  to post_outbox will do so when handling the error.
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not
+  send a response to the connection as it is expected that the caller
+  to `Actor.handle_post_outbox/3` will do so when handling the error.
   """
   @impl true
-  def post_outbox_request_body_hook(_context, %Plug.Conn{} = conn, _activity) do
-    {:ok, conn}
+  def post_outbox_request_body_hook(context, %Plug.Conn{} = _conn, activity) do
+    with {:ok, context} <- verify_actor_and_attributed_to(context, activity) do
+      check_object_spoofing(context, activity)
+    end
+  end
+
+  def verify_actor_and_attributed_to(
+        %{current_user: %{ap_id: current_user_id}} = context,
+        activity
+      ) do
+    actor_id =
+      case Utils.get_iri(activity, "actor") do
+        %URI{} = id -> URI.to_string(id)
+        _ -> nil
+      end
+
+    invalid_message =
+      cond do
+        actor_id != current_user_id ->
+          "Current user can not create activity for actor #{actor_id}"
+
+        APUtils.is_or_extends?(activity, "Create") ->
+          with object when is_struct(object) <- Utils.get_object(activity),
+               %URI{} = id <- Utils.get_iri(object, "attributedTo") do
+            attributed_to_id = URI.to_string(id)
+
+            if attributed_to_id == current_user_id do
+              nil
+            else
+              "Current user can not create object attributed to #{attributed_to_id}"
+            end
+          else
+            _ ->
+              nil
+          end
+
+        true ->
+          nil
+      end
+
+    if invalid_message do
+      {:error, %Error{code: :unauthorized_create, status: :bad_request, message: invalid_message}}
+    else
+      {:ok, context}
+    end
+  end
+
+  # Ref: AP Section 3. Preventing spoofing attacks. When an activity has an
+  # object id, the server should dereference the id
+  # both to ensure that it exists and is a valid object, and that it is not
+  # misrepresenting the object.
+  def check_object_spoofing(context, activity) do
+    if APUtils.is_or_extends?(activity, ["Update", "Like", "Announce"]) do
+      case APUtils.get_object_id(activity) do
+        {:ok, object_id} ->
+          with {:original_object, {:ok, derefed_m}} <-
+                 {:original_object, ActorFacade.db_dereference(context, object_id)},
+               {:ok, activity_m} <- Fedi.Streams.Serializer.serialize(activity) do
+            case activity_m["object"] do
+              object_m when is_map(object_m) ->
+                case unmatched_property?(["type", "attributedTo"], object_m, derefed_m) do
+                  prop_name when is_binary(prop_name) ->
+                    Logger.error(
+                      "Object spoofed at #{prop_name}:\n   db has #{inspect(derefed_m[prop_name])}\n  act has #{inspect(object_m[prop_name])}"
+                    )
+
+                    {:error,
+                     %Error{
+                       code: :object_spoofed,
+                       status: :bad_request,
+                       message: "Object's '#{prop_name}' value may be spoofed"
+                     }}
+
+                  _ ->
+                    {:ok, context}
+                end
+
+              _object_id_or_nil ->
+                {:ok, context}
+            end
+          else
+            {:error, reason} ->
+              {:error, reason}
+
+            {:original_object, _} ->
+              Logger.error("No existing object at #{object_id}")
+
+              {:error,
+               %Error{
+                 code: :object_spoofed,
+                 status: :bad_request,
+                 message: "Object #{object_id} does not exist"
+               }}
+          end
+
+        _ ->
+          {:ok, context}
+      end
+    else
+      {:ok, context}
+    end
+  end
+
+  def unmatched_property?(prop_names, object_m, derefed_m) do
+    List.wrap(prop_names)
+    |> Enum.find(fn prop_name ->
+      if object_m[prop_name] == derefed_m[prop_name] do
+        nil
+      else
+        prop_name
+      end
+    end)
   end
 
   @doc """
@@ -59,10 +168,11 @@ defmodule FediServerWeb.SocialCallbacks do
 
   Only called if the Social API is enabled.
 
-  If an error is returned, it is returned to the caller of post_outbox.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_outbox/3`.
   """
   @impl true
-  def add_new_ids(context, activity) do
+  def add_new_ids(_context, _activity) do
     # Handled by SideEffectActor.
     {:error, "Unexpected"}
   end
@@ -73,7 +183,7 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not send a
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -87,8 +197,18 @@ defmodule FediServerWeb.SocialCallbacks do
   to be processed.
   """
   @impl true
-  def authenticate_post_outbox(context, %Plug.Conn{} = conn) do
-    {:ok, conn, true}
+  def authenticate_post_outbox(
+        %{current_user: current_user} = context,
+        %Plug.Conn{} = conn
+      ) do
+    case current_user do
+      %{ap_id: _current_user_id} ->
+        {:ok, context, conn, true}
+
+      _ ->
+        Logger.error("No current user")
+        {:ok, context, conn, false}
+    end
   end
 
   @doc """
@@ -98,7 +218,7 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Social API is enabled.
   """
   @impl true
-  def wrap_in_create(context, value, %URI{} = outbox_iri) do
+  def wrap_in_create(_context, _value, %URI{} = _outbox_iri) do
     # Handled by SideEffectActor.
     {:error, "Unexpected"}
   end
@@ -117,7 +237,9 @@ defmodule FediServerWeb.SocialCallbacks do
   Create a following relationship.
   """
   @impl true
-  def follow(context, activity) do
+  def follow(_context, activity) do
+    Logger.debug("Follow")
+
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
          {:follower_id, %URI{} = follower_id} <- {:follower_id, APUtils.to_id(actor)},
@@ -125,9 +247,9 @@ defmodule FediServerWeb.SocialCallbacks do
          {:ok, %User{}} <- Activities.ensure_user(follower_id, true),
          # Insert remote following user if not in db
          {:ok, %User{}} <- Activities.ensure_user(following_id, false),
-         {:ok, relationship} <- Activities.follow(follower_id, following_id, :pending) do
+         {:ok, _relationship} <- Activities.follow(follower_id, following_id, :pending) do
       Logger.debug("Inserted new relationship")
-      {:ok, activity, false}
+      {:ok, activity, true}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
         Logger.error("Insert error #{Activities.describe_errors(changeset)}")

@@ -9,40 +9,38 @@ defmodule Fedi.ActivityPub.FederatingApi do
 
   alias Fedi.ActivityPub.ActorFacade
 
-  @type context() :: ActorFacade.s2s_context()
+  @type context() :: ActorFacade.context()
   @type on_follow() :: ActorFacade.on_follow()
 
   @doc """
   Hook callback after parsing the request body for a federated request
   to the Actor's inbox.
 
-  Can be used to set contextual information based on the Activity
-  received.
-
   Only called if the Federated Protocol is enabled.
 
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
+  Can be used to set contextual information or to prevent further processing
+  based on the Activity received.
+
+  Authentication has been approved, but authorization has not been
+  checked when this hook is called.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not
   send a response to `conn` as is expected that the caller
-  to `post_inbox` will do so when handling the error.
+  to `Actor.handle_post_inbox/3` will do so when handling the error.
   """
   @callback post_inbox_request_body_hook(
               context :: context(),
               conn :: Plug.Conn.t(),
               activity :: struct()
             ) ::
-              {:ok, Plug.Conn.t()} | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
-  AuthenticatePostInbox delegates the authentication of a POST to an
-  inbox.
+  Delegates the authentication of a POST to an inbox.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not send a
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not send a
   response to `conn` as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -56,7 +54,8 @@ defmodule Fedi.ActivityPub.FederatingApi do
   to be processed.
   """
   @callback authenticate_post_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Delegates the authorization of an activity that
@@ -65,7 +64,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   Only called if the Federated Protocol is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not send a
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not send a
   response to `conn` as is expected that the client will
   do so when handling the error. The 'authorized' is ignored.
 
@@ -73,7 +72,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   must be false and error nil. It is expected that the implementation
   handles sending a response to `conn` in this case.
 
-  Finally, if the authentication and authorization succeeds, then
+  Finally, if the authorization succeeds, then
   authorized must be true and error nil. The request will continue
   to be processed.
   """
@@ -82,7 +81,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
               conn :: Plug.Conn.t(),
               activity :: struct()
             ) ::
-              {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, conn :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
 
   @doc """
   Delegates the side effects of adding to the inbox and
@@ -90,7 +89,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
 
   Only called if the Federated Protocol is enabled.
 
-  As a side effect, `post_inbox` sets the federated data in the inbox, but
+  As a side effect, `Actor.handle_post_inbox/3` sets the federated data in the inbox, but
   not on its own in the database, as InboxForwarding (which is called
   later) must decide whether it has seen this activity before in order
   to determine whether to do the forwarding algorithm.
@@ -123,7 +122,8 @@ defmodule Fedi.ActivityPub.FederatingApi do
   Activity is examined for the information about who to inbox forward
   to.
 
-  If an error is returned, it is returned to the caller of `post_inbox`.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_inbox/3`.
   """
 
   @callback inbox_fowarding(context :: context(), inbox_iri :: URI.t(), activity :: struct()) ::
@@ -137,7 +137,8 @@ defmodule Fedi.ActivityPub.FederatingApi do
   `outbox_iri` is the outbox of the sender. The Activity contains
   the information about the intended recipients.
 
-  If an error is returned, it is returned to the caller of PostOutbox.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_outbox/3`.
   """
   @callback deliver(context :: context(), outbox_iri :: URI.t(), activity :: struct()) ::
               :ok | {:error, term()}
@@ -148,7 +149,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
 
   Applications are not expected to handle every single ActivityStreams
   type and extension, so the unhandled ones are passed to
-  default_callback.
+  `default_callback/2`.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
               :pass | {:ok, activity :: struct()} | {:error, term()}
@@ -159,7 +160,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   being blocked or other application-specific logic.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`.
+  `Actor.handle_post_inbox/3`.
 
   If no error is returned, but authentication or authorization fails,
   then blocked must be true and error nil. An http.StatusForbidden

@@ -37,8 +37,6 @@ Controllers (see `inbox_controller.ex` and `outbox_controller.ex`)
 pull the Actor out of the connection to process the GET and
 POST requests.
 
-No user authentication or authorization is performed.
-
 Further testing in a real-world federating environment (sending to and
 receiving from actors on other servers, say Pleroma or Mastodon servers),
 is needed to provide full code coverage. Currently these have only been

@@ -3,6 +3,8 @@ defmodule Fedi.Streams.BaseProperty do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+
   @deserializers [
     :any_uri,
     :iri,
@@ -95,7 +97,7 @@ defmodule Fedi.Streams.BaseProperty do
   def deserialize_type(%Pipeline{input: i} = pipeline, :iri) do
     case Fedi.Streams.Literal.String.maybe_to_string(i) do
       {:ok, s} ->
-        uri = URI.parse(s)
+        uri = Utils.to_uri(s)
 
         # If error exists, don't error out -- skip this and treat as unknown string ([]byte) at worst
         # Also, if no scheme exists, don't treat it as a URL -- net/url is greedy

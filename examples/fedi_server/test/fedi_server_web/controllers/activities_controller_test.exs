@@ -1,10 +1,12 @@
 defmodule FediServerWeb.ActivitiesControllerTest do
   use FediServerWeb.ConnCase
 
-  test "GET an activity", %{conn: conn} do
-    {[activity | _], _objects} = outbox_fixtures()
+  alias Fedi.Streams.Utils
 
-    %URI{path: path} = URI.parse(activity.ap_id)
+  test "GET an activity", %{conn: conn} do
+    {_users, [activity | _], _objects} = outbox_fixtures()
+
+    %URI{path: path} = Utils.to_uri(activity.ap_id)
 
     conn =
       conn

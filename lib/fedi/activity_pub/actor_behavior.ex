@@ -25,57 +25,53 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Hook callback after parsing the request body for a federated request
   to the Actor's inbox.
 
-  Can be used to set contextual information based on the Activity
-  received.
-
   Only called if the Federated Protocol is enabled.
 
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
+  Can be used to set contextual information or to prevent further processing
+  based on the Activity received.
+
+  Authentication has been approved, but authorization has not been
+  checked when this hook is called.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not
   send a response to the connection as is expected that the caller
-  to `post_inbox` will do so when handling the error.
+  to `Actor.handle_post_inbox/3` will do so when handling the error.
   """
   @callback post_inbox_request_body_hook(
               context :: context(),
               conn :: Plug.Conn.t(),
               activity :: struct()
             ) ::
-              {:ok, Plug.Conn.t()} | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
   Hook callback after parsing the request body for a client request
   to the Actor's outbox.
 
-  Can be used to set contextual information based on the
-  ActivityStreams object received.
-
   Only called if the Social API is enabled.
 
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
+  Can be used to set contextual information or to prevent further processing
+  based on the Activity received, such as when the current user
+  is not authorized to post the activity.
 
   If an error is returned, it is passed back to the caller of
-  `post_outbox`. In this case, the implementation must not
-  send a response to the connection as is expected that the caller
-  to `post_outbox` will do so when handling the error.
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not
+  send a response to the connection as it is expected that the caller
+  to `Actor.handle_post_outbox/3` will do so when handling the error.
   """
   @callback post_outbox_request_body_hook(
               context :: context(),
               conn :: Plug.Conn.t(),
               activity :: struct()
             ) ::
-              {:ok, Plug.Conn.t()} | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
   Delegates the authentication of a POST to an inbox.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not send a
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -92,7 +88,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
               context :: context(),
               conn :: Plug.Conn.t()
             ) ::
-              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Delegates the authentication of a GET to an inbox.
@@ -101,7 +98,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  GetInbox. In this case, the implementation must not send a
+  `Actor.handle_get_inbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -114,7 +111,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   to be processed.
   """
   @callback authenticate_get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Delegates the authorization of an activity that
@@ -123,7 +121,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Only called if the Federated Protocol is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `post_inbox`. In this case, the implementation must not send a
+  `Actor.handle_post_inbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authorized' is ignored.
 
@@ -131,7 +129,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   must be false and error nil. It is expected that the implementation
   handles sending to the connection in this case.
 
-  Finally, if the authentication and authorization succeeds, then
+  Finally, if the authorization succeeds, then
   authorized must be true and error nil. The request will continue
   to be processed.
   """
@@ -148,7 +146,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  PostOutbox. In this case, the implementation must not send a
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -162,7 +160,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   to be processed.
   """
   @callback authenticate_post_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Delegates the authentication of a GET to an outbox.
@@ -171,7 +170,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `get_outbox`. In this case, the implementation must not send a
+  `Actor.handle_get_outbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -185,7 +184,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   to be processed.
   """
   @callback authenticate_get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Delegates the side effects of adding to the inbox and
@@ -222,7 +222,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Activity is examined for the information about who to inbox forward
   to.
 
-  If an error is returned, it is returned to the caller of post_inbox.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_inbox/3`.
   """
   @callback inbox_forwarding(context :: context(), inbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}
@@ -262,7 +263,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
 
   Only called if the Social API is enabled.
 
-  If an error is returned, it is returned to the caller of `post_outbox`.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_outbox/3`.
   """
   @callback add_new_ids(context :: context(), activity :: term()) ::
               {:ok, activity :: term()} | {:error, term()}
@@ -276,7 +278,8 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   `outbox_iri` is the outbox of the sender. The Activity contains
   the information about the intended recipients.
 
-  If an error is returned, it is returned to the caller of post_outbox.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_outbox/3`.
   """
   @callback deliver(context :: context(), outbox_iri :: URI.t(), activity :: term()) ::
               :ok | {:error, term()}

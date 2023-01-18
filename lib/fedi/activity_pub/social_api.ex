@@ -9,41 +9,38 @@ defmodule Fedi.ActivityPub.SocialApi do
 
   alias Fedi.ActivityPub.ActorFacade
 
-  @type context() :: ActorFacade.c2s_context()
+  @type context() :: ActorFacade.context()
 
   @doc """
   Hook callback after parsing the request body for a client request
   to the Actor's outbox.
 
-  Can be used to set contextual information based on the
-  ActivityStreams object received.
-
   Only called if the Social API is enabled.
 
-  Warning: Neither authentication nor authorization has taken place at
-  this time. Doing anything beyond setting contextual information is
-  strongly discouraged.
+  Can be used to set contextual information or to prevent further processing
+  based on the Activity received, such as when the current user
+  is not authorized to post the activity.
 
   If an error is returned, it is passed back to the caller of
-  `post_outbox`. In this case, the implementation must not
-  send a response to the connection as is expected that the caller
-  to `post_outbox` will do so when handling the error.
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not
+  send a response to the connection as it is expected that the caller
+  to `Actor.handle_post_outbox/3` will do so when handling the error.
   """
   @callback post_outbox_request_body_hook(
               context :: context(),
               conn :: Plug.Conn.t(),
               activity :: struct()
             ) ::
-              {:ok, response :: Plug.Conn.t()} | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
-  AuthenticatePostOutbox delegates the authentication of a POST to an
+  Delegates the authentication of a POST to an
   outbox.
 
   Only called if the Social API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  post_outbox. In this case, the implementation must not send a
+  `Actor.handle_post_outbox/3`. In this case, the implementation must not send a
   response to the connection as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -57,7 +54,8 @@ defmodule Fedi.ActivityPub.SocialApi do
   to be processed.
   """
   @callback authenticate_post_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Sets new URL ids on the activity. It also does so for all
@@ -65,7 +63,8 @@ defmodule Fedi.ActivityPub.SocialApi do
 
   Only called if the Social API is enabled.
 
-  If an error is returned, it is returned to the caller of PostOutbox.
+  If an error is returned, it is returned to the caller of
+  `Actor.handle_post_outbox/3`.
   """
 
   @callback add_new_ids(context :: context(), activity :: struct()) ::
@@ -86,7 +85,7 @@ defmodule Fedi.ActivityPub.SocialApi do
 
   Applications are not expected to handle every single ActivityStreams
   type and extension, so the unhandled ones are passed to
-  default_callback.
+  `default_callback/2`.
   """
   @callback default_callback(context :: context(), activity :: struct()) ::
               :pass | {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}

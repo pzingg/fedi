@@ -3,10 +3,6 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   A behavior for a context around database operations.
   """
 
-  alias Fedi.ActivityPub.Actor
-
-  @type transport_params() :: ActorFacade.c2s_data() | ActorFacade.s2s_data()
-
   @doc """
   Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
   contains the specified 'id'.
@@ -17,6 +13,18 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   @doc """
   Returns the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
   at the specified IRI.
+
+  `opts` can include the following keywords:
+
+  - `:page` - if true (the default), return an OrderedCollectionPage,
+    otherwise return an OrderedCollection with 'totalItems' and 'first'
+    properties.
+  - `:page_size` - if `:page` is set, the maximum number of 'orderedItems'
+    to include in the result.
+  - `:max_id` - if `:page` is set, only include items older than
+    than `:max_id`
+  - `:min_id` - if `:page` is set, only include items equal to or
+    more recent than `:min_id`
   """
   @callback get_collection(coll_id :: URI.t(), opts :: Keyword.t()) ::
               {:ok, ordered_collection_page :: struct()} | {:error, term()}

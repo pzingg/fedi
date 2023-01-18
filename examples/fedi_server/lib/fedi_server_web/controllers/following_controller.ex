@@ -12,7 +12,7 @@ defmodule FediServerWeb.FollowingController do
     actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # TODO Check authentication and authorization
-    handle_collection(conn, actor)
+    handle_collection(conn, actor, params)
   end
 
   def followers(conn, %{"nickname" => nickname} = params) do
@@ -21,13 +21,13 @@ defmodule FediServerWeb.FollowingController do
     actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
 
     # TODO Check authentication and authorization
-    handle_collection(conn, actor)
+    handle_collection(conn, actor, params)
   end
 
-  def handle_collection(conn, _actor) do
+  def handle_collection(conn, _actor, params) do
     %URI{path: path} = coll_id = APUtils.request_id(conn)
 
-    with {:ok, coll} <- Activities.get_collection(coll_id),
+    with {:ok, coll} <- Activities.get_collection(coll_id, APUtils.collection_opts(params)),
          {:ok, m} <- Fedi.Streams.Serializer.serialize(coll),
          {:ok, body} <- Jason.encode(m) do
       conn

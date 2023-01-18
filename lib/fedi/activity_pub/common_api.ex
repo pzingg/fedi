@@ -16,7 +16,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `get_inbox`. In this case, the implementation must not send a
+  `Actor.handle_get_inbox/3`. In this case, the implementation must not send a
   response to `conn` as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -30,20 +30,21 @@ defmodule Fedi.ActivityPub.CommonApi do
   to be processed.
   """
   @callback authenticate_get_inbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Returns the OrderedCollection inbox of the actor for this
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
-  `authenticate_get_inbox` will be called prior to this.
+  `authenticate_get_inbox/2` will be called prior to this.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
   @callback get_inbox(context :: context(), conn :: Plug.Conn.t(), params :: map()) ::
-              {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
+              {:ok, conn :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 
   @doc """
@@ -53,7 +54,7 @@ defmodule Fedi.ActivityPub.CommonApi do
   API is enabled.
 
   If an error is returned, it is passed back to the caller of
-  `get_outbox`. In this case, the implementation must not send a
+  `Actor.handle_get_outbox/3`. In this case, the implementation must not send a
   response to `conn` as is expected that the client will
   do so when handling the error. The 'authenticated' is ignored.
 
@@ -66,20 +67,21 @@ defmodule Fedi.ActivityPub.CommonApi do
   to be processed.
   """
   @callback authenticate_get_outbox(context :: context(), conn :: Plug.Conn.t()) ::
-              {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+              {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+              | {:error, term()}
 
   @doc """
   Returns the OrderedCollection outbox of the actor for this
   context. It is up to the implementation to provide the correct
   collection for the kind of authorization given in the request.
 
-  `authenticate_get_outbox` will be called prior to this.
+  `authenticate_get_outbox/2` will be called prior to this.
 
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
   @callback get_outbox(context :: context(), conn :: Plug.Conn.t(), params :: map()) ::
-              {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
+              {:ok, conn :: Plug.Conn.t(), ordered_collection :: struct()}
               | {:error, term()}
 
   @doc """

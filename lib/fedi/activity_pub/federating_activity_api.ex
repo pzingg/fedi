@@ -30,7 +30,7 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
     block: 2
   ]
 
-  @type context() :: ActorFacade.s2s_context()
+  @type context() :: ActorFacade.context()
   @type handler_result() :: ActorFacade.s2s_handler_result()
 
   @doc """

@@ -31,7 +31,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def create_objects(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
+        %{box_iri: %URI{}} = context,
         values
       )
       when is_list(values) do
@@ -46,7 +46,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
         end
 
       %{iri: %URI{} = iri}, acc ->
-        with {:ok, m} <- ActorFacade.db_dereference(context, inbox_iri, app_agent, iri),
+        with {:ok, m} <- ActorFacade.db_dereference(context, iri),
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
           case ActorFacade.db_create(context, as_type) do
             {:ok, created, _raw_json} ->
@@ -145,7 +145,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   """
   @impl true
   def follow(
-        %{data: %{on_follow: on_follow, box_iri: %URI{} = inbox_iri}} = context,
+        %{on_follow: on_follow, box_iri: %URI{} = inbox_iri} = context,
         %{__struct__: _, alias: alias_} = activity
       ) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
@@ -196,7 +196,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def prepare_and_deliver_follow(
-        %{data: %{box_iri: inbox_iri}} = context,
+        %{box_iri: inbox_iri} = context,
         follow,
         actor_iri,
         on_follow,
@@ -274,7 +274,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   Implements the federating Accept activity side effects.
   """
   @impl true
-  def accept(%{data: %{box_iri: inbox_iri}} = context, activity)
+  def accept(%{box_iri: inbox_iri} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
@@ -333,14 +333,14 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def find_follow(
-        %{data: %{box_iri: inbox_iri, app_agent: app_agent}} = context,
+        %{box_iri: %URI{}} = context,
         values,
         %URI{} = actor_iri
       ) do
     Enum.reduce_while(values, {:error, "Not found"}, fn
       # Attempt to dereference the IRI instead
       %{iri: %URI{} = iri}, acc ->
-        with {:ok, m} <- ActorFacade.db_dereference(context, inbox_iri, app_agent, iri),
+        with {:ok, m} <- ActorFacade.db_dereference(context, iri),
              {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
           case follow_is_me?(as_type, actor_iri) do
             {:error, reason} -> {:halt, {:error, reason}}

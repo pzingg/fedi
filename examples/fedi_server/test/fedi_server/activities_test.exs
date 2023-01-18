@@ -20,7 +20,7 @@ defmodule FediServer.ActivitiesTest do
     test "fails to get Alyssa from an empty database" do
       assert {:error, "Not found"} =
                "https://example.com/users/alyssa"
-               |> URI.parse()
+               |> Utils.to_uri()
                |> Activities.get()
     end
 
@@ -29,7 +29,7 @@ defmodule FediServer.ActivitiesTest do
 
       assert {:ok, alyssa} =
                "https://example.com/users/alyssa"
-               |> URI.parse()
+               |> Utils.to_uri()
                |> Activities.get()
 
       assert alyssa.__struct__ == Fedi.ActivityStreams.Type.Person

@@ -41,6 +41,7 @@ defmodule FediServer.MixProject do
       {:telemetry_metrics, "~> 0.6"},
       {:telemetry_poller, "~> 1.0"},
       {:plug_cowboy, "~> 2.6"},
+      {:bcrypt_elixir, "~> 2.0"},
       {:jason, "~> 1.2"},
       {:tesla, "~> 1.5"},
       {:sweet_xml, "~> 0.7"},

@@ -4,28 +4,34 @@ defmodule Fedi.Streams.Error do
   deserialization and ActivityPub processing.
   """
 
-  @enforce_keys [:code, :message]
+  @enforce_keys [:code, :status, :message]
   defstruct [
     :code,
+    :status,
     :message,
-    internal?: false,
     data: []
   ]
 
   @type t() :: %__MODULE__{
           code: atom(),
+          status: atom(),
           message: String.t(),
-          internal?: boolean(),
           data: Keyword.t()
         }
 
-  def new(code, message, internal? \\ false, data \\ []) do
-    %__MODULE__{code: code, message: message, internal?: internal?, data: data}
+  def new(code, message, status \\ :internal_server_error, data \\ []) do
+    %__MODULE__{code: code, message: message, status: status, data: data}
   end
 
-  def response_message(%__MODULE__{internal?: true}), do: "Internal server error"
+  def message_from_status(:ok), do: "OK"
 
-  def response_message(%__MODULE__{}), do: "Bad request"
+  def message_from_status(status) when is_atom(status) do
+    Atom.to_string(status) |> String.replace("_", " ") |> Fedi.Streams.Utils.capitalize()
+  end
+
+  def response_message(%__MODULE__{status: status}) do
+    message_from_status(status)
+  end
 end
 
 defimpl String.Chars, for: Fedi.Streams.Error do

@@ -40,6 +40,25 @@ Documentation can be generated with [ExDoc](https://github.com/elixir-lang/ex_do
 and published on [HexDocs](https://hexdocs.pm). Once published, the docs can
 be found at <https://hexdocs.pm/fedi>.
 
+## Details
+
+See [IMPLMENTATION.md](IMPLEMENTATION.md) for test suite coverage,
+in order to assess the conformance of the library and example application to the
+ActivityPub specification for both the Social API (client-to-server
+interactions) and the Federated Protocol (server-to-server interactions).
+
+The example application uses a user token stored in a session cookie,
+possibly fetched from a persistent "remember_me" cookie,
+to authenticate activities posted to the outbox for the Social API,
+following the standard methods of `phx.gen.auth`.
+
+For the Federated protocol, the application creates HTTP signatures on
+outgoing activities posted to remote inboxes, and validates HTTP
+signatures for activities arriving at local inboxes.
+
+There is also support for 'webfinger', 'host-meta' and 'nodeinfo'
+endpoints in the example application.
+
 ## TODO
 
 Top level documentation
@@ -63,5 +82,3 @@ Other enhancements and bug fixes
   URL from the implementing application, not the other way around.
   Maybe this can be done with a `__using__` macro, set up in the
   implementing application.
-
-More tests to increase code coverage.

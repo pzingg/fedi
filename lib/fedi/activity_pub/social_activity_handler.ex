@@ -36,7 +36,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   """
   @impl true
   def create(
-        %{data: context_data} = context,
+        context,
         %{alias: alias_, properties: _} = activity
       ) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
@@ -73,7 +73,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
           end
         end)
 
-      actor = Utils.append_iters(context, "attributedTo", Enum.reverse(new_att_to_iters))
+      actor = Utils.append_iters(actor, "attributedTo", Enum.reverse(new_att_to_iters))
       activity = struct(activity, properties: Map.put(activity.properties, "actor", actor))
 
       # Copy over the 'to', 'bto', 'cc', 'bcc', and 'audience' recipients
@@ -82,8 +82,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
         {:ok, activity} ->
           # Persist all objects we've created, which will include sensitive
           # recipients such as 'bcc' and 'bto'.
-          context_data = Map.put(context_data, :deliverable, true)
-          context = Map.put(context, :data, context_data)
+          context = Map.put(context, :deliverable, true)
 
           Enum.reduce_while(object.values, :ok, fn
             %{member: %{__struct__: _, properties: _} = as_type}, acc ->
@@ -125,7 +124,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Update activity side effects.
   """
   @impl true
-  def update(%{data: %{raw_activity: raw_activity}} = context, activity)
+  def update(%{raw_activity: raw_activity} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)} do
@@ -224,7 +223,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Follow activity side effects.
   """
   @impl true
-  def follow(%{data: %{box_iri: box_iri}} = context, activity)
+  def follow(%{box_iri: box_iri} = context, activity)
       when is_struct(context) and is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
@@ -286,7 +285,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Like activity side effects.
   """
   @impl true
-  def like(%{data: %{box_iri: outbox_iri}} = context, activity)
+  def like(%{box_iri: outbox_iri} = context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
@@ -306,15 +305,14 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Undo activity side effects.
   """
   @impl true
-  def undo(%{data: context_data} = context, activity)
+  def undo(context, activity)
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
            {:activity_actor, Utils.get_actor(activity)},
          :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
-      context_data = Map.put(context_data, :deliverable, true)
-      context = Map.put(context, :data, context_data)
+      context = Map.put(context, :deliverable, true)
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -327,11 +325,10 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   Implements the social Block activity side effects.
   """
   @impl true
-  def block(%{data: context_data} = context, activity) when is_struct(activity) do
+  def block(context, activity) when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      context_data = Map.put(context_data, :deliverable, true)
-      context = Map.put(context, :data, context_data)
+      context = Map.put(context, :deliverable, true)
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}

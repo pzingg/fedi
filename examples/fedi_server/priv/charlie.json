@@ -1,0 +1,82 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/activitystreams",
+    "https://w3id.org/security/v1",
+    {
+      "manuallyApprovesFollowers": "as:manuallyApprovesFollowers",
+      "toot": "http://joinmastodon.org/ns#",
+      "featured": { "@id": "toot:featured", "@type": "@id" },
+      "featuredTags": { "@id": "toot:featuredTags", "@type": "@id" },
+      "alsoKnownAs": { "@id": "as:alsoKnownAs", "@type": "@id" },
+      "movedTo": { "@id": "as:movedTo", "@type": "@id" },
+      "schema": "http://schema.org#",
+      "PropertyValue": "schema:PropertyValue",
+      "value": "schema:value",
+      "IdentityProof": "toot:IdentityProof",
+      "discoverable": "toot:discoverable",
+      "Device": "toot:Device",
+      "Ed25519Signature": "toot:Ed25519Signature",
+      "Ed25519Key": "toot:Ed25519Key",
+      "Curve25519Key": "toot:Curve25519Key",
+      "EncryptedMessage": "toot:EncryptedMessage",
+      "publicKeyBase64": "toot:publicKeyBase64",
+      "deviceId": "toot:deviceId",
+      "claim": { "@type": "@id", "@id": "toot:claim" },
+      "fingerprintKey": { "@type": "@id", "@id": "toot:fingerprintKey" },
+      "identityKey": { "@type": "@id", "@id": "toot:identityKey" },
+      "devices": { "@type": "@id", "@id": "toot:devices" },
+      "messageFranking": "toot:messageFranking",
+      "messageType": "toot:messageType",
+      "cipherText": "toot:cipherText",
+      "suspended": "toot:suspended",
+      "Emoji": "toot:Emoji",
+      "focalPoint": { "@container": "@list", "@id": "toot:focalPoint" },
+      "Hashtag": "as:Hashtag"
+    }
+  ],
+  "id": "https://other.example/users/charlie",
+  "type": "Person",
+  "following": "https://other.example/users/charlie/following",
+  "followers": "https://other.example/users/charlie/followers",
+  "inbox": "https://other.example/users/charlie/inbox",
+  "outbox": "https://other.example/users/charlie/outbox",
+  "featured": "https://other.example/users/charlie/collections/featured",
+  "featuredTags": "https://other.example/users/charlie/collections/tags",
+  "preferredUsername": "ben",
+  "name": "Chatty Ben",
+  "url": "https://other.example/@ben",
+  "manuallyApprovesFollowers": false,
+  "discoverable": true,
+  "published": "2017-04-07T00:00:00Z",
+  "devices": "https://other.example/users/charlie/collections/devices",
+  "publicKey": {
+    "id": "https://other.example/users/charlie#main-key",
+    "owner": "https://other.example/users/charlie",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxM7ZDq/+RFSjZECH7otJ\n++hHa1XDm+c5EE0zh5TNcb/kl0ng3d+Zm+ZtUdobA2vcD8MV7KKCKPfgDY0Vg+vt\n4U5FsxNlvSXCQjlzP8zD0NZefnRdkfD64DVBLba/pJrQVAP0oB1ebpFoNClOarvL\nuGQVRvh5efKs0XH2CZym/okrC1Xyo887YKYaoS/k3ABTr2Nybl/ib67UhaXf3C5a\nMk+CBehgiH8t2lxeTEgoEihojWRwuoq1E0uFcHnq9R/1kEmQMJXMrAYCqsM/5Zc7\nwZIWotBOIPp6oWQtDFLJCvyJVfbDXswk2a7n2w3gzy71VkWvfouapdNka2RWOgtd\n8wIDAQAB\n-----END PUBLIC KEY-----"
+  },
+  "tag": [
+    {
+      "id": "https://other.example/emojis/20689",
+      "type": "Emoji",
+      "name": ":verified:",
+      "updated": "2018-08-09T20:45:57Z",
+      "icon": {
+        "type": "Image",
+        "mediaType": "image/png",
+        "url": "https://media.other.example/custom_emojis/images/000/020/689/original/e6e27ab922bb6ddc.png"
+      }
+    }
+  ],
+  "attachment": [],
+  "endpoints": { "sharedInbox": "https://other.example/inbox" },
+  "icon": {
+    "type": "Image",
+    "mediaType": "image/jpeg",
+    "url": "https://media.other.example/accounts/avatars/000/018/356/original/8fb7c58e48468071.jpg"
+  },
+  "image": {
+    "type": "Image",
+    "mediaType": "image/jpeg",
+    "url": "https://media.other.example/accounts/headers/000/018/356/original/49c0bc5770673923.jpg"
+  }
+}

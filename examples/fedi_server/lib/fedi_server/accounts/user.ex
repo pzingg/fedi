@@ -1,9 +1,10 @@
-defmodule FediServer.Activities.User do
+defmodule FediServer.Accounts.User do
   use Ecto.Schema
   import Ecto.Changeset
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias FediServerWeb.Router.Helpers, as: Routes
 
   @timestamps_opts [type: :utc_datetime]
@@ -15,6 +16,8 @@ defmodule FediServer.Activities.User do
     field(:nickname, :string)
     field(:local, :boolean)
     field(:email, :string)
+    field(:password, :string, virtual: true, redact: true)
+    field(:hashed_password, :string, redact: true)
     field(:public_key, :string)
     field(:keys, :string)
     field(:data, :map)
@@ -37,18 +40,59 @@ defmodule FediServer.Activities.User do
     }
   end
 
+  def get_public_key(%__MODULE__{public_key: public_key_pem}) do
+    FediServer.HTTPClient.public_key_from_pem(public_key_pem)
+  end
+
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
     user
-    |> cast(attrs, [:ap_id, :inbox, :name, :nickname, :local, :email, :public_key, :data])
+    |> cast(attrs, [
+      :ap_id,
+      :inbox,
+      :name,
+      :nickname,
+      :local,
+      :email,
+      :password,
+      :public_key,
+      :data
+    ])
     |> validate_required([:ap_id, :inbox, :name, :nickname, :local, :data])
     |> unique_constraint(:ap_id)
     |> unique_constraint(:nickname)
     |> unique_constraint(:email)
-    |> put_keys()
-    |> put_data()
+    |> validate_password()
+    |> maybe_put_keys()
+    |> maybe_put_data()
   end
 
-  defp put_keys(changeset) do
+  defp validate_password(changeset, opts \\ []) do
+    if get_field(changeset, :local) && get_change(changeset, :password) do
+      changeset
+      # |> validate_length(:password, min: 12, max: 80)
+      # |> validate_format(:password, ~r/[a-z]/, message: "at least one lower case character")
+      # |> validate_format(:password, ~r/[A-Z]/, message: "at least one upper case character")
+      # |> validate_format(:password, ~r/[!?@#$%^&*_0-9]/, message: "at least one digit or punctuation character")
+      |> maybe_hash_password(opts)
+    else
+      changeset
+    end
+  end
+
+  defp maybe_hash_password(changeset, opts) do
+    hash_password? = Keyword.get(opts, :hash_password, true)
+    password = get_change(changeset, :password)
+
+    if hash_password? && password && changeset.valid? do
+      changeset
+      |> put_change(:hashed_password, Bcrypt.hash_pwd_salt(password))
+      |> delete_change(:password)
+    else
+      changeset
+    end
+  end
+
+  defp maybe_put_keys(changeset) do
     if get_field(changeset, :local) && is_nil(get_field(changeset, :keys)) do
       {:ok, private_key_pem, public_key_pem} = FediServer.HTTPClient.generate_rsa_pem()
 
@@ -60,7 +104,7 @@ defmodule FediServer.Activities.User do
     end
   end
 
-  def put_data(changeset) do
+  def maybe_put_data(changeset) do
     case get_field(changeset, :data) do
       %{"id" => ap_id} when is_binary(ap_id) ->
         changeset
@@ -82,7 +126,7 @@ defmodule FediServer.Activities.User do
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
-    endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+    endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
     shared_inbox_uri = %URI{
       endpoint_uri

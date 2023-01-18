@@ -11,19 +11,17 @@ defmodule Fedi.ActivityPubTest do
     @moduledoc false
 
     def start_link() do
-      Agent.start_link(fn -> 1 end, name: __MODULE__)
+      Agent.start_link(fn -> [] end, name: __MODULE__)
     end
 
     def new_id(value) do
       with {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
-        id = Agent.get_and_update(__MODULE__, fn id -> {id, id + 1} end)
-        last_four = Integer.to_string(id) |> String.pad_leading(4, "0")
-        ulid = "01GP9EBWC2BTW0R98JJF2X" <> last_four
+        ulid = Agent.get_and_update(__MODULE__, fn state -> List.pop_at(state, 0) end)
 
         case category do
           :actors -> {:error, "Cannot make new id for actors"}
-          :activities -> {:ok, URI.parse("https://example.com/activities/#{ulid}")}
-          _ -> {:ok, URI.parse("https://example.com/objects/#{ulid}")}
+          :activities -> {:ok, Utils.to_uri("https://example.com/activities/#{ulid}")}
+          _ -> {:ok, Utils.to_uri("https://example.com/objects/#{ulid}")}
         end
       end
     end
@@ -42,7 +40,12 @@ defmodule Fedi.ActivityPubTest do
       :database,
       :enable_social_protocol,
       :enable_federated_protocol,
-      :data
+      :current_user,
+      :app_agent,
+      :box_iri,
+      :raw_activity,
+      deliverable: true,
+      on_follow: :do_nothing
     ]
   end
 
@@ -71,8 +74,14 @@ defmodule Fedi.ActivityPubTest do
     MockDatabase.start_link()
 
     mock_actor = %MockActor{
-      database: MockDatabase
+      database: MockDatabase,
+      current_user: %{ap_id: "https://example.com/users/sally"},
+      app_agent: Fedi.Application.app_agent()
     }
+
+    ulid_1 = Ecto.ULID.generate()
+    ulid_2 = Ecto.ULID.generate()
+    Agent.update(MockDatabase, fn _state -> [ulid_1, ulid_2] end)
 
     assert {:ok, create} = Fedi.Streams.JSONResolver.resolve(source)
     assert create.__struct__ == Fedi.ActivityStreams.Type.Create
@@ -84,11 +93,11 @@ defmodule Fedi.ActivityPubTest do
     assert {:ok, create} = Fedi.ActivityPub.SideEffectActor.add_new_ids(mock_actor, create)
     assert create.__struct__ == Fedi.ActivityStreams.Type.Create
     %URI{path: path} = APUtils.get_id(create)
-    assert path == "/activities/01GP9EBWC2BTW0R98JJF2X0001"
+    assert path == "/activities/#{ulid_1}"
 
     note = Utils.get_object(create) |> Map.get(:values) |> hd() |> Map.get(:member)
     assert note.__struct__ == Fedi.ActivityStreams.Type.Note
     %URI{path: path} = APUtils.get_id(note)
-    assert path == "/objects/01GP9EBWC2BTW0R98JJF2X0002"
+    assert path == "/objects/#{ulid_2}"
   end
 end

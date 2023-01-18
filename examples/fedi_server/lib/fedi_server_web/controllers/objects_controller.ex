@@ -14,8 +14,10 @@ defmodule FediServerWeb.ObjectsController do
            {:fetch, FediServer.Activities.repo_get(:objects, ulid)},
          status <- check_for_tombstone(data),
          {:ok, body} <- Jason.encode(data) do
+      content_type = Plug.Conn.get_req_header(conn, "accept") |> get_best_content_type()
+
       conn
-      |> put_resp_content_type("application/json")
+      |> put_resp_content_type(content_type)
       |> send_resp(status, body)
     else
       {:fetch, nil} ->
@@ -28,6 +30,23 @@ defmodule FediServerWeb.ObjectsController do
       {:error, reason} ->
         Logger.error("Encoding error #{inspect(reason)}")
         send_resp(conn, 500, "Internal server error")
+    end
+  end
+
+  def get_best_content_type(accepts) do
+    found =
+      Enum.find(["application/ld+json", "application/activity+json"], fn accept ->
+        if Enum.find(accepts, fn v -> String.starts_with?(v, accept) end) do
+          accept
+        else
+          false
+        end
+      end)
+
+    if found do
+      found
+    else
+      "application/json"
     end
   end
 

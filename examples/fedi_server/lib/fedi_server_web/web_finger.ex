@@ -7,8 +7,9 @@ defmodule FediServerWeb.WebFinger do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias FediServer.Activities
-  alias FediServer.Activities.User
+  alias FediServer.Accounts.User
   alias FediServer.HTTPClient
   alias FediServerWeb.XMLBuilder
 
@@ -48,7 +49,7 @@ defmodule FediServerWeb.WebFinger do
       {:ok, represent_user(user, fmt)}
     else
       _ ->
-        resource = URI.parse(resource)
+        resource = Utils.to_uri(resource)
 
         with %User{} = user <- Activities.repo_get_by_ap_id(:actors, resource) do
           {:ok, represent_user(user, fmt)}

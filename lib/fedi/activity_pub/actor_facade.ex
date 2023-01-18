@@ -9,64 +9,40 @@ defmodule Fedi.ActivityPub.ActorFacade do
 
   @type on_follow() :: :do_nothing | :automatically_accept | :automatically_reject
   @type c2s_handler_result() ::
-          :pass | {:ok, deliverable :: boolean()} | {:error, term()}
-  @type s2s_handler_result() :: :pass | :ok | {:error, term()}
+          :pass | {:ok, activity :: struct(), deliverable :: boolean()} | {:error, term()}
+  @type s2s_handler_result() :: :pass | {:ok, activity :: struct()} | {:error, term()}
+
+  @type current_user() :: %{ap_id: String.t()} | nil
 
   @typedoc """
-  Wrapped data passed in the actor's data element for the Social API.
-  """
-  @type c2s_data() :: %{
-          box_iri: URI.t(),
-          app_agent: String.t(),
-          raw_activity: map(),
-          deliverable: boolean()
-        }
+  Context for actors and handlers. In addition to specifying the implementation
+  callback modules, it also carries the following data.any()
 
-  @typedoc """
-  Context for Social API callbacks.
-  """
-  @type c2s_context() :: %{
-          __struct__: module(),
-          common: module(),
-          c2s: module() | nil,
-          s2s: module() | nil,
-          c2s_activity_handler: module() | nil,
-          s2s_activity_handler: module() | nil,
-          fallback: module() | nil,
-          database: module() | nil,
-          social_api_enabled?: boolean(),
-          federated_protocol_enabled?: boolean(),
-          data: c2s_data()
-        }
+  For both the Social API and the Federated Protocol:
 
-  @typedoc """
-  Wrapped data passed in the actor's data element for the Federated Protocol.
-  """
-  @type s2s_data() :: %{
-          box_iri: URI.t(),
-          app_agent: String.t(),
-          on_follow: on_follow()
-        }
+  * `current_user` is an application-defined reference to the
+    logged in user, or nil if the request is by an anonymous user.
+    If not nil, `current_user` must be a map or struct with an
+    binary `ap_id` member, whose value is the IRI of the local user.
+  * `app_agent` is the User-Agent string that will be used for
+    dereferencing objects and delivering activities to federated
+    servers.
 
-  @typedoc """
-  Context for Federated Protocol callbacks.
-  """
-  @type s2s_context() :: %{
-          __struct__: module(),
-          common: module(),
-          c2s: module() | nil,
-          s2s: module() | nil,
-          c2s_activity_handler: module() | nil,
-          s2s_activity_handler: module() | nil,
-          fallback: module() | nil,
-          database: module() | nil,
-          social_api_enabled?: boolean(),
-          federated_protocol_enabled?: boolean(),
-          data: s2s_data()
-        }
+  For the Social API:
 
-  @typedoc """
-  Generic context.
+  * `box_iri` is the outbox IRI that is handling callbacks.
+  * `raw_activity` is the JSON map literal received when deserializing the
+    request body.
+  * `deliverable` is an out param, indicating if the handled activity
+    should be delivered to a peer. Its provided default value will always
+    be used when a custom function is called.
+
+  For the Federated Protocol:
+
+  * `box_iri` is the inbox IRI that is handling callbacks.
+  * `on_follow` specifies which of the different default
+    actions that the library can provide when receiving a Follow Activity
+
   """
   @type context() :: %{
           __struct__: module(),
@@ -79,7 +55,13 @@ defmodule Fedi.ActivityPub.ActorFacade do
           database: module() | nil,
           social_api_enabled?: boolean(),
           federated_protocol_enabled?: boolean(),
-          data: c2s_data() | s2s_data()
+          current_user: current_user(),
+          app_agent: String.t(),
+          box_iri: URI.t() | nil,
+          raw_activity: map() | nil,
+          deliverable: boolean(),
+          on_follow: on_follow(),
+          data: map()
         }
 
   ### delegate and api callbacks
@@ -92,7 +74,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
           conn :: Plug.Conn.t(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+          {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+          | {:error, term()}
   def authenticate_get_inbox(context, conn, opts \\ []) do
     delegate(context, :common, :authenticate_get_inbox, [context, conn], opts)
   end
@@ -103,14 +86,15 @@ defmodule Fedi.ActivityPub.ActorFacade do
           params :: map(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
+          {:ok, conn :: Plug.Conn.t(), ordered_collection :: struct()}
           | {:error, term()}
   def get_inbox(context, conn, params, opts \\ []) do
     delegate(context, :common, :get_inbox, [context, conn, params], opts)
   end
 
   @spec authenticate_get_outbox(context :: context(), conn :: Plug.Conn.t(), opts :: Keyword.t()) ::
-          {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+          {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+          | {:error, term()}
   def authenticate_get_outbox(context, conn, opts \\ []) do
     delegate(context, :common, :authenticate_get_outbox, [context, conn], opts)
   end
@@ -121,7 +105,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           params :: map(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), ordered_collection :: struct()}
+          {:ok, conn :: Plug.Conn.t(), ordered_collection :: struct()}
           | {:error, term()}
   def get_outbox(context, conn, params, opts \\ []) do
     delegate(context, :common, :get_outbox, [context, conn, params], opts)
@@ -132,7 +116,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
           conn :: Plug.Conn.t(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), authenticated :: boolean} | {:error, term()}
+          {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+          | {:error, term()}
   def authenticate_post_outbox(context, conn, opts \\ []) do
     delegate(context, :c2s, :authenticate_post_outbox, [context, conn], opts)
   end
@@ -143,7 +128,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           activity :: struct(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t()} | {:error, term()}
+          {:ok, context :: context()} | {:error, term()}
   def post_outbox_request_body_hook(context, conn, activity, opts \\ []) do
     delegate(context, :c2s, :post_outbox_request_body_hook, [context, conn, activity], opts)
   end
@@ -188,7 +173,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
           conn :: Plug.Conn.t(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+          {:ok, context :: context(), conn :: Plug.Conn.t(), authenticated :: boolean()}
+          | {:error, term()}
   def authenticate_post_inbox(context, conn, opts \\ []) do
     delegate(context, :s2s, :authenticate_post_inbox, [context, conn], opts)
   end
@@ -199,7 +185,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           activity :: struct(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
+          {:ok, conn :: Plug.Conn.t(), authenticated :: boolean()} | {:error, term()}
   def authorize_post_inbox(context, conn, activity, opts \\ []) do
     delegate(context, :s2s, :authorize_post_inbox, [context, conn, activity], opts)
   end
@@ -210,7 +196,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           activity :: struct(),
           opts :: Keyword.t()
         ) ::
-          {:ok, response :: Plug.Conn.t()} | {:error, term()}
+          {:ok, context :: context()} | {:error, term()}
   def post_inbox_request_body_hook(context, conn, activity, opts \\ []) do
     delegate(context, :s2s, :post_inbox_request_body_hook, [context, conn, activity], opts)
   end
@@ -310,114 +296,109 @@ defmodule Fedi.ActivityPub.ActorFacade do
   @spec db_collection_contains?(context :: context, inbox :: struct(), coll_id :: URI.t()) ::
           {:ok, boolean()} | {:error, term()}
   def db_collection_contains?(context, inbox, coll_id) do
-    apply(context.database, :collection_contains?, [inbox, coll_id])
+    database_apply(context, :collection_contains?, [inbox, coll_id])
   end
 
   @spec db_get_collection(context :: context, coll_id :: URI.t(), opts :: Keyword.t()) ::
           {:ok, ordered_collection_page :: struct()} | {:error, term()}
   def db_get_collection(context, coll_id, opts) do
-    apply(context.database, :get_collection, [coll_id, opts])
+    database_apply(context, :get_collection, [coll_id, opts])
   end
 
   @spec db_update_collection(context :: context, coll_id :: URI.t(), updates :: map()) ::
           {:ok, ordered_collection_page :: struct()} | {:error, term()}
   def db_update_collection(context, coll_id, updates) do
-    apply(context.database, :update_collection, [coll_id, updates])
+    database_apply(context, :update_collection, [coll_id, updates])
   end
 
   @spec db_owns?(context :: context, id :: URI.t()) ::
           {:ok, boolean()} | {:error, term()}
   def db_owns?(context, id) do
-    apply(context.database, :owns?, [id])
+    database_apply(context, :owns?, [id])
   end
 
   @spec db_actor_for_collection(context :: context, coll_id :: URI.t()) ::
           {:ok, actor_iri :: URI.t()} | {:error, term()}
   def db_actor_for_collection(context, coll_id) do
-    apply(context.database, :actor_for_collection, [coll_id])
+    database_apply(context, :actor_for_collection, [coll_id])
   end
 
   @spec db_actor_for_outbox(context :: context, outbox_iri :: URI.t()) ::
           {:ok, actor_iri :: URI.t()} | {:error, term()}
   def db_actor_for_outbox(context, outbox_iri) do
-    apply(context.database, :actor_for_outbox, [outbox_iri])
+    database_apply(context, :actor_for_outbox, [outbox_iri])
   end
 
   @spec db_actor_for_inbox(context :: context, inbox_iri :: URI.t()) ::
           {:ok, actor_iri :: URI.t()} | {:error, term()}
   def db_actor_for_inbox(context, inbox_iri) do
-    apply(context.database, :actor_for_inbox, [inbox_iri])
+    database_apply(context, :actor_for_inbox, [inbox_iri])
   end
 
   @spec db_outbox_for_inbox(context :: context, inbox_iri :: URI.t()) ::
           {:ok, outbox_iri :: URI.t()} | {:error, term()}
   def db_outbox_for_inbox(context, inbox_iri) do
-    apply(context.database, :outbox_for_inbox, [inbox_iri])
+    database_apply(context, :outbox_for_inbox, [inbox_iri])
   end
 
   @spec db_inbox_for_actor(context :: context, actor_iri :: URI.t()) ::
           {:ok, inbox_iri :: URI.t()} | {:error, term()}
   def db_inbox_for_actor(context, actor_iri) do
-    apply(context.database, :inbox_for_actor, [actor_iri])
+    database_apply(context, :inbox_for_actor, [actor_iri])
   end
 
   @spec db_exists?(context :: context, id :: URI.t()) ::
           {:ok, boolean()} | {:error, term()}
   def db_exists?(context, id) do
-    apply(context.database, :exists?, [id])
+    database_apply(context, :exists?, [id])
   end
 
   @spec db_get(context :: context(), id :: URI.t()) ::
           {:ok, struct()} | {:error, term()}
   def db_get(context, id) do
-    apply(context.database, :get, [id])
+    database_apply(context, :get, [id])
   end
 
   @spec db_create(context :: context(), as_type :: struct()) ::
           {:ok, as_type :: struct(), json :: map() | nil} | {:error, term()}
   def db_create(context, as_type) do
-    apply(context.database, :create, [as_type])
+    database_apply(context, :create, [as_type])
   end
 
   @spec db_update(context :: context(), as_type :: struct()) ::
           {:ok, updated :: struct()} | {:error, term()}
   def db_update(context, as_type) do
-    apply(context.database, :update, [as_type])
+    database_apply(context, :update, [as_type])
   end
 
   @spec db_delete(context :: context(), id :: URI.t()) ::
           :ok | {:error, term()}
   def db_delete(context, id) do
-    apply(context.database, :delete, [id])
+    database_apply(context, :delete, [id])
   end
 
   @spec db_new_id(context :: context(), object :: struct()) ::
           {:ok, id :: URI.t()} | {:error, term()}
   def db_new_id(context, object) do
-    apply(context.database, :new_id, [object])
+    database_apply(context, :new_id, [object])
   end
 
-  @spec db_new_transport(context :: context(), box_iri :: URI.t(), app_agent :: String.t()) ::
+  @spec db_new_transport(context :: context()) ::
           {:ok, term()} | {:error, term()}
-  def db_new_transport(context, box_iri, app_agent) do
-    apply(context.database, :new_transport, [box_iri, app_agent])
+  def db_new_transport(%{box_iri: box_iri, app_agent: app_agent} = context) do
+    database_apply(context, :new_transport, [box_iri, app_agent])
   end
 
   @spec db_dereference(context :: context(), transport :: term(), iri :: URI.t()) ::
           {:ok, map()} | {:error, term()}
   def db_dereference(context, transport, iri) do
-    apply(context.database, :dereference, [transport, iri])
+    database_apply(context, :dereference, [transport, iri])
   end
 
-  @spec db_dereference(
-          context :: context(),
-          box_iri :: URI.t(),
-          app_agent :: String.t(),
-          iri :: URI.t()
-        ) ::
+  @spec db_dereference(context :: context(), iri :: URI.t()) ::
           {:ok, map()} | {:error, term()}
-  def db_dereference(context, box_iri, app_agent, iri) do
-    apply(context.database, :dereference, [box_iri, app_agent, iri])
+  def db_dereference(%{box_iri: box_iri, app_agent: app_agent} = context, iri) do
+    database_apply(context, :dereference, [box_iri, app_agent, iri])
   end
 
   @spec db_deliver(
@@ -428,19 +409,17 @@ defmodule Fedi.ActivityPub.ActorFacade do
         ) ::
           :ok | {:error, term()}
   def db_deliver(context, transport, json_body, iri) do
-    apply(context.database, :deliver, [transport, json_body, iri])
+    database_apply(context, :deliver, [transport, json_body, iri])
   end
 
   @spec db_deliver(
           context :: context(),
-          box_iri :: URI.t(),
-          app_agent :: String.t(),
           json_body :: String.t(),
           iri :: URI.t()
         ) ::
           :ok | {:error, term()}
-  def db_deliver(context, box_iri, app_agent, json_body, iri) do
-    apply(context.database, :deliver, [box_iri, app_agent, json_body, iri])
+  def db_deliver(%{box_iri: box_iri, app_agent: app_agent} = context, json_body, iri) do
+    database_apply(context, :deliver, [box_iri, app_agent, json_body, iri])
   end
 
   @spec db_batch_deliver(
@@ -451,19 +430,17 @@ defmodule Fedi.ActivityPub.ActorFacade do
         ) ::
           :ok | {:error, term()}
   def db_batch_deliver(context, transport, json_body, recipients) do
-    apply(context.database, :batch_deliver, [transport, json_body, recipients])
+    database_apply(context, :batch_deliver, [transport, json_body, recipients])
   end
 
   @spec db_batch_deliver(
           context :: context(),
-          box_iri :: URI.t(),
-          app_agent :: String.t(),
           json_body :: String.t(),
           recipients :: list()
         ) ::
           :ok | {:error, term()}
-  def db_batch_deliver(context, box_iri, app_agent, json_body, recipients) do
-    apply(context.database, :batch_deliver, [box_iri, app_agent, json_body, recipients])
+  def db_batch_deliver(%{box_iri: box_iri, app_agent: app_agent} = context, json_body, recipients) do
+    database_apply(context, :batch_deliver, [box_iri, app_agent, json_body, recipients])
   end
 
   # Other public functions
@@ -548,22 +525,33 @@ defmodule Fedi.ActivityPub.ActorFacade do
         result
 
       verify_module(protocol_module) == :ok && function_exported?(protocol_module, func, arity) ->
-        Logger.debug("Using #{which} #{Utils.alias_module(protocol_module)} for #{func}/#{arity}")
+        Logger.debug(
+          "Delegating #{which} to #{Utils.alias_module(protocol_module)}.#{func}/#{arity}"
+        )
+
         apply(protocol_module, func, args)
 
       verify_module(fallback_module) == :ok &&
           function_exported?(fallback_module, func, arity) ->
         Logger.debug(
-          "Falling back to #{Utils.alias_module(fallback_module)} for #{func}/#{arity}"
+          "Fallback #{which} to #{Utils.alias_module(fallback_module)}.#{func}/#{arity}"
         )
 
         apply(fallback_module, func, args)
 
       true ->
         if is_nil(fallback_module) do
+          Logger.error(
+            "Delegate #{which}: #{Utils.alias_module(protocol_module)}.#{func}/#{arity} not found."
+          )
+
           {:error,
-           "Function #{func}/#{arity} not found in #{Utils.alias_module(protocol_module)}"}
+           "Delegate #{which}: #{Utils.alias_module(protocol_module)}.#{func}/#{arity} not found."}
         else
+          Logger.error(
+            "Function #{func}/#{arity} not found in either #{Utils.alias_module(protocol_module)} or #{Utils.alias_module(fallback_module)}"
+          )
+
           {:error,
            "Function #{func}/#{arity} not found in either #{Utils.alias_module(protocol_module)} or #{Utils.alias_module(fallback_module)}"}
         end
@@ -587,33 +575,33 @@ defmodule Fedi.ActivityPub.ActorFacade do
 
         function_exported?(callback_module, :default_callback, 2) ->
           Logger.debug(
-            "#{which} Activity handler #{callback_fn} defaulting to #{Utils.alias_module(callback_module)}.default_callback"
+            "handle_#{which}_activity: #{callback_fn} defaulting to #{Utils.alias_module(callback_module)}.default_callback"
           )
 
           apply(callback_module, :default_callback, [context, activity])
           |> activity_handler_result(which, context, activity)
 
         true ->
-          Logger.error("#{which} Activity handler: no #{callback_fn} or default_callback")
-          {:ok, activity, context.data}
+          Logger.error("handle_#{which}_activity: no #{callback_fn} or default_callback")
+          activity_handler_result(:pass, which, context, activity)
       end
     else
       {:module, _} ->
-        Logger.error("#{which} Activity handler not set")
-        {:error, "#{which} Activity handler not set"}
+        Logger.error("handle_#{which}_activity: handler has not been set")
+        {:error, "handle_#{which}_activity: handler has not been set"}
 
       {:module_exists, _} ->
-        Logger.error("#{which} Activity handler does not exist")
-        {:error, "#{which} Activity handler does not exist"}
+        Logger.error("handle_#{which}_activity: handler does not exist")
+        {:error, "handle_#{which}_activity: handler does not exist"}
     end
   end
 
-  defp activity_handler_result(:pass, :c2s, %{data: %{deliverable: deliverable}}, _activity) do
-    {:ok, deliverable}
+  defp activity_handler_result(:pass, :c2s, %{deliverable: deliverable}, activity) do
+    {:ok, activity, deliverable}
   end
 
-  defp activity_handler_result(:pass, :c2s, _context, _activity) do
-    {:ok, true}
+  defp activity_handler_result(:pass, :c2s, _context, activity) do
+    {:ok, activity, true}
   end
 
   defp activity_handler_result(:pass, :s2s, _context, activity) do
@@ -633,6 +621,34 @@ defmodule Fedi.ActivityPub.ActorFacade do
     case which do
       :c2s -> Map.get(context, :c2s)
       :s2s -> Map.get(context, :s2s)
+    end
+  end
+
+  defp database_apply(context, func, args) do
+    case Map.get(context, :database) do
+      nil ->
+        {:error, "Database module has not been set"}
+
+      database_module ->
+        arity = Enum.count(args)
+
+        with {:module_exists, :ok} <- {:module_exists, verify_module(database_module)},
+             {:function_exists, true} <-
+               {:function_exists, function_exported?(database_module, func, arity)} do
+          apply(database_module, func, args)
+        else
+          {:module_exists, _} ->
+            Logger.error("Database module #{Utils.alias_module(database_module)} does not exist")
+            {:error, "Database module #{Utils.alias_module(database_module)} does not exist"}
+
+          {:function_exists, _} ->
+            Logger.error(
+              "Function #{Utils.alias_module(database_module)}.#{func}/#{arity} does not exist"
+            )
+
+            {:error,
+             "Function #{Utils.alias_module(database_module)}.#{func}/#{arity} does not exist"}
+        end
     end
   end
 

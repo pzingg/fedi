@@ -30,7 +30,7 @@ defmodule Fedi.ActivityPub.SocialActivityApi do
     block: 2
   ]
 
-  @type context() :: ActorFacade.c2s_context()
+  @type context() :: ActorFacade.context()
   @type handler_result() :: ActorFacade.c2s_handler_result()
 
   @doc """

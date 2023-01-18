@@ -9,13 +9,13 @@ defmodule FediServerWeb.WellKnownController do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias FediServerWeb.WebFinger
 
   def nodeinfo(%Plug.Conn{} = conn, _params) do
-    endpoint_uri = Fedi.Application.endpoint_url() |> URI.parse()
+    endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
-    nodeinfo_version_url =
-      %URI{endpoint_uri | path: "/nodeinfo/2.0", query: nil} |> URI.to_string()
+    nodeinfo_version_url = Utils.base_uri(endpoint_uri, "/nodeinfo/2.0") |> URI.to_string()
 
     links_data = %{
       links: [
