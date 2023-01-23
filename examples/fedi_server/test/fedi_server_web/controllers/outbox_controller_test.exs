@@ -600,10 +600,53 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", activity)
 
     # TODO Add a todo collection to our application
-    assert response(conn, 400)
+    assert response(conn, 201) == ""
+    assert Utils.to_uri(note.ap_id) == get_posted_item("https://example.com/users/alyssa/todo")
+  end
 
-    # assert response(conn, 201) == ""
-    # assert %T.Note{} = get_posted_item("https://example.com/users/alyssa/todo")
+  test "outbox remove SHOULD remove object from target", %{conn: conn} do
+    {users, [_create | _], [note | _]} = outbox_fixtures()
+
+    # Making up a "todo" collection as the target
+    activity = """
+    {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Add",
+      "to": "https://example.com/users/alyssa/followers",
+      "actor": "https://example.com/users/alyssa",
+      "object": "#{note.ap_id}",
+      "target": "https://example.com/users/alyssa/todo"
+    }
+    """
+
+    %{alyssa: %{user: alyssa}} = users
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", activity)
+
+    # Now remove it
+    activity = """
+    {
+      "@context": "https://www.w3.org/ns/activitystreams",
+      "type": "Remove",
+      "to": "https://example.com/users/alyssa/followers",
+      "actor": "https://example.com/users/alyssa",
+      "object": "#{note.ap_id}",
+      "target": "https://example.com/users/alyssa/todo"
+    }
+    """
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", activity)
+
+    assert response(conn, 201) == ""
+    refute get_posted_item("https://example.com/users/alyssa/todo")
   end
 
   test "outbox like SHOULD add object to liked", %{conn: conn} do

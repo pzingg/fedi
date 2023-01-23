@@ -249,16 +249,16 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def add(context, activity)
       when is_struct(context) and is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _]} = object} <-
+    with {:activity_object, object} when is_struct(object) <-
            {:activity_object, Utils.get_object(activity)},
-         {:activity_target, %P.Target{values: [_ | _]} = target} <-
+         {:activity_target, target} when is_struct(target) <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.add(context, object, target) do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_target, _} -> Utils.err_target_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_target, _} -> {:error, Utils.err_target_required(activity: activity)}
     end
   end
 
@@ -268,16 +268,16 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def remove(context, activity)
       when is_struct(context) and is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _]} = object} <-
+    with {:activity_object, object} when is_struct(object) <-
            {:activity_object, Utils.get_object(activity)},
-         {:activity_target, %P.Target{values: [_ | _]} = target} <-
+         {:activity_target, target} when is_struct(target) <-
            {:activity_target, Utils.get_target(activity)},
          :ok <- APUtils.remove(context, object, target) do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_target, _} -> Utils.err_target_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_target, _} -> {:error, Utils.err_target_required(activity: activity)}
     end
   end
 

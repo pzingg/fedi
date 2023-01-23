@@ -19,6 +19,7 @@ defmodule FediServer.Activities do
   alias FediServer.Activities.Mailbox
   alias FediServer.Activities.FollowingRelationship
   alias FediServer.Activities.ObjectAction
+  alias FediServer.Activities.UserCollection
   alias FediServer.HTTPClient
   alias FediServer.Repo
 
@@ -147,6 +148,13 @@ defmodule FediServer.Activities do
           |> select([r], count(r.id))
 
         # Special collections
+        {:user_collection, name} ->
+          coll_id = actor_id <> "/#{name}"
+
+          UserCollection
+          |> where([c], c.collection_id == ^coll_id)
+          |> select([c], count(c.id))
+
         _ ->
           nil
       end
@@ -285,6 +293,29 @@ defmodule FediServer.Activities do
           end
 
         # Special collections
+        {:user_collection, name} ->
+          coll_id = actor_id <> "/#{name}"
+
+          q =
+            UserCollection
+            |> where([c], c.collection_id == ^coll_id)
+            |> select([c], %{id: c.id, iri: c.object})
+            |> order_by([c], desc: c.id)
+            |> limit(^page_size)
+
+          q =
+            if is_nil(min_id) do
+              q
+            else
+              q |> where([c], c.id >= ^min_id)
+            end
+
+          if is_nil(max_id) do
+            q
+          else
+            q |> where([c], c.id <= ^max_id)
+          end
+
         _ ->
           nil
       end
@@ -301,7 +332,7 @@ defmodule FediServer.Activities do
       "liked" -> :liked
       "following" -> :following
       "followers" -> :followers
-      other -> {:special, other}
+      other -> {:user_collection, other}
     end
   end
 
@@ -379,13 +410,23 @@ defmodule FediServer.Activities do
          {:valid_type, type} when not is_nil(type) <- {:valid_type, collection_type(path)} do
       # TODO Handle deletes, etc.
       new_items = Map.get(updates, :add, [])
+      items_to_be_removed = Map.get(updates, :remove, [])
 
       Enum.reduce_while(new_items, [], fn item, acc ->
-        insert_collection_item(type, actor_iri, item, acc)
+        add_collection_item(type, actor_iri, item, acc)
       end)
       |> case do
-        {:error, reason} -> {:error, reason}
-        _ -> get_collection(coll_id)
+        {:error, reason} ->
+          {:error, reason}
+
+        _ ->
+          case remove_collection_items(type, actor_iri, items_to_be_removed) do
+            {:error, reason} ->
+              {:error, reason}
+
+            _ ->
+              get_collection(coll_id)
+          end
       end
     else
       {:error, reason} -> {:error, reason}
@@ -393,7 +434,7 @@ defmodule FediServer.Activities do
     end
   end
 
-  def insert_collection_item({:mailbox, outgoing}, %URI{} = actor_iri, activity, acc) do
+  def add_collection_item({:mailbox, outgoing}, %URI{} = actor_iri, activity, acc) do
     with {:ok, params} <- parse_basic_params(activity),
          {:ok, object_id} <- APUtils.get_object_id(activity) do
       visibility = APUtils.get_visibility(activity, actor_iri)
@@ -420,7 +461,7 @@ defmodule FediServer.Activities do
     end
   end
 
-  def insert_collection_item(:liked, %URI{} = actor_iri, object_id, acc) do
+  def add_collection_item(:liked, %URI{} = actor_iri, object_id, acc) do
     Logger.error("#{actor_iri} liked #{object_id}")
 
     params = %{
@@ -437,7 +478,7 @@ defmodule FediServer.Activities do
     end
   end
 
-  def insert_collection_item(:following, %URI{} = actor_iri, %URI{} = following_id, acc) do
+  def add_collection_item(:following, %URI{} = actor_iri, %URI{} = following_id, acc) do
     Logger.error("#{actor_iri} following #{following_id}")
 
     case follow(actor_iri, following_id) do
@@ -446,13 +487,70 @@ defmodule FediServer.Activities do
     end
   end
 
-  def insert_collection_item(:followers, %URI{} = actor_iri, %URI{} = follower_id, acc) do
+  def add_collection_item(:followers, %URI{} = actor_iri, %URI{} = follower_id, acc) do
     Logger.error("#{actor_iri} followers #{follower_id}")
 
     case follow(follower_id, actor_iri) do
       {:ok, %FollowingRelationship{}} -> {:cont, [follower_id | acc]}
       {:error, reason} -> {:halt, {:error, reason}}
     end
+  end
+
+  def add_collection_item({:user_collection, name}, %URI{} = actor_id, %URI{} = object_id, acc) do
+    # TODO dereference to get object_type?
+    object_type = "Unknown"
+    actor = URI.to_string(actor_id)
+    coll_id = actor <> "/#{name}"
+    Logger.error("collection #{coll_id} object #{object_id}")
+
+    params = %{
+      collection_id: coll_id,
+      type: object_type,
+      actor: actor,
+      object: URI.to_string(object_id)
+    }
+
+    case repo_insert(:collections, params) do
+      {:ok, %UserCollection{}} -> {:cont, [object_id | acc]}
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
+  end
+
+  def add_collection_item(type, _actor_id, _object_id, _acc) do
+    {:halt, {:error, "Add item unimplemented for #{inspect(type)}"}}
+  end
+
+  def remove_collection_items(_type, _actor_id, []), do: :ok
+
+  def remove_collection_items({:user_collection, name}, %URI{} = actor_id, object_ids) do
+    # TODO dereference to get object_type?
+    actor = URI.to_string(actor_id)
+    coll_id = actor <> "/#{name}"
+    object_ids = Enum.map(object_ids, &URI.to_string(&1))
+    to_delete = Enum.count(object_ids)
+
+    {count_deleted, _} =
+      UserCollection
+      |> where([c], c.collection_id == ^coll_id)
+      |> where([c], c.object in ^object_ids)
+      |> Repo.delete_all()
+
+    cond do
+      count_deleted == 0 ->
+        Logger.error("None of #{to_delete} items were removed from #{coll_id}")
+        {:error, "Not found"}
+
+      count_deleted < to_delete ->
+        Logger.error("Only #{count_deleted} of #{to_delete} items were removed from #{coll_id}")
+        :ok
+
+      true ->
+        :ok
+    end
+  end
+
+  def remove_collection_items(type, _actor_id, _object_ids) do
+    {:error, "Remove item unimplemented for #{inspect(type)}"}
   end
 
   @doc """
@@ -573,7 +671,7 @@ defmodule FediServer.Activities do
   """
   @impl true
   def exists?(%URI{} = ap_id) do
-    [:actors, :objects, :activities]
+    [:actors, :objects, :activities, :collections]
     |> Enum.reduce_while({:ok, false}, fn schema, acc ->
       if repo_ap_id_exists?(schema, ap_id) do
         {:halt, {:ok, true}}
@@ -976,9 +1074,6 @@ defmodule FediServer.Activities do
 
   def parse_basic_params(as_type) do
     case Utils.get_id_type_name_and_category(as_type) do
-      {:ok, ap_id, type_name, :collections} ->
-        {:error, "Can't parse params for collection #{Utils.alias_module(as_type.__struct__)}"}
-
       {:ok, ap_id, type_name, :actors} ->
         case parse_iri_schema(ap_id) do
           {:error, reason} ->
@@ -1016,21 +1111,17 @@ defmodule FediServer.Activities do
             {:error, "Bad schema #{schema} for #{type_name}"}
         end
 
-      {:ok, ap_id, type_name, :activities} ->
-        {:ok,
-         %{
-           schema: :activities,
-           ap_id: ap_id,
-           ulid: nil,
-           nickname: nil,
-           local: local?(ap_id),
-           type: type_name
-         }}
+      {:ok, ap_id, type_name, category} ->
+        schema =
+          if category == :activities || category == :collections do
+            category
+          else
+            :objects
+          end
 
-      {:ok, ap_id, type_name, _} ->
         {:ok,
          %{
-           schema: :objects,
+           schema: schema,
            ap_id: ap_id,
            ulid: nil,
            nickname: nil,
@@ -1100,8 +1191,8 @@ defmodule FediServer.Activities do
     end
   end
 
-  def repo_exists?(:objects, ulid) do
-    query = Object |> where([o], o.id == ^ulid)
+  def repo_exists?(:actors, nickname) do
+    query = User |> where([u], u.nickname == ^nickname)
     Repo.exists?(query)
   end
 
@@ -1110,8 +1201,13 @@ defmodule FediServer.Activities do
     Repo.exists?(query)
   end
 
-  def repo_exists?(:actors, nickname) do
-    query = User |> where([u], u.nickname == ^nickname)
+  def repo_exists?(:objects, ulid) do
+    query = Object |> where([o], o.id == ^ulid)
+    Repo.exists?(query)
+  end
+
+  def repo_exists?(:collections, ulid) do
+    query = UserCollection |> where([c], c.id == ^ulid)
     Repo.exists?(query)
   end
 
@@ -1119,10 +1215,9 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for exists #{other}"}
   end
 
-  def repo_ap_id_exists?(:objects, %URI{} = ap_id) do
+  def repo_ap_id_exists?(:actors, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-
-    query = Object |> where([o], o.ap_id == ^ap_id)
+    query = User |> where([u], u.ap_id == ^ap_id)
     Repo.exists?(query)
   end
 
@@ -1132,53 +1227,68 @@ defmodule FediServer.Activities do
     Repo.exists?(query)
   end
 
-  def repo_ap_id_exists?(:actors, %URI{} = ap_id) do
+  def repo_ap_id_exists?(:objects, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = User |> where([u], u.ap_id == ^ap_id)
+
+    query = Object |> where([o], o.ap_id == ^ap_id)
     Repo.exists?(query)
+  end
+
+  # Mock: we allow any old collection
+  def repo_ap_id_exists?(:collections, %URI{} = ap_id) do
+    local?(ap_id)
   end
 
   def repo_ap_id_exists?(other, _) do
     {:error, "Invalid schema for ap_id_exists #{other}"}
   end
 
-  def repo_get(:objects, ulid) do
-    Repo.get(Object, ulid)
+  def repo_get(:actors, nickname) do
+    Repo.get_by(User, nickname: nickname)
   end
 
   def repo_get(:activities, ulid) do
     Repo.get(Activity, ulid)
   end
 
-  def repo_get(:actors, nickname) do
-    Repo.get_by(User, nickname: nickname)
+  def repo_get(:objects, ulid) do
+    Repo.get(Object, ulid)
+  end
+
+  def repo_get(:collections, ulid) do
+    Repo.get(UserCollection, ulid)
   end
 
   def repo_get(other, _) do
     {:error, "Invalid schema for get #{other}"}
   end
 
-  def repo_get_by_ap_id(:objects, %URI{} = ap_id) do
-    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  def repo_get_by_ap_id(:actors, %URI{} = ap_id) do
+    Repo.get_by(User, ap_id: URI.to_string(ap_id))
   end
 
   def repo_get_by_ap_id(:activities, %URI{} = ap_id) do
     Repo.get_by(Activity, ap_id: URI.to_string(ap_id))
   end
 
-  def repo_get_by_ap_id(:actors, %URI{} = ap_id) do
-    Repo.get_by(User, ap_id: URI.to_string(ap_id))
+  def repo_get_by_ap_id(:objects, %URI{} = ap_id) do
+    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(:collections, %URI{} = ap_id) do
+    query = UserCollection |> where([u], u.collection_id == ^ap_id)
+    Repo.all(query)
   end
 
   def repo_get_by_ap_id(other, %URI{} = _) do
     {:error, "Invalid schema for get by ap_id #{other}"}
   end
 
-  def repo_insert(:objects, params) do
-    ulid = params.ulid || Ecto.ULID.generate()
-    Logger.debug("Inserting object: #{params.ap_id}")
+  def repo_insert(:actors, params) do
+    ulid = Ecto.ULID.generate()
+    Logger.debug("Inserting user: #{params.ap_id}")
 
-    Object.changeset(%Object{id: ulid}, params)
+    User.changeset(%User{id: ulid}, params)
     |> Repo.insert(returning: true)
     |> handle_insert_result(:objects)
   end
@@ -1192,11 +1302,11 @@ defmodule FediServer.Activities do
     |> handle_insert_result(:objects)
   end
 
-  def repo_insert(:actors, params) do
-    ulid = Ecto.ULID.generate()
-    Logger.debug("Inserting user: #{params.ap_id}")
+  def repo_insert(:objects, params) do
+    ulid = params.ulid || Ecto.ULID.generate()
+    Logger.debug("Inserting object: #{params.ap_id}")
 
-    User.changeset(%User{id: ulid}, params)
+    Object.changeset(%Object{id: ulid}, params)
     |> Repo.insert(returning: true)
     |> handle_insert_result(:objects)
   end
@@ -1232,6 +1342,15 @@ defmodule FediServer.Activities do
     |> handle_insert_result(:objects)
   end
 
+  def repo_insert(:collections, params) do
+    Logger.debug("Inserting collection: #{params.object}")
+
+    # TODO get type of item from params
+    UserCollection.changeset(%UserCollection{}, params)
+    |> Repo.insert(on_conflict: :nothing, returning: true)
+    |> handle_insert_result(params.type)
+  end
+
   def repo_insert(other, _) do
     {:error, "Invalid schema for insert #{other}"}
   end
@@ -1244,6 +1363,26 @@ defmodule FediServer.Activities do
     else
       Logger.error("Failed to insert #{type}: #{describe_errors(changeset)}")
       {:error, "Internal database error"}
+    end
+  end
+
+  def repo_update(:actors, params) do
+    with %User{} = user <- repo_get_by_ap_id(:actors, params.ap_id) do
+      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
+      User.changeset(user, params) |> Repo.update(returning: true)
+    else
+      _ ->
+        {:error, "User %{params.ap_id} not found"}
+    end
+  end
+
+  def repo_update(:activities, params) do
+    with %Activity{} = activity <- repo_get_by_ap_id(:activities, params.ap_id) do
+      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
+      Activity.changeset(activity, params) |> Repo.update(returning: true)
+    else
+      _ ->
+        {:error, "Activity %{params.ap_id} not found"}
     end
   end
 
@@ -1265,26 +1404,6 @@ defmodule FediServer.Activities do
     end
   end
 
-  def repo_update(:activities, params) do
-    with %Activity{} = activity <- repo_get_by_ap_id(:activities, params.ap_id) do
-      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
-      Activity.changeset(activity, params) |> Repo.update(returning: true)
-    else
-      _ ->
-        {:error, "Activity %{params.ap_id} not found"}
-    end
-  end
-
-  def repo_update(:actors, params) do
-    with %User{} = user <- repo_get_by_ap_id(:actors, params.ap_id) do
-      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
-      User.changeset(user, params) |> Repo.update(returning: true)
-    else
-      _ ->
-        {:error, "User %{params.ap_id} not found"}
-    end
-  end
-
   def repo_update(:mailboxes, params) do
     Mailbox.changeset(%Mailbox{id: params.ulid}, params) |> Repo.update(returning: true)
   end
@@ -1293,9 +1412,9 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for insert #{other}"}
   end
 
-  def repo_delete(:objects, %URI{} = ap_id) do
+  def repo_delete(:actors, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = Object |> where([o], o.ap_id == ^ap_id)
+    query = User |> where([u], u.ap_id == ^ap_id)
     Repo.delete_all(query)
   end
 
@@ -1305,9 +1424,27 @@ defmodule FediServer.Activities do
     Repo.delete_all(query)
   end
 
-  def repo_delete(:actors, %URI{} = ap_id) do
+  def repo_delete(:objects, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = User |> where([u], u.ap_id == ^ap_id)
+    query = Object |> where([o], o.ap_id == ^ap_id)
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(:likes, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = ObjectAction |> where([o], o.object == ^ap_id)
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(:shares, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = ObjectAction |> where([o], o.object == ^ap_id)
+    Repo.delete_all(query)
+  end
+
+  def repo_delete(:collections, %URI{} = ap_id) do
+    ap_id = URI.to_string(ap_id)
+    query = UserCollection |> where([c], c.collection_id == ^ap_id)
     Repo.delete_all(query)
   end
 

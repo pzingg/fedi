@@ -682,53 +682,35 @@ defmodule Fedi.ActivityPub.Utils do
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.
   """
   def add(context, object_prop, target_prop) do
-    with {:ok, op_ids} <- get_ids(object_prop),
-         {:ok, target_ids} <- get_ids(target_prop) do
-      Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, target_id)},
-             {:ok, as_value} <- ActorFacade.db_get(context, target_id) do
-          cond do
-            is_or_extends?(as_value, "OrderedCollection") ->
-              Utils.append_iris(as_value, "orderedItems", op_ids)
-
-            is_or_extends?(as_value, "Collection") ->
-              Utils.append_iris(as_value, "items", op_ids)
-
-            true ->
-              {:error, "Target in Add is neither a Collection nor an OrderedCollection"}
-          end
-          |> case do
-            {:error, reason} ->
-              {:halt, {:error, reason}}
-
-            updated_value ->
-              case ActorFacade.db_update(context, updated_value) do
-                {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _updated} -> {:cont, acc}
-              end
-          end
+    case to_id(target_prop) do
+      %URI{} = coll_id ->
+        with {:ok, object_ids} <-
+               get_ids(object_prop),
+             {:owns?, {:ok, true}} <-
+               {:owns?, ActorFacade.db_owns?(context, coll_id)},
+             {:ok, _oc} <-
+               ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
+          :ok
         else
           {:error, reason} ->
-            {:halt, {:error, reason}}
+            {:error, reason}
 
           {:owns?, {:ok, _}} ->
-            Logger.error("Local collection #{target_id} not found")
+            Logger.error("Local collection #{coll_id} not found")
 
-            {:halt,
-             {:error,
-              %Error{
-                code: :unknown_collection,
-                status: :bad_request,
-                message: "Local collection #{target_id} not found"
-              }}}
+            {:error,
+             %Error{
+               code: :unknown_collection,
+               status: :bad_request,
+               message: "Local collection #{coll_id} not found"
+             }}
 
           {:owns?, {:error, reason}} ->
-            {:halt, {:error, reason}}
+            {:error, reason}
         end
-      end)
-    else
-      {:error, reason} ->
-        {:error, reason}
+
+      _ ->
+        {:error, Utils.err_target_required()}
     end
   end
 
@@ -737,37 +719,35 @@ defmodule Fedi.ActivityPub.Utils do
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.
   """
   def remove(context, object_prop, target_prop) do
-    with {:ok, op_ids} <- get_ids(object_prop),
-         {:ok, target_ids} <- get_ids(target_prop) do
-      Enum.reduce_while(target_ids, :ok, fn target_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, target_id)},
-             {:ok, as_value} <- ActorFacade.db_get(context, target_id) do
-          cond do
-            is_or_extends?(as_value, "OrderedCollection") ->
-              Utils.remove_iris(as_value, "orderedItems", op_ids)
-
-            is_or_extends?(as_value, "Collection") ->
-              Utils.remove_iris(as_value, "items", op_ids)
-
-            true ->
-              {:error, "Target in Add is neither a Collection nor an OrderedCollection"}
-          end
-          |> case do
-            {:error, reason} ->
-              {:halt, {:error, reason}}
-
-            updated_value ->
-              case ActorFacade.db_update(context, updated_value) do
-                {:error, reason} -> {:halt, {:error, reason}}
-                {:ok, _updated} -> {:cont, acc}
-              end
-          end
+    case to_id(target_prop) do
+      %URI{} = coll_id ->
+        with {:ok, object_ids} <-
+               get_ids(object_prop),
+             {:owns?, {:ok, true}} <-
+               {:owns?, ActorFacade.db_owns?(context, coll_id)},
+             {:ok, _oc} <-
+               ActorFacade.db_update_collection(context, coll_id, %{remove: object_ids}) do
+          :ok
         else
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:owns?, {:ok, _}} -> {:cont, acc}
-          {:owns?, {:error, reason}} -> {:halt, {:error, reason}}
+          {:error, reason} ->
+            {:error, reason}
+
+          {:owns?, {:ok, _}} ->
+            Logger.error("Local collection #{coll_id} not found")
+
+            {:error,
+             %Error{
+               code: :unknown_collection,
+               status: :bad_request,
+               message: "Local collection #{coll_id} not found"
+             }}
+
+          {:owns?, {:error, reason}} ->
+            {:error, reason}
         end
-      end)
+
+      _ ->
+        {:error, Utils.err_target_required()}
     end
   end
 
