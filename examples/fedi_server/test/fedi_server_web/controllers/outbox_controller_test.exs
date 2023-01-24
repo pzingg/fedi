@@ -121,21 +121,19 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "outbox MUST accept activities", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Create",
-      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -143,21 +141,19 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
   end
 
   test "outbox MUST accept non activity objects", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "attributedTo": "https://example.com/users/alyssa",
-      "to": "https://chatty.example/users/ben",
-      "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "to" => "https://chatty.example/users/ben",
+      "content" => "Say, did you finish reading that book I lent you?"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -165,29 +161,27 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
   end
 
   test "outbox MUST remove bto and bcc", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Create",
-      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
-      "to": "https://chatty.example/users/ben",
-      "bcc": "https://other.example/users/charlie",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "bcc": "https://other.example/users/charlie",
-        "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
+      "to" => "https://chatty.example/users/ben",
+      "bcc" => "https://other.example/users/charlie",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "bcc" => "https://other.example/users/charlie",
+        "content" => "Say, did you finish reading that book I lent you?"
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -195,7 +189,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
 
@@ -218,16 +212,14 @@ defmodule FediServerWeb.OutboxControllerTest do
   test "outbox MUST ignore id", %{conn: conn} do
     submitted_id = "https://example.com/users/alyssa/objects/1"
 
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "id": "#{submitted_id}",
-      "attributedTo": "https://example.com/users/alyssa",
-      "to": "https://chatty.example/users/ben",
-      "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "id" => submitted_id,
+      "attributedTo" => "https://example.com/users/alyssa",
+      "to" => "https://chatty.example/users/ben",
+      "content" => "Say, did you finish reading that book I lent you?"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -235,7 +227,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
 
@@ -252,15 +244,13 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "outbox MUST respond with 201 status", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "attributedTo": "https://example.com/users/alyssa",
-      "to": "https://chatty.example/users/ben",
-      "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "to" => "https://chatty.example/users/ben",
+      "content" => "Say, did you finish reading that book I lent you?"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -268,21 +258,19 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
   end
 
   test "outbox MUST set location header", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "attributedTo": "https://example.com/users/alyssa",
-      "to": "https://chatty.example/users/ben",
-      "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "to" => "https://chatty.example/users/ben",
+      "content" => "Say, did you finish reading that book I lent you?"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -290,30 +278,28 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert [location] = get_resp_header(conn, "location")
     assert location =~ "/users/alyssa/activities/"
   end
 
   test "outbox create SHOULD merge audience properties", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Create",
-      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
-      "to": "https://chatty.example/users/ben",
-      "bcc": "https://example.com/users/daria",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "cc": "https://other.example/users/charlie",
-        "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
+      "to" => "https://chatty.example/users/ben",
+      "bcc" => "https://example.com/users/daria",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "cc" => "https://other.example/users/charlie",
+        "content" => "Say, did you finish reading that book I lent you?"
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -321,7 +307,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
     activity = get_posted_item()
@@ -337,19 +323,17 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "outbox create SHOULD copy actor to attributedTo", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Create",
-      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "type": "Note",
-        "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK5",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "content" => "Say, did you finish reading that book I lent you?"
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -357,7 +341,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
     activity = get_posted_item()
@@ -373,21 +357,19 @@ defmodule FediServerWeb.OutboxControllerTest do
     # note1 is owned by alyssa
     note1_id = note1.data["id"]
 
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Update",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "id": "#{note1_id}",
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "content": "I take it all back."
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Update",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "id" => note1_id,
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "I take it all back."
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -395,7 +377,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
   end
@@ -406,21 +388,19 @@ defmodule FediServerWeb.OutboxControllerTest do
     # note3 is owned by daria!
     note3_id = note3.data["id"]
 
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Update",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "id": "#{note3_id}",
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "content": "I take it all back."
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Update",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "id" => note3_id,
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "I take it all back."
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -428,26 +408,24 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 422)
   end
 
   test "outbox SHOULD NOT trust submitted content (bad actor)", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Update",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/daria",
-      "object": {
-        "type": "Note",
-        "attributedTo": "https://example.com/users/alyssa",
-        "to": "https://chatty.example/users/ben",
-        "content": "I take it all back."
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Update",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/daria",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "I take it all back."
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -455,21 +433,19 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 422)
   end
 
   test "outbox SHOULD NOT trust submitted content (bad attributedTo in Create)", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "attributedTo": "https://example.com/users/daria",
-      "to": "https://chatty.example/users/ben",
-      "content": "I take it all back."
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "attributedTo" => "https://example.com/users/daria",
+      "to" => "https://chatty.example/users/ben",
+      "content" => "I take it all back."
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -477,7 +453,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 422)
   end
@@ -489,21 +465,19 @@ defmodule FediServerWeb.OutboxControllerTest do
     note1_id = note1.data["id"]
 
     # Changed the type and attributedTo!
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Update",
-      "to": "https://chatty.example/users/ben",
-      "actor": "https://example.com/users/alyssa",
-      "object": {
-        "id": "#{note1_id}",
-        "type": "Article",
-        "attributedTo": "https://example.com/users/daria",
-        "to": "https://chatty.example/users/ben",
-        "content": "I take it all back."
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Update",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "id" => note1_id,
+        "type" => "Article",
+        "attributedTo" => "https://example.com/users/daria",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "I take it all back."
       }
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -511,21 +485,19 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 422)
   end
 
   test "inbox delivery MUST perform delivery", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Note",
-      "attributedTo": "https://example.com/users/alyssa",
-      "to": ["https://chatty.example/users/ben", "https://other.example/users/charlie"],
-      "content": "Say, did you finish reading that book I lent you?"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "to" => ["https://chatty.example/users/ben", "https://other.example/users/charlie"],
+      "content" => "Say, did you finish reading that book I lent you?"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -533,7 +505,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
 
@@ -550,16 +522,14 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   test "outbox follow SHOULD add followed object", %{conn: conn} do
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "id": "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK8",
-      "type": "Follow",
-      "to": "https://example.com/users/alyssa/followers",
-      "actor": "https://example.com/users/alyssa",
-      "object": "https://chatty.example/users/ben"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "id" => "https://example.com/users/alyssa/activities/01GPQ4DCJTWE0TZ2GENB8BZMK8",
+      "type" => "Follow",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
@@ -567,7 +537,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     # QUESTION Should a Follow return 202?
     assert response(conn, 201) == ""
@@ -580,16 +550,14 @@ defmodule FediServerWeb.OutboxControllerTest do
     {users, [_create | _], [note | _]} = outbox_fixtures()
 
     # Making up a "todo" collection as the target
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Add",
-      "to": "https://example.com/users/alyssa/followers",
-      "actor": "https://example.com/users/alyssa",
-      "object": "#{note.ap_id}",
-      "target": "https://example.com/users/alyssa/todo"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Add",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => note.ap_id,
+      "target" => "https://example.com/users/alyssa/todo"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -597,7 +565,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     # TODO Add a todo collection to our application
     assert response(conn, 201) == ""
@@ -608,16 +576,14 @@ defmodule FediServerWeb.OutboxControllerTest do
     {users, [_create | _], [note | _]} = outbox_fixtures()
 
     # Making up a "todo" collection as the target
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Add",
-      "to": "https://example.com/users/alyssa/followers",
-      "actor": "https://example.com/users/alyssa",
-      "object": "#{note.ap_id}",
-      "target": "https://example.com/users/alyssa/todo"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Add",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => note.ap_id,
+      "target" => "https://example.com/users/alyssa/todo"
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -625,25 +591,23 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     # Now remove it
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Remove",
-      "to": "https://example.com/users/alyssa/followers",
-      "actor": "https://example.com/users/alyssa",
-      "object": "#{note.ap_id}",
-      "target": "https://example.com/users/alyssa/todo"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Remove",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => note.ap_id,
+      "target" => "https://example.com/users/alyssa/todo"
     }
-    """
 
     conn =
       Phoenix.ConnTest.build_conn()
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
     refute get_posted_item("https://example.com/users/alyssa/todo")
@@ -652,15 +616,13 @@ defmodule FediServerWeb.OutboxControllerTest do
   test "outbox like SHOULD add object to liked", %{conn: conn} do
     {users, [_create | _], [note | _]} = outbox_fixtures()
 
-    activity = """
-    {
-      "@context": "https://www.w3.org/ns/activitystreams",
-      "type": "Like",
-      "to": "https://example.com/users/alyssa/followers",
-      "actor": "https://example.com/users/alyssa",
-      "object": "#{note.ap_id}"
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Like",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => note.ap_id
     }
-    """
 
     %{alyssa: %{user: alyssa}} = users
 
@@ -668,7 +630,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201) == ""
     assert %T.Note{} = get_posted_item("https://example.com/users/alyssa/liked")

@@ -6,25 +6,23 @@ defmodule Fedi.StreamsTest do
 
   describe "resolve" do
     test "example 9" do
-      source = """
-      {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "summary": "Sally accepted an invitation to a party",
-        "type": "Accept",
-        "actor": {
-          "type": "Person",
-          "name": "Sally"
+      source = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "summary" => "Sally accepted an invitation to a party",
+        "type" => "Accept",
+        "actor" => %{
+          "type" => "Person",
+          "name" => "Sally"
         },
-        "object": {
-          "type": "Invite",
-          "actor": "http://john.example.org",
-          "object": {
-            "type": "Event",
-            "name": "Going-Away Party for Jim"
+        "object" => %{
+          "type" => "Invite",
+          "actor" => "http://john.example.org",
+          "object" => %{
+            "type" => "Event",
+            "name" => "Going-Away Party for Jim"
           }
         }
       }
-      """
 
       assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert accept.__struct__ == Fedi.ActivityStreams.Type.Accept
@@ -35,28 +33,26 @@ defmodule Fedi.StreamsTest do
     end
 
     test "example 9 with langString" do
-      source = """
-      {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "summary": "Sally accepted an invitation to a party",
-        "type": "Accept",
-        "actor": {
-          "type": "Person",
-          "name": "Sally"
+      source = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "summary" => "Sally accepted an invitation to a party",
+        "type" => "Accept",
+        "actor" => %{
+          "type" => "Person",
+          "name" => "Sally"
         },
-        "object": {
-          "type": "Invite",
-          "actor": "http://john.example.org",
-          "object": {
-            "type": "Event",
-            "nameMap": {
-              "en": "Going-Away Party for Jim",
-              "fr": "Fête de départ pour Jim"
+        "object" => %{
+          "type" => "Invite",
+          "actor" => "http://john.example.org",
+          "object" => %{
+            "type" => "Event",
+            "nameMap" => %{
+              "en" => "Going-Away Party for Jim",
+              "fr" => "Fête de départ pour Jim"
             }
           }
         }
       }
-      """
 
       assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert accept.__struct__ == Fedi.ActivityStreams.Type.Accept
@@ -82,25 +78,23 @@ defmodule Fedi.StreamsTest do
     end
 
     test "orderedCollectionPage" do
-      source = """
-        {
-          "@context": "https://www.w3.org/ns/activitystreams",
-          "id": "http://example.org/foo?page=1",
-          "orderedItems": [
-            {
-              "name": "A Simple Note",
-              "type": "Note"
-            },
-            {
-              "name": "Another Simple Note",
-              "type": "Note"
-            }
-          ],
-          "partOf": "http://example.org/foo",
-          "summary": "Page 1 of Sally's notes",
-          "type": "OrderedCollectionPage"
-        }
-      """
+      source = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "id" => "http://example.org/foo?page=1",
+        "orderedItems" => [
+          %{
+            "name" => "A Simple Note",
+            "type" => "Note"
+          },
+          %{
+            "name" => "Another Simple Note",
+            "type" => "Note"
+          }
+        ],
+        "partOf" => "http://example.org/foo",
+        "summary" => "Page 1 of Sally's notes",
+        "type" => "OrderedCollectionPage"
+      }
 
       assert {:ok, page} = Fedi.Streams.JSONResolver.resolve(source)
       assert page.__struct__ == Fedi.ActivityStreams.Type.OrderedCollectionPage
@@ -129,56 +123,52 @@ defmodule Fedi.StreamsTest do
 
   describe "re-serialize" do
     test "example 9 with langString" do
-      source = """
-      {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "summary": "Sally accepted an invitation to a party",
-        "type": "Accept",
-        "actor": {
-          "type": "Person",
-          "name": "Sally"
+      source = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "summary" => "Sally accepted an invitation to a party",
+        "type" => "Accept",
+        "actor" => %{
+          "type" => "Person",
+          "name" => "Sally"
         },
-        "object": {
-          "type": "Invite",
-          "actor": "http://john.example.org",
-          "object": {
-            "type": "Event",
-            "nameMap": {
-              "en": "Going-Away Party for Jim",
-              "fr": "Fête de départ pour Jim"
+        "object" => %{
+          "type" => "Invite",
+          "actor" => "http://john.example.org",
+          "object" => %{
+            "type" => "Event",
+            "nameMap" => %{
+              "en" => "Going-Away Party for Jim",
+              "fr" => "Fête de départ pour Jim"
             }
           }
         }
       }
-      """
 
       assert {:ok, accept} = Fedi.Streams.JSONResolver.resolve(source)
       assert {:ok, json} = Fedi.Streams.Serializer.serialize(accept)
 
-      expected = """
-      {
-        "@context": "https://www.w3.org/ns/activitystreams",
-        "actor": {
-          "name": "Sally",
-          "type": "Person"
+      expected = %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "actor" => %{
+          "name" => "Sally",
+          "type" => "Person"
         },
-        "object": {
-          "actor": "http://john.example.org",
-          "object": {
-            "nameMap": {
-              "en": "Going-Away Party for Jim",
-              "fr": "Fête de départ pour Jim"
+        "object" => %{
+          "actor" => "http://john.example.org",
+          "object" => %{
+            "nameMap" => %{
+              "en" => "Going-Away Party for Jim",
+              "fr" => "Fête de départ pour Jim"
             },
-            "type": "Event"
+            "type" => "Event"
           },
-          "type": "Invite"
+          "type" => "Invite"
         },
-        "summary": "Sally accepted an invitation to a party",
-        "type": "Accept"
+        "summary" => "Sally accepted an invitation to a party",
+        "type" => "Accept"
       }
-      """
 
-      assert Jason.encode!(json, pretty: true) == String.trim_trailing(expected)
+      assert Jason.encode!(json, pretty: true) == Jason.encode!(expected, pretty: true)
     end
   end
 end
