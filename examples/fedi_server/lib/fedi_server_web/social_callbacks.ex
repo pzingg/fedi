@@ -89,7 +89,8 @@ defmodule FediServerWeb.SocialCallbacks do
       end
 
     if invalid_message do
-      {:error, %Error{code: :unauthorized_create, status: :bad_request, message: invalid_message}}
+      {:error,
+       %Error{code: :unauthorized_create, status: :unprocessable_entity, message: invalid_message}}
     else
       {:ok, context}
     end
@@ -117,7 +118,7 @@ defmodule FediServerWeb.SocialCallbacks do
                     {:error,
                      %Error{
                        code: :object_spoofed,
-                       status: :bad_request,
+                       status: :unprocessable_entity,
                        message: "Object's '#{prop_name}' value may be spoofed"
                      }}
 
@@ -138,7 +139,7 @@ defmodule FediServerWeb.SocialCallbacks do
               {:error,
                %Error{
                  code: :object_spoofed,
-                 status: :bad_request,
+                 status: :unprocessable_entity,
                  message: "Object #{object_id} does not exist"
                }}
           end

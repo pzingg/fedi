@@ -392,7 +392,6 @@ defmodule Fedi.ActivityPub.Utils do
     digest = "SHA-256=" <> (:crypto.hash(:sha256, body) |> Base.encode64())
 
     [
-      {@content_type_header, @content_type_value},
       # RFC 7231 §7.1.1.2
       {"date", date_header_value()},
       # RFC 3230 and RFC 5843
@@ -401,48 +400,86 @@ defmodule Fedi.ActivityPub.Utils do
     |> Enum.reduce(conn, fn {key, value}, acc ->
       Plug.Conn.put_resp_header(acc, key, value)
     end)
+    |> Plug.Conn.put_resp_content_type(@content_type_value)
   end
 
-  def send_json_resp(conn, status_or_error, opts \\ [])
+  def send_json_resp(conn, status_or_error, body \\ nil, opts \\ [])
 
-  def send_json_resp(%Plug.Conn{} = conn, status, opts) when is_atom(status) do
+  def send_json_resp(%Plug.Conn{} = conn, status, nil, opts) when is_atom(status) do
     send_json_resp(
       conn,
       status,
-      Error.message_from_status(status),
-      Keyword.get(opts, :actor_state)
+      message_for_status(status),
+      opts
     )
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, %Error{status: :bad_request, message: message}, opts) do
+  def send_json_resp(
+        %Plug.Conn{} = conn,
+        %Error{status: :unprocessable_entity, message: message},
+        nil,
+        opts
+      ) do
     send_json_resp(
       conn,
-      :bad_request,
-      "Bad request: #{message}",
-      Keyword.get(opts, :actor_state)
+      :unprocessable_entity,
+      "Validation error: #{message}",
+      opts
     )
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, %Error{status: status}, opts) do
+  def send_json_resp(%Plug.Conn{} = conn, %Error{status: status}, nil, opts) do
     send_json_resp(
       conn,
       status,
-      Error.message_from_status(status),
-      Keyword.get(opts, :actor_state)
+      message_for_status(status),
+      opts
     )
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, status, body, nil) when is_binary(body) do
+  def send_json_resp(%Plug.Conn{} = conn, status, body, opts) when is_binary(body) do
+    content_type =
+      if Plug.Conn.Status.code(status) > 299 do
+        "application/json"
+      else
+        Plug.Conn.get_req_header(conn, "accept") |> get_best_content_type()
+      end
+
+    conn =
+      case Keyword.get(opts, :actor_state) do
+        nil -> conn
+        actor_state -> Plug.Conn.put_private(conn, :actor_state, actor_state)
+      end
+
     conn
-    |> Plug.Conn.put_resp_header(@content_type_header, "application/json")
+    |> Plug.Conn.put_resp_content_type(content_type)
     |> Plug.Conn.send_resp(status, body)
   end
 
-  def send_json_resp(%Plug.Conn{} = conn, status, body, actor_state) when is_binary(body) do
-    conn
-    |> Plug.Conn.put_private(:actor_state, actor_state)
-    |> Plug.Conn.put_resp_header(@content_type_header, "application/json")
-    |> Plug.Conn.send_resp(status, body)
+  def message_for_status(:ok), do: "OK"
+
+  def message_for_status(:unprocessable_entity), do: "Validation error"
+
+  def message_for_status(status) when is_atom(status) do
+    Atom.to_string(status) |> String.replace("_", " ") |> Fedi.Streams.Utils.capitalize()
+  end
+
+  @content_types [
+    {"application/ld+json",
+     "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\""},
+    {"application/activity+json", "application/activity+json"}
+  ]
+
+  def get_best_content_type(accepts) do
+    found =
+      Enum.find(@content_types, fn {accept, _value} ->
+        Enum.find(accepts, &String.starts_with?(&1, accept))
+      end)
+
+    case found do
+      {_accept, value} -> value
+      _ -> "application/json"
+    end
   end
 
   def get_type_meta(%{__struct__: module}) do
@@ -701,7 +738,7 @@ defmodule Fedi.ActivityPub.Utils do
             {:error,
              %Error{
                code: :unknown_collection,
-               status: :bad_request,
+               status: :unprocessable_entity,
                message: "Local collection #{coll_id} not found"
              }}
 
@@ -738,7 +775,7 @@ defmodule Fedi.ActivityPub.Utils do
             {:error,
              %Error{
                code: :unknown_collection,
-               status: :bad_request,
+               status: :unprocessable_entity,
                message: "Local collection #{coll_id} not found"
              }}
 

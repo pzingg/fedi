@@ -430,7 +430,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", activity)
 
-    assert response(conn, 400)
+    assert response(conn, 422)
   end
 
   test "outbox SHOULD NOT trust submitted content (bad actor)", %{conn: conn} do
@@ -457,7 +457,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", activity)
 
-    assert response(conn, 400)
+    assert response(conn, 422)
   end
 
   test "outbox SHOULD NOT trust submitted content (bad attributedTo in Create)", %{conn: conn} do
@@ -479,7 +479,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", activity)
 
-    assert response(conn, 400)
+    assert response(conn, 422)
   end
 
   test "outbox SHOULD validate content (update)", %{conn: conn} do
@@ -513,7 +513,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", activity)
 
-    assert response(conn, 400)
+    assert response(conn, 422)
   end
 
   test "inbox delivery MUST perform delivery", %{conn: conn} do
@@ -621,7 +621,7 @@ defmodule FediServerWeb.OutboxControllerTest do
 
     %{alyssa: %{user: alyssa}} = users
 
-    conn =
+    _ =
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")

@@ -497,22 +497,25 @@ defmodule FediServer.Activities do
   end
 
   def add_collection_item({:user_collection, name}, %URI{} = actor_id, %URI{} = object_id, acc) do
-    # TODO dereference to get object_type?
-    object_type = "Unknown"
-    actor = URI.to_string(actor_id)
-    coll_id = actor <> "/#{name}"
-    Logger.error("collection #{coll_id} object #{object_id}")
+    case repo_get_by_ap_id(:objects, object_id) do
+      %Object{type: type} ->
+        actor = URI.to_string(actor_id)
+        coll_id = actor <> "/#{name}"
 
-    params = %{
-      collection_id: coll_id,
-      type: object_type,
-      actor: actor,
-      object: URI.to_string(object_id)
-    }
+        params = %{
+          collection_id: coll_id,
+          type: type,
+          actor: actor,
+          object: URI.to_string(object_id)
+        }
 
-    case repo_insert(:collections, params) do
-      {:ok, %UserCollection{}} -> {:cont, [object_id | acc]}
-      {:error, reason} -> {:halt, {:error, reason}}
+        case repo_insert(:collections, params) do
+          {:ok, %UserCollection{}} -> {:cont, [object_id | acc]}
+          {:error, changeset} -> {:halt, {:error, changeset}}
+        end
+
+      _ ->
+        {:halt, {:error, "Object #{object_id} not found"}}
     end
   end
 
@@ -1396,7 +1399,9 @@ defmodule FediServer.Activities do
         # Triggered if someone tried to update the actor for the object
         ex in Postgrex.Error ->
           message = ex.message || ex.postgres.message
-          {:error, %Error{code: :update_not_allowed, status: :bad_request, message: message}}
+
+          {:error,
+           %Error{code: :update_not_allowed, status: :unprocessable_entity, message: message}}
       end
     else
       _ ->

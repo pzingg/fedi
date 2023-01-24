@@ -30,16 +30,11 @@ defmodule FediServerWeb.FollowingController do
     with {:ok, coll} <- Activities.get_collection(coll_id, APUtils.collection_opts(params)),
          {:ok, m} <- Fedi.Streams.Serializer.serialize(coll),
          {:ok, body} <- Jason.encode(m) do
-      conn
-      |> put_resp_content_type("application/json")
-      |> send_resp(200, body)
+      APUtils.send_json_resp(conn, :ok, body)
     else
       {:error, reason} ->
         Logger.error("followers error #{reason}")
-
-        conn
-        |> put_resp_content_type("application/json")
-        |> send_resp(500, "Internal server error")
+        APUtils.send_json_resp(conn, :internal_server_error)
     end
   end
 end

@@ -172,18 +172,21 @@ defmodule Fedi.ActivityPub.Actor do
       # If the Federated Protocol is not enabled, then this endpoint is not
       # enabled.
       {:protocol_enabled, _} ->
-        {:ok, APUtils.send_json_resp(conn, :method_not_allowed, actor_state: :protocol_enabled)}
+        {:ok,
+         APUtils.send_json_resp(conn, :method_not_allowed, nil, actor_state: :protocol_enabled)}
 
       # Not authenticated
       {:authenticated, {:ok, _, conn, _}} ->
-        {:ok, APUtils.send_json_resp(conn, :unauthorized, actor_state: :authenticated)}
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :authenticated)}
 
       # Respond with bad request -- we do not understand the type.
       {:matched_type, {:error, %Error{code: :unhandled_type}}} ->
-        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :matched_type)}
+        {:ok,
+         APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :matched_type)}
 
       {:valid_activity, {:error, %Error{code: :missing_id}}} ->
-        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :valid_activity)}
+        {:ok,
+         APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :valid_activity)}
 
       {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
@@ -192,10 +195,10 @@ defmodule Fedi.ActivityPub.Actor do
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
       {:post_inbox, {:error, %Error{code: :object_required}}} ->
-        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :post_inbox)}
+        {:ok, APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :post_inbox)}
 
       {:post_inbox, {:error, %Error{code: :target_required}}} ->
-        {:ok, APUtils.send_json_resp(conn, :bad_request, actor_state: :post_inbox)}
+        {:ok, APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :post_inbox)}
     end
   end
 
@@ -310,22 +313,23 @@ defmodule Fedi.ActivityPub.Actor do
       # Attempts to submit objects to servers not implementing client to
       # server support SHOULD result in a 405 Method Not Allowed response.
       {:protocol_enabled, _} ->
-        {:ok, APUtils.send_json_resp(conn, :method_not_allowed, actor_state: :protocol_enabled)}
+        {:ok,
+         APUtils.send_json_resp(conn, :method_not_allowed, nil, actor_state: :protocol_enabled)}
 
       # Not authenticated
       {:authenticated, {:ok, _, conn, _}} ->
-        {:ok, APUtils.send_json_resp(conn, :unauthorized, actor_state: :autenticated)}
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :autenticated)}
 
       # We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
 
       # Send the rejection to the client.
       {:matched_type, {:error, %Error{code: :unhandled_type} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, actor_state: :matched_type)}
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :matched_type)}
 
       # Send the rejection to the client.
       {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, actor_state: :valid_activity)}
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :valid_activity)}
 
       {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
@@ -334,18 +338,18 @@ defmodule Fedi.ActivityPub.Actor do
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
       {:delivered, {:error, %Error{code: :object_required} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, actor_state: :delivered)}
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :delivered)}
 
       {:delivered, {:error, %Error{code: :target_required} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, actor_state: :delivered)}
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :delivered)}
 
       {step, {:error, %Error{} = error}} ->
         Logger.error("failed in step #{step}: #{error}")
-        {:ok, APUtils.send_json_resp(conn, error, actor_state: step)}
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: step)}
 
       {step, {:error, reason}} ->
         Logger.error("failed in step #{step}: #{reason}")
-        {:ok, APUtils.send_json_resp(conn, :internal_server_error, actor_state: step)}
+        {:ok, APUtils.send_json_resp(conn, :internal_server_error, nil, actor_state: step)}
     end
   end
 

@@ -16,7 +16,7 @@ defmodule FediServerWeb.ObjectsControllerTest do
     assert response(conn, 200) =~ "/users/alyssa"
 
     assert Plug.Conn.get_resp_header(conn, "content-type") == [
-             "application/ld+json; charset=utf-8"
+             "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\"; charset=utf-8"
            ]
   end
 

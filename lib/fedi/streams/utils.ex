@@ -54,7 +54,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_actor_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:actor_required, "Actor property required#{suffix}", :bad_request, data)
+    Error.new(:actor_required, "Actor property required#{suffix}", :unprocessable_entity, data)
   end
 
   @doc """
@@ -64,7 +64,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_object_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:object_required, "Object property required#{suffix}", :bad_request, data)
+    Error.new(:object_required, "Object property required#{suffix}", :unprocessable_entity, data)
   end
 
   @doc """
@@ -74,7 +74,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_target_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:target_required, "Target property required#{suffix}", :bad_request, data)
+    Error.new(:target_required, "Target property required#{suffix}", :unprocessable_entity, data)
   end
 
   @doc """
@@ -84,7 +84,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_id_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:id_required, "Id property required#{suffix}", :bad_request, data)
+    Error.new(:id_required, "Id property required#{suffix}", :unprocessable_entity, data)
   end
 
   @doc """
@@ -94,7 +94,7 @@ defmodule Fedi.Streams.Utils do
   """
   def err_type_required(data \\ []) do
     suffix = err_location(data)
-    Error.new(:type_required, "Type property required#{suffix}", :bad_request, data)
+    Error.new(:type_required, "Type property required#{suffix}", :unprocessable_entity, data)
   end
 
   @doc """
