@@ -16,6 +16,7 @@ defmodule Fedi.ActivityPub.Utils do
   @public_activity_streams_iri Utils.to_uri(@public_activity_streams)
   @public_json_ld "Public"
   @public_json_ld_as "as:Public"
+  @public_addresses [@public_activity_streams, @public_json_ld, @public_json_ld_as]
 
   @doc """
   activity_streams_media_types contains all of the accepted ActivityStreams media
@@ -106,7 +107,9 @@ defmodule Fedi.ActivityPub.Utils do
   Returns the IRI that indicates an Activity is meant
   to be visible for general public consumption.
   """
-  def public_activity_streams_iri, do: @public_activity_streams_iri
+  def public_activity_streams, do: @public_activity_streams
+
+  def public_addresses, do: @public_addresses
 
   @doc """
   Determines if an IRI string is the Public collection as defined in
@@ -118,11 +121,19 @@ defmodule Fedi.ActivityPub.Utils do
     public?(URI.to_string(iri))
   end
 
-  def public?(str) when is_binary(str) do
-    str == @public_activity_streams ||
-      str == @public_json_ld ||
-      str == @public_json_ld_as
+  def public?(recipients) when is_map(recipients) do
+    Map.keys(recipients) |> public?()
   end
+
+  def public?([_ | _] = recipients) do
+    Enum.any?(recipients, &public?(&1))
+  end
+
+  def public?(addr) when is_binary(addr) do
+    Enum.member?(@public_addresses, addr)
+  end
+
+  def public?(_), do: false
 
   @doc """
   Returns a property's id, or raises an error if it is not found.
@@ -1042,6 +1053,8 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  def verify_no_hidden_recipients(nil, _label), do: :ok
+
   def verify_no_hidden_recipients(m, label) when is_map(m) do
     activity_keys = Map.keys(m)
 
@@ -1218,11 +1231,29 @@ defmodule Fedi.ActivityPub.Utils do
   @doc """
   Sanitize query params for collection URLs
   """
-  def collection_opts(params) when is_map(params) do
+  def collection_opts(params, conn_or_ap_id \\ nil)
+
+  def collection_opts(params, %Plug.Conn{} = conn) when is_map(params) do
+    case conn.assigns[:current_user] do
+      %{ap_id: ap_id} -> collection_opts(params, ap_id)
+      _ -> collection_opts(params, nil)
+    end
+  end
+
+  def collection_opts(params, ap_id) when is_map(params) and is_binary(ap_id) do
+    collection_opts(params, nil)
+    |> Keyword.put(:visible_to, ap_id)
+  end
+
+  def collection_opts(params, nil) when is_map(params) do
     [:max_id, :min_id, :page, :first, :page_size]
     |> Enum.reduce([], fn key, acc ->
       case {key, Map.get(params, Atom.to_string(key))} do
         {_, nil} ->
+          nil
+
+        {_, v} when not is_binary(v) ->
+          Logger.error("collection_opts skipping non-binary #{key} #{inspect(v)}")
           nil
 
         {:page_size, v} ->
@@ -1232,7 +1263,7 @@ defmodule Fedi.ActivityPub.Utils do
           end
 
         {:page, v} ->
-          if v == "true" do
+          if v != "" && v != "false" do
             true
           else
             nil

@@ -243,12 +243,12 @@ defmodule FediServerWeb.SocialCallbacks do
 
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
-         {:follower_id, %URI{} = follower_id} <- {:follower_id, APUtils.to_id(actor)},
+         {:actor_id, %URI{} = actor_id} <- {:actor_id, APUtils.to_id(actor)},
          {:following_id, %URI{} = following_id} <- {:following_id, APUtils.to_id(object)},
-         {:ok, %User{}} <- Activities.ensure_user(follower_id, true),
+         {:ok, %User{}} <- Activities.ensure_user(actor_id, true),
          # Insert remote following user if not in db
          {:ok, %User{}} <- Activities.ensure_user(following_id, false),
-         {:ok, _relationship} <- Activities.follow(follower_id, following_id, :pending) do
+         {:ok, _relationship} <- Activities.follow(actor_id, following_id, :pending) do
       Logger.debug("Inserted new relationship")
       {:ok, activity, true}
     else
@@ -266,7 +266,7 @@ defmodule FediServerWeb.SocialCallbacks do
       {:activity_object, _} ->
         Utils.err_object_required(activity: activity)
 
-      {:follower_id, _} ->
+      {:actor_id, _} ->
         {:error, "No id in actor"}
 
       {:following_id, _} ->

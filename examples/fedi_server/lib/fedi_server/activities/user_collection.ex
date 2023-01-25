@@ -12,14 +12,13 @@ defmodule FediServer.Activities.UserCollection do
     field(:type, :string)
     field(:actor, :string)
     field(:object, :string)
-    field(:visibility, Ecto.Enum, values: [:public, :unlisted, :followers_only, :direct])
 
     timestamps()
   end
 
   def changeset(%__MODULE__{} = mailbox, attrs \\ %{}) do
     mailbox
-    |> cast(attrs, [:collection_id, :type, :actor, :object, :visibility])
+    |> cast(attrs, [:collection_id, :type, :actor, :object])
     |> validate_required([:collection_id, :type, :actor, :object])
     |> unique_constraint([:collection_id, :object])
   end

@@ -32,7 +32,7 @@ endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
   nickname: "alyssa",
   email: "alyssa@example.com",
   password: "pass",
-  local: true,
+  local?: true,
   data: %{}
 }
 |> User.changeset()

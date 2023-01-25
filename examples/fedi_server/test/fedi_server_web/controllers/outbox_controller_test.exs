@@ -194,7 +194,7 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 201) == ""
 
     # Now fetch activity, its object, and the object id
-    activity = get_posted_item()
+    assert activity = get_posted_item()
     assert :ok = APUtils.verify_no_hidden_recipients(activity)
 
     # Also check on the activities delivered to ben and charlie
@@ -232,13 +232,9 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 201) == ""
 
     # Now fetch activity, its object, and the object id
-    assert {:ok, %{properties: _properties} = _outbox_page} =
-             Utils.to_uri("https://example.com/users/alyssa/outbox")
-             |> Activities.get_collection()
-
     assert response(conn, 201)
-    activity = get_posted_item()
-    object = Utils.get_object(activity)
+    assert activity = get_posted_item()
+    assert object = Utils.get_object(activity)
     assert %URI{} = id = APUtils.to_id(object)
     assert URI.to_string(id) != submitted_id
   end
@@ -310,7 +306,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
-    activity = get_posted_item()
+    assert activity = get_posted_item()
     assert {:ok, act_recipients} = APUtils.get_recipients(activity, as_map: true)
 
     object = Utils.get_object(activity)
@@ -344,8 +340,8 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
-    activity = get_posted_item()
-    object = Utils.get_object(activity)
+    assert activity = get_posted_item()
+    assert object = Utils.get_object(activity)
 
     assert Utils.get_iri(object, "attributedTo") |> URI.to_string() ==
              "https://example.com/users/alyssa"
@@ -636,20 +632,178 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert %T.Note{} = get_posted_item("https://example.com/users/alyssa/liked")
   end
 
-  defp get_posted_item(coll_url \\ "https://example.com/users/alyssa/outbox") do
-    with {:ok, %{properties: properties} = _outbox_page} <-
-           Utils.to_uri(coll_url)
-           |> Activities.get_collection(),
-         %P.OrderedItems{values: [%P.OrderedItemsIterator{} = iter | _]} <-
-           Map.get(properties, "orderedItems") do
-      case iter do
-        %{member: as_type} when is_struct(as_type) -> as_type
-        %{iri: %URI{} = iri} -> iri
-        _ -> nil
-      end
-    else
-      _ -> nil
+  test "outbox retrieval MUST respond unuathorized with public contents", %{
+    conn: conn
+  } do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "to" => "https://www.w3.org/ns/activitystreams#Public",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://www.w3.org/ns/activitystreams#Public",
+        "content" => "Hello, world!"
+      }
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201) == ""
+
+    assert %T.Create{} = get_posted_item("https://example.com/users/alyssa/outbox", "")
+  end
+
+  test "outbox retrieval MUST respond with filtered contents (direct recipient)", %{
+    conn: conn
+  } do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "to" => "https://example.com/users/daria",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://example.com/users/daria",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201) == ""
+
+    assert %T.Create{} =
+             get_posted_item(
+               "https://example.com/users/alyssa/outbox",
+               "https://example.com/users/daria"
+             )
+  end
+
+  test "outbox retrieval MUST respond with filtered contents (following recipient)",
+       %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://example.com/users/alyssa/followers",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    %{alyssa: %{user: alyssa}, daria: %{user: daria}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Now daria will be one of alyssa's followers
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "to" => "https://example.com/users/daria/followers",
+      "actor" => "https://example.com/users/daria",
+      "object" => "https://example.com/users/alyssa"
+    }
+
+    build_conn()
+    |> log_in_user(daria)
+    |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+    |> post("/users/daria/outbox", Jason.encode!(activity))
+
+    assert %T.Create{} =
+             get_posted_item(
+               "https://example.com/users/alyssa/outbox",
+               "https://example.com/users/daria"
+             )
+  end
+
+  test "outbox retrieval MUST respond with filtered contents (non-following recipient)",
+       %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/alyssa",
+        "to" => "https://example.com/users/alyssa/followers",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    refute get_posted_item(
+             "https://example.com/users/alyssa/outbox",
+             "https://example.com/users/daria"
+           )
+  end
+
+  defp get_posted_item(coll_url \\ "https://example.com/users/alyssa/outbox", filtered_for \\ nil) do
+    case get_page(coll_url, filtered_for) do
+      {:ok,
+       %{
+         properties: %{
+           "orderedItems" => %P.OrderedItems{values: [%P.OrderedItemsIterator{} = iter | _]}
+         }
+       } = _outbox_page} ->
+        case iter do
+          %{member: as_type} when is_struct(as_type) -> as_type
+          %{iri: %URI{} = iri} -> iri
+          _ -> nil
+        end
+
+      _ ->
+        nil
     end
+  end
+
+  def get_page(coll_url, nil) do
+    Utils.to_uri(coll_url) |> Activities.get_collection_unfiltered()
+  end
+
+  def get_page(coll_url, viewer_ap_id) when is_binary(viewer_ap_id) do
+    viewer_ap_id =
+      if Activities.local?(Utils.to_uri(viewer_ap_id)) do
+        viewer_ap_id
+      else
+        nil
+      end
+
+    opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
+    Utils.to_uri(coll_url) |> Activities.get_collection(opts)
   end
 
   defp mock_actor(url) do

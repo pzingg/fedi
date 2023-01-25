@@ -14,7 +14,7 @@ defmodule FediServer.Accounts.User do
     field(:inbox, :string)
     field(:name, :string)
     field(:nickname, :string)
-    field(:local, :boolean)
+    field(:local?, :boolean)
     field(:email, :string)
     field(:password, :string, virtual: true, redact: true)
     field(:hashed_password, :string, redact: true)
@@ -34,7 +34,7 @@ defmodule FediServer.Accounts.User do
       inbox: data["inbox"],
       name: data["name"],
       nickname: data["preferredUsername"],
-      local: false,
+      local?: false,
       public_key: get_in(data, ["publicKey", "publicKeyPem"]),
       data: data
     }
@@ -51,13 +51,13 @@ defmodule FediServer.Accounts.User do
       :inbox,
       :name,
       :nickname,
-      :local,
+      :local?,
       :email,
       :password,
       :public_key,
       :data
     ])
-    |> validate_required([:ap_id, :inbox, :name, :nickname, :local, :data])
+    |> validate_required([:ap_id, :inbox, :name, :nickname, :local?, :data])
     |> unique_constraint(:ap_id)
     |> unique_constraint(:nickname)
     |> unique_constraint(:email)
@@ -67,7 +67,7 @@ defmodule FediServer.Accounts.User do
   end
 
   defp validate_password(changeset, opts \\ []) do
-    if get_field(changeset, :local) && get_change(changeset, :password) do
+    if get_field(changeset, :local?) && get_change(changeset, :password) do
       changeset
       # |> validate_length(:password, min: 12, max: 80)
       # |> validate_format(:password, ~r/[a-z]/, message: "at least one lower case character")
@@ -93,7 +93,7 @@ defmodule FediServer.Accounts.User do
   end
 
   defp maybe_put_keys(changeset) do
-    if get_field(changeset, :local) && is_nil(get_field(changeset, :keys)) do
+    if get_field(changeset, :local?) && is_nil(get_field(changeset, :keys)) do
       {:ok, private_key_pem, public_key_pem} = FediServer.HTTPClient.generate_rsa_pem()
 
       changeset
@@ -110,7 +110,7 @@ defmodule FediServer.Accounts.User do
         changeset
 
       _ ->
-        if get_field(changeset, :local) do
+        if get_field(changeset, :local?) do
           ap_id = get_field(changeset, :ap_id)
           name = get_field(changeset, :name)
           nickname = get_field(changeset, :nickname)

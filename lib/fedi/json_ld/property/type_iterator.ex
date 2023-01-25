@@ -2,7 +2,7 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
   @moduledoc """
   TypeIterator represents a single value for the "type" property.
 
-  TypeIterator is an iterator for a property. It is permitted to be
+  TypeIterator is an iterator for a property. It is visible_to to be
   one of multiple value types. At most, one type of value can be present, or
   none at all. Setting a value will clear the other types of values so that
   only one of the 'is' methods will return true. It is possible to clear all

@@ -48,9 +48,11 @@ defmodule FediServerWeb.CommonCallbacks do
   """
   def get_inbox(context, %Plug.Conn{} = conn, params) do
     inbox_iri = APUtils.request_id(conn)
+    opts = APUtils.collection_opts(params, conn)
 
-    with {:ok, oc} <- Activities.get_collection(inbox_iri, APUtils.collection_opts(params)) do
-      {:ok, conn, oc}
+    case Activities.get_collection(inbox_iri, opts) do
+      {:ok, oc} -> {:ok, conn, oc}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -92,10 +94,11 @@ defmodule FediServerWeb.CommonCallbacks do
   """
   def get_outbox(context, %Plug.Conn{} = conn, params) do
     outbox_iri = APUtils.request_id(conn)
+    opts = APUtils.collection_opts(params, conn)
 
-    # TODO Parse max_id and min_id from params, add to opts
-    with {:ok, oc} <- Activities.get_collection(outbox_iri, APUtils.collection_opts(params)) do
-      {:ok, conn, oc}
+    case Activities.get_collection(outbox_iri, opts) do
+      {:ok, oc} -> {:ok, conn, oc}
+      {:error, reason} -> {:error, reason}
     end
   end
 

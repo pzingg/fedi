@@ -10,7 +10,7 @@ defmodule FediServer.Repo.Migrations.AddUsers do
       add :inbox, :string, null: false
       add :name, :string, null: false
       add :nickname, :citext, null: false
-      add :local, :boolean, null: false, default: true
+      add :local?, :boolean, null: false, default: true
       add :email, :citext
       add :public_key, :text
       add :keys, :text
@@ -23,6 +23,6 @@ defmodule FediServer.Repo.Migrations.AddUsers do
     create index(:users, :inbox, unique: true)
     create index(:users, :nickname, unique: true)
     create index(:users, :email, unique: true)
-    create index(:users, :local)
+    create index(:users, :local?)
   end
 end

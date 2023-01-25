@@ -25,9 +25,10 @@ defmodule FediServerWeb.FollowingController do
   end
 
   def handle_collection(conn, _actor, params) do
-    %URI{path: path} = coll_id = APUtils.request_id(conn)
+    coll_id = APUtils.request_id(conn)
+    opts = APUtils.collection_opts(params, conn)
 
-    with {:ok, coll} <- Activities.get_collection(coll_id, APUtils.collection_opts(params)),
+    with {:ok, coll} <- Activities.get_collection(coll_id, opts),
          {:ok, m} <- Fedi.Streams.Serializer.serialize(coll),
          {:ok, body} <- Jason.encode(m) do
       APUtils.send_json_resp(conn, :ok, body)

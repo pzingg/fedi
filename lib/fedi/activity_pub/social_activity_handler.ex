@@ -8,9 +8,9 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityPub.ActorFacade
-  alias Fedi.ActivityPub.Utils, as: APUtils
 
   @doc """
   Implements the social Create activity side effects.
@@ -225,6 +225,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def follow(%{box_iri: box_iri} = context, activity)
       when is_struct(context) and is_struct(activity) do
+    recipients = APUtils.public_activity_streams()
+
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, following_ids} <- APUtils.get_ids(object),
@@ -292,8 +294,10 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, %URI{path: actor_path} = actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, outbox_iri),
          {:ok, object_ids} <- APUtils.get_ids(object),
+         {:ok, recipients} <- APUtils.get_recipients(activity),
+         items <- Enum.map(object_ids, fn id -> {id, recipients} end),
          coll_id <- %URI{actor_iri | path: actor_path <> "/liked"},
-         {:ok, _oc} <- ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
+         {:ok, _oc} <- ActorFacade.db_update_collection(context, coll_id, %{add: items}) do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -301,6 +305,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
     end
   end
 
+  @spec undo(any, %{:properties => map, optional(any) => any}) ::
+          :pass | {:error, any} | {:ok, struct, boolean} | Fedi.Streams.Error.t()
   @doc """
   Implements the social Undo activity side effects.
   """

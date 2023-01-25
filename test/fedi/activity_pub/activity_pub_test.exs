@@ -54,22 +54,20 @@ defmodule Fedi.ActivityPubTest do
   end
 
   test "SideEffectActor adds new ids" do
-    source =
-      %{
-        "@context" => "https://www.w3.org/ns/activitystreams",
-        "actor" => %{
-          "name" => "Sally",
-          "type" => "Person"
-        },
-        "object" => %{
-          "content" => "This is a simple note",
-          "name" => "A Simple Note",
-          "type" => "Note"
-        },
-        "summary" => "Sally created a note",
-        "type" => "Create"
-      }
-
+    source = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "actor" => %{
+        "name" => "Sally",
+        "type" => "Person"
+      },
+      "object" => %{
+        "content" => "This is a simple note",
+        "name" => "A Simple Note",
+        "type" => "Note"
+      },
+      "summary" => "Sally created a note",
+      "type" => "Create"
+    }
 
     MockDatabase.start_link()
 

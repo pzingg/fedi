@@ -4,6 +4,7 @@ defmodule FediServerWeb.ObjectsController do
   require Logger
 
   alias Fedi.ActivityPub.Utils, as: APUtils
+  alias FediServer.Accounts.User
 
   @doc """
   Ref: [AP Section 6.4](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
@@ -12,8 +13,17 @@ defmodule FediServerWeb.ObjectsController do
   response body, otherwise respond with a HTTP 404 Not Found.
   """
   def object(%Plug.Conn{request_path: path} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
+    opts =
+      case conn.assigns[:current_user] do
+        %User{ap_id: ap_id} ->
+          [visible_to: ap_id]
+
+        _ ->
+          []
+      end
+
     with {:fetch, %{data: data}} when is_map(data) <-
-           {:fetch, FediServer.Activities.repo_get(:objects, ulid)},
+           {:fetch, FediServer.Activities.repo_get(:objects, ulid, opts)},
          status <- check_for_tombstone(data),
          {:ok, body} <- Jason.encode(data) do
       APUtils.send_json_resp(conn, status, body)

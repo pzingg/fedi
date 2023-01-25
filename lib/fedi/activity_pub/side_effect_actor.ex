@@ -557,7 +557,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           case found_inboxes ++ remote_inboxes do
             [] ->
               Logger.debug("No non-public recipients")
-              {:error, "No non-public recipients"}
+              {:ok, context, activity, []}
 
             targets ->
               # Verify the inbox on the sender.

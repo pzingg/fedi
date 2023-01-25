@@ -8,17 +8,17 @@ defmodule FediServer.Activities.FollowingRelationship do
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   @foreign_key_type Ecto.ULID
   schema "following_relationships" do
-    field(:state, Ecto.Enum, values: [:pending, :accepted, :rejected])
     field(:follower_id, :string)
     field(:following_id, :string)
+    field(:state, Ecto.Enum, values: [:pending, :accepted, :rejected])
 
     timestamps()
   end
 
   def changeset(%__MODULE__{} = following_relationship, attrs \\ %{}) do
     following_relationship
-    |> cast(attrs, [:state, :follower_id, :following_id])
-    |> validate_required([:state, :follower_id, :following_id])
+    |> cast(attrs, [:follower_id, :following_id, :state])
+    |> validate_required([:follower_id, :following_id, :state])
     |> unique_constraint(:follower_id,
       name: :following_relationships_follower_id_following_id_index
     )

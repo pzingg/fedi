@@ -14,7 +14,7 @@ defmodule FediServer.Activities.Mailbox do
     field(:actor, :string)
     field(:object, :string)
     field(:visibility, Ecto.Enum, values: [:public, :unlisted, :followers_only, :direct])
-    field(:local, :boolean)
+    field(:local?, :boolean)
     field(:status, :string)
 
     timestamps()
@@ -27,8 +27,17 @@ defmodule FediServer.Activities.Mailbox do
 
   def changeset(%__MODULE__{} = mailbox, attrs \\ %{}) do
     mailbox
-    |> cast(attrs, [:activity_id, :outgoing, :type, :actor, :object, :visibility, :local, :status])
-    |> validate_required([:activity_id, :outgoing, :type, :actor, :object, :visibility, :local])
+    |> cast(attrs, [
+      :activity_id,
+      :outgoing,
+      :type,
+      :actor,
+      :object,
+      :visibility,
+      :local?,
+      :status
+    ])
+    |> validate_required([:activity_id, :outgoing, :type, :actor, :object, :visibility, :local?])
     |> unique_constraint([:outgoing, :actor, :activity_id])
   end
 end

@@ -12,9 +12,9 @@ defmodule FediServer.Accounts.UserToken do
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   @foreign_key_type Ecto.ULID
   schema "users_tokens" do
-    field :token, :binary
-    field :context, :string
-    belongs_to :user, FediServer.Accounts.User
+    field(:token, :binary)
+    field(:context, :string)
+    belongs_to(:user, FediServer.Accounts.User)
 
     timestamps(updated_at: false)
   end
@@ -53,10 +53,11 @@ defmodule FediServer.Accounts.UserToken do
   """
   def verify_session_token_query(token) do
     query =
-      from token in token_and_context_query(token, "session"),
+      from(token in token_and_context_query(token, "session"),
         join: user in assoc(token, :user),
         where: token.inserted_at > ago(@session_validity_in_days, "day"),
         select: user
+      )
 
     {:ok, query}
   end
@@ -65,18 +66,19 @@ defmodule FediServer.Accounts.UserToken do
   Returns the token struct for the given token value and context.
   """
   def token_and_context_query(token, context) do
-    from FediServer.Accounts.UserToken, where: [token: ^token, context: ^context]
+    from(FediServer.Accounts.UserToken, where: [token: ^token, context: ^context])
   end
 
   @doc """
   Gets all tokens for the given user for the given contexts.
   """
   def user_and_contexts_query(user, :all) do
-    from t in FediServer.Accounts.UserToken, where: t.user_id == ^user.id
+    from(t in FediServer.Accounts.UserToken, where: t.user_id == ^user.id)
   end
 
   def user_and_contexts_query(user, [_ | _] = contexts) do
-    from t in FediServer.Accounts.UserToken,
+    from(t in FediServer.Accounts.UserToken,
       where: t.user_id == ^user.id and t.context in ^contexts
+    )
   end
 end
