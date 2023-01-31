@@ -1,4 +1,4 @@
-defmodule FediServerWeb.InboxControllerTest do
+defmodule FediServerWeb.InboxDeliveryTest do
   use FediServerWeb.ConnCase
 
   import FediServer.FixturesHelper
@@ -7,6 +7,7 @@ defmodule FediServerWeb.InboxControllerTest do
 
   alias Fedi.Streams.Utils
   alias FediServer.Accounts.User
+  alias FediServer.Activities
 
   @webfinger_prefix "https://example.com/.well-known/webfinger?resource=acct:"
 
@@ -62,6 +63,7 @@ defmodule FediServerWeb.InboxControllerTest do
       %{
         method: :post,
         url: url,
+        headers: headers,
         body: body
       } ->
         actor_url = String.replace_trailing(url, "/inbox", "")
@@ -71,11 +73,18 @@ defmodule FediServerWeb.InboxControllerTest do
             # Actor.handle_post_inbox?
             type = Jason.decode!(body) |> Map.get("type", "activity")
             Logger.error("#{actor_url} got a #{type}")
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
+
+            Agent.update(__MODULE__, fn acc ->
+              [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
+            end)
+
             %Tesla.Env{status: 201, body: "Created"}
 
           Map.has_key?(@remote_actors, actor_url) ->
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
+            Agent.update(__MODULE__, fn acc ->
+              [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
+            end)
+
             %Tesla.Env{status: 201, body: "Created"}
 
           true ->
@@ -91,99 +100,166 @@ defmodule FediServerWeb.InboxControllerTest do
     :ok
   end
 
-  test "GET /users/alyssa/inbox", %{conn: conn} do
-    _ = user_fixtures()
+  test "inbox delivery MUST perform delivery", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => ["https://chatty.example/users/ben", "https://other.example/users/charlie"],
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
 
     conn =
       conn
-      |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/inbox")
-
-    assert json_body = response(conn, 200)
-    assert json_body =~ "\"OrderedCollection\""
-    assert json_body =~ "\"first\""
-    assert json_body =~ "/users/alyssa/inbox"
-  end
-
-  test "GET /users/alyssa/inbox?page=true", %{conn: conn} do
-    _ = user_fixtures()
-
-    conn =
-      conn
-      |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/inbox?page=true")
-
-    assert json_body = response(conn, 200)
-    assert json_body =~ "\"OrderedCollectionPage\""
-    assert json_body =~ "/users/alyssa/inbox?page=true"
-  end
-
-  test "POST /users/alyssa/inbox", %{conn: conn} do
-    activity = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Create",
-      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
-      "to" => "https://example.com/users/alyssa",
-      "actor" => "https://chatty.example/users/ben",
-      "object" => %{
-        "type" => "Note",
-        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
-        "to" => "https://example.com/users/alyssa",
-        "attributedTo" => "https://chatty.example/users/ben",
-        "content" => "Say, did you finish reading that book I lent you?"
-      }
-    }
-
-    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
-    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
-
-    assert response(conn, 200) =~ "OK"
-  end
-
-  test "inbox accept SHOULD NOT trust unverified content (success)", %{conn: conn} do
-    activity = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Create",
-      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
-      "to" => "https://example.com/users/alyssa",
-      "actor" => "https://chatty.example/users/ben",
-      "object" => %{
-        "type" => "Note",
-        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
-        "to" => "https://example.com/users/alyssa",
-        "attributedTo" => "https://chatty.example/users/ben",
-        "content" => "Say, did you finish reading that book I lent you?"
-      }
-    }
-
-    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
-    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
-
-    assert response(conn, 200) =~ "OK"
-  end
-
-  test "inbox accept SHOULD NOT trust unverified content (failure)", %{conn: conn} do
-    activity = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Create",
-      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
-      "to" => "https://example.com/users/alyssa",
-      "actor" => "https://chatty.example/users/ben",
-      "object" => %{
-        "type" => "Note",
-        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
-        "to" => "https://example.com/users/alyssa",
-        "attributedTo" => "https://chatty.example/users/ben",
-        "content" => "Say, did you finish reading that book I lent you?"
-      }
-    }
-
-    conn =
-      conn
+      |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/inbox", activity)
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 401)
+    assert response(conn, 201)
+
+    # Check that the activities were delivered to ben and charlie
+    requests = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+
+    recipients = Enum.map(requests, fn {url, _} -> url end)
+
+    assert MapSet.new(recipients) ==
+             MapSet.new([
+               "https://chatty.example/users/ben/inbox",
+               "https://other.example/users/charlie/inbox"
+             ])
+  end
+
+  test "inbox delivery MUST determine all recipients", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => "https://example.com/users/alyssa/followers",
+      "bto" => "https://chatty.example/users/ben",
+      "bcc" => "https://other.example/users/charlie",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Check that the activities were delivered to ben and charlie
+    recipients =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+      |> Enum.map(fn {url, _} -> url end)
+
+    # FIXME: Alyssa is sender, she should not get delivered
+    assert MapSet.new(recipients) ==
+             MapSet.new([
+               "https://chatty.example/users/ben/inbox",
+               "https://other.example/users/charlie/inbox"
+             ])
+  end
+
+  test "inbox delivery MUST add id", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => "https://chatty.example/users/ben",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Get the payload that was delivered to ben
+    [{"https://chatty.example/users/ben/inbox", %{json: payload}}] =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+
+    assert is_map(payload)
+    assert payload["type"] == "Create"
+    assert payload["id"]
+  end
+
+  test "inbox delivery MUST submit with credentials", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => "https://chatty.example/users/ben",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Get the payload that was delivered to ben
+    [{"https://chatty.example/users/ben/inbox", %{headers: headers}}] =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+
+    headers = Map.new(headers)
+    assert digest = headers["digest"]
+    assert String.starts_with?(digest, "SHA-256=")
+    assert signature = headers["signature"]
+    assert String.contains?(signature, "keyId=\"https://example.com/users/alyssa#main-key\"")
+    assert String.contains?(signature, "algorithm=\"rsa-sha256\"")
+    assert String.contains?(signature, "headers=")
+    assert String.contains?(signature, "signature=")
+  end
+
+  test "inbox delivery MUST deliver to collection", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => "https://example.com/users/alyssa/followers",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
+
+    # Add daria, ben and charle to alyssa's followers
+    Activities.follow("https://chatty.example/users/ben", "https://example.com/users/alyssa")
+    Activities.follow("https://other.example/users/charlie", "https://example.com/users/alyssa")
+    Activities.follow("https://example.com/users/daria", "https://example.com/users/alyssa")
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    recipients =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+      |> Enum.map(fn {url, _} -> url end)
+
+    assert MapSet.new(recipients) ==
+             MapSet.new([
+               "https://chatty.example/users/ben/inbox",
+               "https://other.example/users/charlie/inbox",
+               "https://example.com/users/daria/inbox"
+             ])
   end
 
   defp sign_and_send(conn, url, body, %User{ap_id: actor_id}, keys_pem) do

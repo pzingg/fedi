@@ -486,37 +486,6 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 422)
   end
 
-  test "inbox delivery MUST perform delivery", %{conn: conn} do
-    activity = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Note",
-      "attributedTo" => "https://example.com/users/alyssa",
-      "to" => ["https://chatty.example/users/ben", "https://other.example/users/charlie"],
-      "content" => "Say, did you finish reading that book I lent you?"
-    }
-
-    %{alyssa: %{user: alyssa}} = user_fixtures()
-
-    conn =
-      conn
-      |> log_in_user(alyssa)
-      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", Jason.encode!(activity))
-
-    assert response(conn, 201) == ""
-
-    # Also check on the activities delivered to ben and charlie
-    payloads = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
-
-    recipients = Enum.map(payloads, fn {url, _} -> url end)
-
-    assert MapSet.new(recipients) ==
-             MapSet.new([
-               "https://chatty.example/users/ben/inbox",
-               "https://other.example/users/charlie/inbox"
-             ])
-  end
-
   test "outbox follow SHOULD add followed object", %{conn: conn} do
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",

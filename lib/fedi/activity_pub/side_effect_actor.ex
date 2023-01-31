@@ -205,6 +205,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def inbox_forwarding(context, %URI{} = inbox_iri, activity) do
+    Logger.error("inbox_forwarding #{inbox_iri}")
     # Ref: This is the first time the server has seen this Activity.
     case Utils.get_json_ld_id(activity) do
       %URI{} = id ->
@@ -356,18 +357,23 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         Enum.reduce_while(to_send, [], fn iri, acc ->
           cond do
             %{properties: %{"items" => prop}} = Map.get(cols, iri) ->
+              Logger.error("get_collection_recipients #{iri} is a Collection")
+
               case APUtils.to_id(prop) do
                 %URI{} = id -> {:cont, [id | acc]}
                 _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
             %{properties: %{"orderedItems" => prop}} = Map.get(ocols, iri) ->
+              Logger.error("get_collection_recipients #{iri} is an OrderedCollection")
+
               case APUtils.to_id(prop) do
                 %URI{} = id -> {:cont, [id | acc]}
                 _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
             true ->
+              Logger.error("get_collection_recipients #{iri} is NOT a collection")
               {:cont, acc}
           end
         end)
@@ -624,18 +630,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         actors
       ) do
     if max_depth > 0 && depth >= max_depth do
-      if Enum.empty?(actors) do
-        {:error, "No actors resolved (depth #{max_depth} exceeded)"}
-      else
-        {:ok, actors}
-      end
+      {:ok, actors}
     else
       # TODO Determine if more logic is needed here for inaccessible
       # collections owned by peer servers
       {actors, more} =
         Enum.reduce(actor_ids, {actors, []}, fn iri, {actor_acc, coll_acc} = acc ->
           case dereference_for_resolving_inboxes(context, transport, iri) do
-            {:ok, actor, []} ->
+            {:ok, actor, []} when is_struct(actor) ->
               {[actor | actor_acc], coll_acc}
 
             {:ok, _nil, more_ids} ->
@@ -650,12 +652,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       more_count = Enum.count(more)
 
       if more_count == 0 do
-        if Enum.empty?(actors) do
-          actor_ids = Enum.map(actor_ids, &URI.to_string(&1)) |> Enum.join(", ")
-          {:error, "No actors resolved from #{actor_ids}"}
-        else
-          {:ok, actors}
-        end
+        {:ok, actors}
       else
         # Recurse
         resolve_actors(context, transport, more, depth + 1, max_depth, actors)
@@ -670,29 +667,50 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   OrderedCollection).
   """
   def dereference_for_resolving_inboxes(context, transport, %URI{} = actor_id) do
-    with {:ok, m} <- ActorFacade.db_dereference(context, transport, actor_id),
-         {:ok, %{properties: properties} = actor} <-
-           Fedi.Streams.JSONResolver.resolve(m) do
+    with {:ok, m} when is_map(m) <- ActorFacade.db_dereference(context, transport, actor_id),
+         {:ok, %{properties: properties} = actor_or_collection} <-
+           Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
       # Attempt to see if the 'actor' is really some sort of type that has
       # an 'items' or 'orderedItems' property.
-      ["items", "orderedItems"]
-      |> Enum.reduce_while([], fn prop_name, acc ->
-        case Map.get(properties, prop_name) do
-          prop when is_struct(prop) ->
-            case APUtils.to_id(prop) do
-              %URI{} = id -> {:cont, [id | acc]}
-              _ -> {:halt, {:error, "Actor #{prop_name} with no id"}}
-            end
+      if Map.has_key?(m, "inbox") do
+        # A real actor
+        {:ok, actor_or_collection, []}
+      else
+        # Should be a (possibly empty) collection
+        ["items", "orderedItems"]
+        |> Enum.reduce_while([], fn prop_name, acc ->
+          case Map.get(properties, prop_name) do
+            prop when is_struct(prop) ->
+              case APUtils.get_ids(prop) do
+                {:ok, ids} ->
+                  {:cont, acc ++ ids}
 
-          _ ->
-            {:cont, acc}
+                _ ->
+                  Logger.error("deref #{actor_id} has #{prop_name} with no id")
+                  {:halt, {:error, "Actor #{actor_id} has #{prop_name} with no id"}}
+              end
+
+            _ ->
+              {:cont, acc}
+          end
+        end)
+        |> case do
+          {:error, reason} ->
+            {:error, reason}
+
+          more_ids ->
+            # Can be an empty list
+            {:ok, nil, more_ids}
         end
-      end)
-      |> case do
-        {:error, reason} -> {:error, reason}
-        [] -> {:ok, actor, []}
-        more_ids -> {:ok, nil, more_ids}
       end
+    else
+      {:ok, _not_a_map} ->
+        Logger.error("deref #{actor_id} ERROR Not a map")
+        {:error, "Not a map"}
+
+      {:error, reason} ->
+        Logger.error("deref #{actor_id} ERROR #{reason}")
+        {:error, reason}
     end
   end
 

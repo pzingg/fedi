@@ -536,7 +536,8 @@ defmodule Fedi.ActivityPub.Utils do
           {:error, Utils.err_id_required(value: as_value)}
       end
     else
-      {:error, "#{as_value.__struct__} is not an Activity"}
+      type_name = Utils.alias_module(as_value.__struct__)
+      {:error, Utils.err_type_not_an_activity(type_name, activity: as_value)}
     end
   end
 
@@ -917,11 +918,13 @@ defmodule Fedi.ActivityPub.Utils do
 
   def get_inbox(%{properties: properties} = value) when is_map(properties) do
     with true <- Utils.has_inbox?(value),
-         %P.Inbox{} = inbox <-
-           Map.get(properties, "inbox") do
+         %P.Inbox{} = inbox <- Map.get(properties, "inbox") do
       to_id(inbox)
     else
-      _ -> nil
+      _ ->
+        id = Utils.get_json_ld_id(value)
+        Logger.error("#{id} no inbox in props #{inspect(Map.keys(properties))}")
+        nil
     end
   end
 

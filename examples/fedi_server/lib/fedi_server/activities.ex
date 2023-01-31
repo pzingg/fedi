@@ -701,11 +701,15 @@ defmodule FediServer.Activities do
   attempt to resolve the inbox of the actor by remote dereferencing instead.
   """
   @impl true
-  def inbox_for_actor(%URI{} = iri) do
+  def inbox_for_actor(%URI{path: actor_path} = iri) do
     with true <- local?(iri),
-         {:ok, :actors, nickname, _} <- parse_iri_schema(iri) do
+         {:ok, :actors, nickname, nil} <- parse_iri_schema(iri),
+         true <- "/users/#{nickname}" == actor_path do
       {:ok, Utils.base_uri(iri, "/users/#{nickname}/inbox")}
     else
+      {:ok, _schema, _nickname, _collection} ->
+        {:ok, nil}
+
       false ->
         {:ok, nil}
 
@@ -747,18 +751,28 @@ defmodule FediServer.Activities do
   end
 
   def get_object_data(%URI{} = ap_id) do
-    with {:ok, schema, _ulid_or_nickame, _collection} <- parse_iri_schema(ap_id) do
-      case repo_get_by_ap_id(schema, ap_id) do
-        %{__struct__: _module, data: data} when is_map(data) ->
-          {:ok, data}
+    case parse_iri_schema(ap_id) do
+      {:ok, :actors, _nickname, coll_name} when is_binary(coll_name) ->
+        case get_collection_unfiltered(ap_id) do
+          {:ok, oc} ->
+            Fedi.Streams.Serializer.serialize(oc)
 
-        nil ->
-          {:error, "Not found"}
+          {:error, reason} ->
+            {:error, reason}
+        end
 
-        other ->
-          Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
-          {:error, "Internal database error"}
-      end
+      {:ok, schema, _, _} ->
+        case repo_get_by_ap_id(schema, ap_id) do
+          %{__struct__: _module, data: data} when is_map(data) ->
+            {:ok, data}
+
+          nil ->
+            {:error, "Not found"}
+
+          other ->
+            Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
+            {:error, "Internal database error"}
+        end
     end
   end
 
@@ -1250,11 +1264,11 @@ defmodule FediServer.Activities do
 
       _ ->
         case Regex.run(@users_or_collections_regex, path) do
-          [_match, nickname, _] ->
-            {:ok, :actors, nickname, nil}
-
           [_match, nickname, _, collection_suffix] ->
             {:ok, :actors, nickname, collection_suffix}
+
+          [_match, nickname, _] ->
+            {:ok, :actors, nickname, nil}
 
           _ ->
             Logger.error("Failed to parse #{iri}")
@@ -1437,6 +1451,18 @@ defmodule FediServer.Activities do
     Repo.get_by(Object, ap_id: URI.to_string(ap_id))
   end
 
+  def repo_get_by_ap_id(:followers, %URI{} = ap_id) do
+    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(:following, %URI{} = ap_id) do
+    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  end
+
+  def repo_get_by_ap_id(:liked, %URI{} = ap_id) do
+    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+  end
+
   def repo_get_by_ap_id(:collections, %URI{} = ap_id) do
     query = UserCollection |> where([u], u.collection_id == ^ap_id)
     Repo.all(query)
@@ -1521,6 +1547,7 @@ defmodule FediServer.Activities do
 
   def handle_insert_result({:error, %Ecto.Changeset{} = changeset}, type) do
     if unique_constraint_error(changeset) do
+      Logger.debug("Conflict on insert #{type}: #{inspect(changeset)}")
       {:ok, :already_inserted}
     else
       Logger.error("Failed to insert #{type}: #{describe_errors(changeset)}")

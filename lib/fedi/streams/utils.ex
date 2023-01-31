@@ -98,6 +98,20 @@ defmodule Fedi.Streams.Utils do
   end
 
   @doc """
+  Indicates that the activity needs its 'type' property
+  set. Can be returned by `Actor.handle_post_inbox/2` or
+  `Actor.handle_post_outbox/2` so a Bad Request response is set.
+  """
+  def err_type_not_an_activity(type_name, data \\ []) do
+    Error.new(
+      :type_not_an_activity,
+      "Type #{type_name} is not an Activity",
+      :unprocessable_entity,
+      data
+    )
+  end
+
+  @doc """
   Indicates that an ActivityStreams value has a type that is not
   handled by the JSONResolver.
   """

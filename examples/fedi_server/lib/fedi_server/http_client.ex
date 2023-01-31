@@ -174,7 +174,7 @@ defmodule FediServer.HTTPClient do
       {:ok, %Tesla.Env{body: body} = env} ->
         if success?(env.status) do
           # Logger.debug("GET #{opts[:url]} succeeded")
-          {:ok, body}
+          Jason.decode(body)
         else
           msg = "GET #{opts[:url]} failed (#{env.status})"
           Logger.error(msg)
@@ -228,7 +228,7 @@ defmodule FediServer.HTTPClient do
   requests had an error.
   """
   def batch_deliver(%__MODULE__{}, body, []) do
-    Logger.error("No recipients specified for batch_deliver of #{body}")
+    Logger.debug("No recipients specified for batch_deliver of #{body}")
     :ok
   end
 

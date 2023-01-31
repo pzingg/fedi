@@ -45,7 +45,7 @@ defmodule Fedi.Streams.JSONResolver do
   end
 
   def resolve_with_as_context(m) when is_map(m) do
-    Map.put(m, "@context", "https://www.w3.org/ns/activitystreams")
+    Map.put_new(m, "@context", "https://www.w3.org/ns/activitystreams")
     |> resolve()
   end
 

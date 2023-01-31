@@ -179,26 +179,19 @@ defmodule Fedi.ActivityPub.Actor do
       {:authenticated, {:ok, _, conn, _}} ->
         {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :authenticated)}
 
-      # Respond with bad request -- we do not understand the type.
-      {:matched_type, {:error, %Error{code: :unhandled_type}}} ->
-        {:ok,
-         APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :matched_type)}
-
-      {:valid_activity, {:error, %Error{code: :missing_id}}} ->
-        {:ok,
-         APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :valid_activity)}
-
+      # Not authorized
       {:authorized, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
 
-      # Special case: We know it is a bad request if the object or
+      # Special cases: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
       # Send the rejection to the peer.
-      {:post_inbox, {:error, %Error{code: :object_required}}} ->
-        {:ok, APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :post_inbox)}
+      {step, {:error, %Error{} = error}} ->
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: step)}
 
-      {:post_inbox, {:error, %Error{code: :target_required}}} ->
-        {:ok, APUtils.send_json_resp(conn, :unprocessable_entity, nil, actor_state: :post_inbox)}
+      {step, {:error, reason}} ->
+        Logger.error("error #{reason} at step #{step}")
+        {:ok, APUtils.send_json_resp(conn, :internal_server_error, nil, actor_state: step)}
     end
   end
 
@@ -456,6 +449,7 @@ defmodule Fedi.ActivityPub.Actor do
       # servers and/or the client who sent this request.
       # If we are federating and the type is a deliverable one, then deliver
       # the activity to federating peers.
+
       if federated_protocol_enabled? && deliverable do
         ActorFacade.deliver(actor, outbox_iri, activity, top_level: true)
       else
