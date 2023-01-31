@@ -42,6 +42,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
   * `box_iri` is the inbox IRI that is handling callbacks.
   * `on_follow` specifies which of the different default
     actions that the library can provide when receiving a Follow Activity
+  * `new_activity_id` is the id of an activity that was posted to the
+    outbox. It is used to determine whether inbox forwarding will be needed.
 
   """
   @type context() :: %{
@@ -59,6 +61,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           app_agent: String.t(),
           box_iri: URI.t() | nil,
           raw_activity: map() | nil,
+          new_activity_id: URI.t() | nil,
           deliverable: boolean(),
           on_follow: on_follow(),
           data: map()
@@ -207,7 +210,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           activity :: struct(),
           opts :: Keyword.t()
         ) ::
-          :ok | {:error, term()}
+          {:ok, context :: context()} | {:error, term()}
   def post_inbox(context, inbox_iri, activity, opts \\ []) do
     delegate(context, :s2s, :post_inbox, [context, inbox_iri, activity], opts)
   end

@@ -72,7 +72,7 @@ defmodule FediServerWeb.FederatingCallbacks do
       {:ok, struct(context, data: context_data), conn, true}
     else
       header_keys = Enum.map(conn.req_headers, fn {name, _value} -> name end)
-      Logger.error("invalid signature, headers were #{inspect(header_keys)}")
+      Logger.error("Invalid signature, headers were #{inspect(header_keys)}")
       context_data = Map.put(context_data, :valid_http_signature?, false)
       {:ok, struct(context, data: context_data), conn, false}
     end

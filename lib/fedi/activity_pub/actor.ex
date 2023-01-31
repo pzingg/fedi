@@ -26,6 +26,7 @@ defmodule Fedi.ActivityPub.Actor do
     :app_agent,
     :box_iri,
     :raw_activity,
+    :new_activity_id,
     deliverable: true,
     on_follow: :do_nothing,
     data: %{}
@@ -45,6 +46,7 @@ defmodule Fedi.ActivityPub.Actor do
           app_agent: String.t(),
           box_iri: URI.t() | nil,
           raw_activity: map() | nil,
+          new_activity_id: URI.t() | nil,
           deliverable: boolean(),
           on_follow: ActorFacade.on_follow(),
           data: map()
@@ -151,7 +153,7 @@ defmodule Fedi.ActivityPub.Actor do
          # Post the activity to the actor's inbox and trigger side effects for
          # that particular Activity type. It is up to the delegate to resolve
          # the given map.
-         {:post_inbox, :ok} <-
+         {:post_inbox, {:ok, context}} <-
            {:post_inbox, ActorFacade.post_inbox(context, inbox_iri, activity, top_level: true)},
 
          # Our side effects are complete, now delegate determining whether to

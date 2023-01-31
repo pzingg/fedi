@@ -202,7 +202,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   Request status is sent in the response.
   """
   @callback post_inbox(context :: context(), inbox_iri :: URI.t(), activity :: struct()) ::
-              :ok | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
   Delegates inbox forwarding logic when a POST request

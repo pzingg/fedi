@@ -198,11 +198,11 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert :ok = APUtils.verify_no_hidden_recipients(activity)
 
     # Also check on the activities delivered to ben and charlie
-    payloads = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+    requests = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
 
     Map.keys(@remote_actors)
     |> Enum.each(fn actor_url ->
-      case Enum.find(payloads, fn {url, _data} -> url == "#{actor_url}/inbox" end) do
+      case Enum.find(requests, fn {url, _data} -> url == "#{actor_url}/inbox" end) do
         nil -> flunk("No payload was delivered to #{actor_url}/inbox")
         {_url, data} -> assert :ok = APUtils.verify_no_hidden_recipients(data, "activity")
       end

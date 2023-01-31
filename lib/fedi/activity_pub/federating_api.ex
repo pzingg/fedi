@@ -102,7 +102,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
               inbox_iri :: URI.t(),
               activity :: struct()
             ) ::
-              :ok | {:error, term()}
+              {:ok, context :: context()} | {:error, term()}
 
   @doc """
   Delegates inbox forwarding logic when a POST request

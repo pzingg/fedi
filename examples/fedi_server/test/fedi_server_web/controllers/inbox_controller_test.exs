@@ -6,7 +6,11 @@ defmodule FediServerWeb.InboxControllerTest do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityStreams.Property, as: P
+  alias Fedi.ActivityStreams.Type, as: T
+  alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
+  alias FediServer.Activities
 
   @webfinger_prefix "https://example.com/.well-known/webfinger?resource=acct:"
 
@@ -71,11 +75,11 @@ defmodule FediServerWeb.InboxControllerTest do
             # Actor.handle_post_inbox?
             type = Jason.decode!(body) |> Map.get("type", "activity")
             Logger.error("#{actor_url} got a #{type}")
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
+            Agent.update(__MODULE__, fn acc -> [{url, %{json: Jason.decode!(body)}} | acc] end)
             %Tesla.Env{status: 201, body: "Created"}
 
           Map.has_key?(@remote_actors, actor_url) ->
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
+            Agent.update(__MODULE__, fn acc -> [{url, %{json: Jason.decode!(body)}} | acc] end)
             %Tesla.Env{status: 201, body: "Created"}
 
           true ->
@@ -91,34 +95,98 @@ defmodule FediServerWeb.InboxControllerTest do
     :ok
   end
 
-  test "GET /users/alyssa/inbox", %{conn: conn} do
-    _ = user_fixtures()
+  test "inbox accept MUST deduplicate", %{conn: conn} do
+    # Duplication can occur if an activity is addressed both to an
+    # actor's followers, and a specific actor who also follows the
+    # recipient actor, and the server has failed to de-duplicate
+    # the recipients list.
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => ["https://chatty.example/users/ben/followers", "https://example.com/users/alyssa"],
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    body = Jason.encode!(activity)
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    # Send it twice, as if ben's server didn't deduplicate
+    conn = sign_and_send(conn, "/users/alyssa/inbox", body, ben, keys_pem)
+    assert response(conn, 200)
+    assert count_inbox_items() == 1
 
     conn =
-      conn
-      |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/inbox")
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", body, ben, keys_pem)
 
-    assert json_body = response(conn, 200)
-    assert json_body =~ "\"OrderedCollection\""
-    assert json_body =~ "\"first\""
-    assert json_body =~ "/users/alyssa/inbox"
+    # No error, but nothing was done
+    assert response(conn, 200)
+    assert count_inbox_items() == 1
   end
 
-  test "GET /users/alyssa/inbox?page=true", %{conn: conn} do
-    _ = user_fixtures()
+  test "inbox accept MUST special forward", %{conn: conn} do
+    # When Activities are received in the inbox, the server needs to forward
+    # these to recipients that the origin was unable to deliver them to.
+    # To do this, the server MUST target and deliver to the values of to,
+    # cc, and/or audience if and only if all of the following are true:
+    #
+    # - This is the first time the server has seen this Activity.
+    # - The values of to, cc, and/or audience contain a Collection owned by the server.
+    # - The values of inReplyTo, object, target and/or tag are objects
+    #   owned by the server. The server SHOULD recurse through these values
+    #   to look for linked objects owned by the server, and SHOULD set a
+    #   maximum limit for recursion (ie. the point at which the thread is so
+    #   deep the recipients followers may not mind if they are no longer
+    #   getting updates that don't directly involve the recipient).
+    #   The server MUST only target the values of to, cc, and/or audience
+    #   on the original object being forwarded, and not pick up any new
+    #   addressees whilst recursing through the linked objects (in case these
+    #   addressees were purposefully amended by or via the client).
+    {users, _activities, [note1 | _objects]} = outbox_fixtures()
 
-    conn =
-      conn
-      |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/inbox?page=true")
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa/followers",
+        "inReplyTo" => note1.ap_id,
+        "attributedTo" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
 
-    assert json_body = response(conn, 200)
-    assert json_body =~ "\"OrderedCollectionPage\""
-    assert json_body =~ "/users/alyssa/inbox?page=true"
+    # Add daria to alyssa's followers
+    Activities.follow("https://example.com/users/daria", "https://example.com/users/alyssa")
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+    assert response(conn, 200)
+
+    # Get the payload that was delivered to daria
+    [{"https://example.com/users/daria/inbox", %{json: payload}}] =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+
+    assert is_map(payload)
+    assert payload["type"] == "Create"
+
+    assert payload["object"]["id"] ==
+             "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19"
   end
 
-  test "POST /users/alyssa/inbox", %{conn: conn} do
+  test test "inbox accept create MAY be supported (non-normative)", %{conn: conn} do
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Create",
@@ -186,6 +254,33 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 401)
   end
 
+  test "server inbox MAY respond to get (non-normative)", %{conn: conn} do
+    _ = user_fixtures()
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "application/activity+json")
+      |> get("/users/alyssa/inbox")
+
+    assert json_body = response(conn, 200)
+    assert json_body =~ "\"OrderedCollection\""
+    assert json_body =~ "\"first\""
+    assert json_body =~ "/users/alyssa/inbox"
+  end
+
+  test "server inbox MUST be orderedCollection", %{conn: conn} do
+    _ = user_fixtures()
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "application/activity+json")
+      |> get("/users/alyssa/inbox?page=true")
+
+    assert json_body = response(conn, 200)
+    assert json_body =~ "\"OrderedCollectionPage\""
+    assert json_body =~ "/users/alyssa/inbox?page=true"
+  end
+
   defp sign_and_send(conn, url, body, %User{ap_id: actor_id}, keys_pem) do
     {:ok, private_key, _} = FediServer.HTTPClient.keys_from_pem(keys_pem)
 
@@ -202,6 +297,56 @@ defmodule FediServerWeb.InboxControllerTest do
       Plug.Conn.put_req_header(acc, name, value)
     end)
     |> post(url, body)
+  end
+
+  defp count_inbox_items(coll_url \\ "https://example.com/users/alyssa/inbox") do
+    case get_page(coll_url, nil) do
+      {:ok,
+       %{
+         properties: %{
+           "orderedItems" => %P.OrderedItems{values: values}
+         }
+       } = _outbox_page} ->
+        Enum.count(values)
+
+      _ ->
+        0
+    end
+  end
+
+  defp get_posted_item(coll_url \\ "https://example.com/users/alyssa/inbox", filtered_for \\ nil) do
+    case get_page(coll_url, filtered_for) do
+      {:ok,
+       %{
+         properties: %{
+           "orderedItems" => %P.OrderedItems{values: [%P.OrderedItemsIterator{} = iter | _]}
+         }
+       } = _outbox_page} ->
+        case iter do
+          %{member: as_type} when is_struct(as_type) -> as_type
+          %{iri: %URI{} = iri} -> iri
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  def get_page(coll_url, nil) do
+    Utils.to_uri(coll_url) |> Activities.get_collection_unfiltered()
+  end
+
+  def get_page(coll_url, viewer_ap_id) when is_binary(viewer_ap_id) do
+    viewer_ap_id =
+      if Activities.local?(Utils.to_uri(viewer_ap_id)) do
+        viewer_ap_id
+      else
+        nil
+      end
+
+    opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
+    Utils.to_uri(coll_url) |> Activities.get_collection(opts)
   end
 
   defp mock_webfinger(actor_id) do

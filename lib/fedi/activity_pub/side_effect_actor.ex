@@ -32,6 +32,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :app_agent,
     :box_iri,
     :raw_activity,
+    :new_activity_id,
     deliverable: true,
     on_follow: :do_nothing,
     data: %{}
@@ -51,6 +52,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           app_agent: String.t(),
           box_iri: URI.t() | nil,
           raw_activity: map() | nil,
+          new_activity_id: URI.t() | nil,
           deliverable: boolean(),
           on_follow: ActorFacade.on_follow(),
           data: map()
@@ -177,18 +179,18 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       {:error, reason} ->
         {:error, reason}
 
-      {:ok, false} ->
+      {:ok, nil} ->
         # Already in our inbox, all good
-        :ok
+        {:ok, context}
 
-      {:ok, true} ->
+      {:ok, %URI{} = activity_id} ->
         # A new activity was added to the inbox
         if ActorFacade.protocol_supported?(context, :s2s) do
-          context = wrap_for_federated_protocol(context, inbox_iri)
+          context = wrap_for_federated_protocol(context, inbox_iri, activity_id)
 
           case ActorFacade.handle_s2s_activity(context, activity, top_level: true) do
             {:error, reason} -> {:error, reason}
-            _ -> :ok
+            _ -> {:ok, context}
           end
         end
     end
@@ -205,68 +207,84 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   @impl true
   def inbox_forwarding(context, %URI{} = inbox_iri, activity) do
-    Logger.error("inbox_forwarding #{inbox_iri}")
     # Ref: This is the first time the server has seen this Activity.
+    # See if we have seen the activity
+    with {:seen?, {:ok, false, _id}} <-
+           {:seen?, activity_seen?(context, activity)},
+         # Attempt to create the activity entry.
+         {:ok, _created, _raw_json} <-
+           ActorFacade.db_create(context, activity),
+         # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
+         {:ok, my_iris} <-
+           owned_recipients(context, activity),
+         # Finally, load our IRIs to determine if they are a Collection or
+         # OrderedCollection.
+         {:ok, col_iris, cols, ocols} <-
+           get_collection_types(context, my_iris),
+         {:has_collection?, true} <-
+           {:has_collection?, !Enum.empty?(col_iris)},
+         # Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
+         # The server SHOULD recurse through these values to look for linked objects
+         # owned by the server, and SHOULD set a maximum limit for recursion.
+         # This is only a boolean trigger: As soon as we get
+         # a hit that we own something, then we should do inbox forwarding.
+         {:ok, max_depth} <-
+           ActorFacade.max_inbox_forwarding_recursion_depth(context),
+         # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
+         # values, then no need to do inbox forwarding.
+         {:owned?, true} <-
+           {:owned?, has_inbox_forwarding_values?(context, inbox_iri, activity, max_depth, 0)},
+         # Do the inbox forwarding since the above conditions hold true. Support
+         # the behavior of letting the application filter out the resulting
+         # collections to be targeted.
+         {:ok, recipients} <-
+           get_collection_recipients(context, col_iris, cols, ocols, activity),
+         {:ok, recipients} <-
+           inboxes_for_recipients(context, recipients, inbox_iri) do
+      Logger.error("Inbox fowarding to #{inspect(Enum.map(recipients, &URI.to_string(&1)))}")
+      deliver_to_recipients(context, activity, recipients)
+    else
+      {:error, reason} ->
+        Logger.error("Inbox fowarding error: #{reason}")
+        {:error, reason}
+
+      # We have seen the activity before
+      {:seen?, {:ok, _, id}} ->
+        Logger.debug("No inbox forwarding needed: #{id} has been seen")
+        :ok
+
+      {:has_collection?, _} ->
+        Logger.debug("No inbox fowarding needed: no collections in recipients")
+        :ok
+
+      {:owned?, _} ->
+        Logger.debug("No inbox forwarding needed: no ownership of reference")
+        :ok
+    end
+  end
+
+  def activity_seen?(%{new_activity_id: new_id} = context, activity) do
     case Utils.get_json_ld_id(activity) do
       %URI{} = id ->
-        # See if we have seen the activity
-        with {:exists?, {:ok, false}} <-
-               {:exists?, ActorFacade.db_exists?(context, id)},
-             # Attempt to create the activity entry.
-             {:ok, _created, _raw_json} <-
-               ActorFacade.db_create(context, activity),
-             # Ref: The values of 'to', 'cc', or 'audience' are Collections owned by this server.
-             {:ok, my_iris} <-
-               owned_recipients(context, activity),
-             # Finally, load our IRIs to determine if they are a Collection or
-             # OrderedCollection.
-             {:ok, col_iris, cols, ocols} <-
-               get_collection_types(context, my_iris) do
-          # If we own none of the Collection IRIs in 'to', 'cc', or 'audience'
-          # then no need to do inbox forwarding. We have nothing to forward to.
-          if Enum.empty?(col_iris) do
-            Logger.debug("No inbox fowarding needed: no collections in recipients")
-            :ok
-          else
-            # Ref: The values of 'inReplyTo', 'object', 'target' and/or 'tag' are objects owned by the server.
-            # The server SHOULD recurse through these values to look for linked objects
-            # owned by the server, and SHOULD set a maximum limit for recursion.
-
-            # This is only a boolean trigger: As soon as we get
-            # a hit that we own something, then we should do inbox forwarding.
-            with {:ok, max_depth} <-
-                   ActorFacade.max_inbox_forwarding_recursion_depth(context),
-                 {:ok, owns_value} <-
-                   has_inbox_forwarding_values(context, inbox_iri, activity, max_depth, 0) do
-              # If we don't own any of the 'inReplyTo', 'object', 'target', or 'tag'
-              # values, then no need to do inbox forwarding.
-              if !owns_value do
-                :ok
-              else
-                # Do the inbox forwarding since the above conditions hold true. Support
-                # the behavior of letting the application filter out the resulting
-                # collections to be targeted.
-                with {:ok, recipients} <-
-                       get_collection_recipients(context, col_iris, cols, ocols, activity) do
-                  deliver_to_recipients(context, activity, recipients)
-                end
-
-                # else {:error, reason}
-              end
-            end
-          end
+        if id == new_id do
+          Logger.debug("seen?: #{id} is the new activity in the outbox")
+          {:ok, false, id}
         else
-          {:error, reason} ->
-            Logger.error("Inbox forwarding error for #{id}: #{reason}")
-            {:error, reason}
+          case ActorFacade.db_exists?(context, id) do
+            {:ok, false} ->
+              {:ok, false, id}
 
-          # We have seen the activity before
-          {:exists?, {:ok, _}} ->
-            Logger.debug("No inbox forwarding needed: #{id} has been seen")
-            :ok
+            {:ok, true} ->
+              Logger.debug("seen?: #{id} doesn't match #{new_id} and is an existing activity")
+              {:ok, true, id}
+
+            {:error, reason} ->
+              {:error, reason}
+          end
         end
 
       nil ->
+        Logger.error("Inbox forwarding error, no id")
         {:error, Utils.err_id_required(activity: activity)}
     end
   end
@@ -289,7 +307,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         case ActorFacade.db_owns?(context, iri) do
           {:error, reason} -> {:halt, {:error, reason}}
           {:ok, true} -> {:cont, [iri | acc]}
-          _ -> acc
+          _ -> {:cont, acc}
         end
       end)
       |> case do
@@ -355,26 +373,24 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
       {:ok, to_send} ->
         Enum.reduce_while(to_send, [], fn iri, acc ->
-          cond do
-            %{properties: %{"items" => prop}} = Map.get(cols, iri) ->
-              Logger.error("get_collection_recipients #{iri} is a Collection")
-
+          case Map.get(cols, iri) do
+            %{properties: %{"items" => prop}} ->
               case APUtils.to_id(prop) do
                 %URI{} = id -> {:cont, [id | acc]}
                 _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
               end
 
-            %{properties: %{"orderedItems" => prop}} = Map.get(ocols, iri) ->
-              Logger.error("get_collection_recipients #{iri} is an OrderedCollection")
+            _ ->
+              case Map.get(ocols, iri) do
+                %{properties: %{"orderedItems" => prop}} ->
+                  case APUtils.to_id(prop) do
+                    %URI{} = id -> {:cont, [id | acc]}
+                    _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
+                  end
 
-              case APUtils.to_id(prop) do
-                %URI{} = id -> {:cont, [id | acc]}
-                _ -> {:halt, {:error, Utils.err_id_required(activity: activity)}}
+                _ ->
+                  {:cont, acc}
               end
-
-            true ->
-              Logger.error("get_collection_recipients #{iri} is NOT a collection")
-              {:cont, acc}
           end
         end)
         |> case do
@@ -479,7 +495,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def add_to_outbox(context, %URI{} = outbox_iri, activity)
       when is_struct(activity) do
-    with {:activity_id, %URI{} = _id} <- {:activity_id, Utils.get_json_ld_id(activity)},
+    with {:activity_id, %URI{} = id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
          {:ok, activity, _raw_json} <-
            ActorFacade.db_create(context, activity),
@@ -506,91 +522,87 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def prepare(context, %URI{} = outbox_iri, %{properties: _} = activity) do
     # Get inboxes of recipients ("to", "bto", "cc", "bcc" and "audience")
-    with {:ok, activity_recipients} <- APUtils.get_recipients(activity) do
-      # 1. When an object is being delivered to the originating actor's
-      #    followers, a server MAY reduce the number of receiving actors
-      #    delivered to by identifying all followers which share the same
-      #    sharedInbox who would otherwise be individual recipients and
-      #    instead deliver objects to said sharedInbox.
+    with {:ok, activity_recipients} <- APUtils.get_recipients(activity),
+         # 1. When an object is being delivered to the originating actor's
+         #    followers, a server MAY reduce the number of receiving actors
+         #    delivered to by identifying all followers which share the same
+         #    sharedInbox who would otherwise be individual recipients and
+         #    instead deliver objects to said sharedInbox.
 
-      # 2. If an object is addressed to the Public special collection, a
-      #    server MAY deliver that object to all known sharedInbox endpoints
-      #    on the network.
-      {_public_recipients, non_public_recipients} =
-        Enum.split_with(activity_recipients, &APUtils.public?(&1))
+         # 2. If an object is addressed to the Public special collection, a
+         #    server MAY deliver that object to all known sharedInbox endpoints
+         #    on the network.
+         {_public_recipients, recipients} <-
+           Enum.split_with(activity_recipients, &APUtils.public?(&1)),
+         # Verify the inbox on the sender.
+         {:ok, actor_iri} <-
+           ActorFacade.db_actor_for_outbox(context, outbox_iri),
+         {:ok, this_actor} <-
+           ActorFacade.db_get(context, actor_iri),
+         {:actor_inbox, %URI{} = actor_inbox} <-
+           {:actor_inbox, APUtils.get_inbox(this_actor)},
+         {:inboxes, {:ok, [_ | _] = recipients}} <-
+           {:inboxes, inboxes_for_recipients(context, recipients, actor_inbox)},
+         # Post-processing
+         activity <- APUtils.strip_hidden_recipients(activity) do
+      {:ok, context, activity, recipients}
+    else
+      {:error, reason} ->
+        {:error, reason}
 
-      # First check if the implemented database logic can return any inboxes
-      # from our list of actor IRIs.
-      {found_actors, found_inboxes} =
-        Enum.reduce(non_public_recipients, [], fn actor_iri, acc ->
-          case ActorFacade.db_inbox_for_actor(context, actor_iri) do
-            {:ok, %URI{} = inbox_iri} ->
-              [{actor_iri, inbox_iri} | acc]
+      {:actor_inbox, _} ->
+        Logger.error("No inbox for sender")
+        {:error, "No inbox for sender #{outbox_iri}"}
 
-            _ ->
-              acc
-          end
-        end)
-        |> Enum.unzip()
+      {:inboxes, {:ok, []}} ->
+        Logger.debug("No non-public inbox recipients")
+        {:ok, context, activity, []}
+    end
+  end
 
-      # For every actor we found an inbox for in the db, we should
-      # remove it from the list of actors we still need to dereference
-      case Enum.filter(non_public_recipients, fn actor_iri ->
-             !Enum.member?(found_actors, actor_iri)
-           end) do
-        [] ->
-          []
+  def inboxes_for_recipients(context, recipients, actor_inbox \\ nil) when is_list(recipients) do
+    # First check if the implemented database logic can return any inboxes
+    # from our list of actor IRIs.
+    {found_actors, found_inboxes} =
+      Enum.reduce(recipients, [], fn actor_iri, acc ->
+        case ActorFacade.db_inbox_for_actor(context, actor_iri) do
+          {:ok, %URI{} = inbox_iri} ->
+            [{actor_iri, inbox_iri} | acc]
 
-        actors_to_resolve ->
-          # Look for any actors' inboxes that weren't already discovered above;
-          # find these by making dereference calls to remote instances
-          with {:ok, transport} <- ActorFacade.db_new_transport(context),
-               {:ok, max_depth} <-
-                 ActorFacade.max_delivery_recursion_depth(context),
-               {:ok, remote_actors} <-
-                 resolve_actors(context, transport, actors_to_resolve, 0, max_depth),
-               {:ok, remote_inboxes} <- APUtils.get_inboxes(remote_actors) do
-            remote_inboxes
-          end
-      end
-      |> case do
-        {:error, reason} ->
-          {:error, reason}
+          _ ->
+            acc
+        end
+      end)
+      |> Enum.unzip()
 
-        remote_inboxes ->
-          # Combine this list of dereferenced inbox IRIs with the inboxes we already
-          # found in the db, to make a complete list of target IRIs
-          case found_inboxes ++ remote_inboxes do
-            [] ->
-              Logger.debug("No non-public recipients")
-              {:ok, context, activity, []}
+    # For every actor we found an inbox for in the db, we should
+    # remove it from the list of actors we still need to dereference
+    case Enum.filter(recipients, fn actor_iri ->
+           !Enum.member?(found_actors, actor_iri)
+         end) do
+      [] ->
+        []
 
-            targets ->
-              # Verify the inbox on the sender.
-              with {:ok, actor_iri} <- ActorFacade.db_actor_for_outbox(context, outbox_iri),
-                   {:ok, this_actor} <- ActorFacade.db_get(context, actor_iri),
-                   # Post-processing
-                   {:get_inbox, %URI{} = ignore} <- {:get_inbox, APUtils.get_inbox(this_actor)} do
-                case dedupe_iris(targets, [ignore]) do
-                  [] ->
-                    Logger.debug("No external recipients")
-                    {:error, "No external recipients"}
+      actors_to_resolve ->
+        # Look for any actors' inboxes that weren't already discovered above;
+        # find these by making dereference calls to remote instances
+        with {:ok, transport} <- ActorFacade.db_new_transport(context),
+             {:ok, max_depth} <-
+               ActorFacade.max_delivery_recursion_depth(context),
+             {:ok, remote_actors} <-
+               resolve_actors(context, transport, actors_to_resolve, 0, max_depth),
+             {:ok, remote_inboxes} <- APUtils.get_inboxes(remote_actors) do
+          remote_inboxes
+        end
+    end
+    |> case do
+      {:error, reason} ->
+        {:error, reason}
 
-                  recipients ->
-                    activity = APUtils.strip_hidden_recipients(activity)
-                    # Logger.debug("prepare #{Utils.get_json_ld_id(activity)}")
-                    {:ok, context, activity, recipients}
-                end
-              else
-                {:error, reason} -> {:error, reason}
-                {:get_inbox, _} -> {:error, "No inbox for sender #{outbox_iri}"}
-              end
-
-              # end targets ->
-          end
-
-          # end remote_inboxes ->
-      end
+      remote_inboxes ->
+        # Combine this list of dereferenced inbox IRIs with the inboxes we already
+        # found in the db, to make a complete list of target inbox IRIs
+        {:ok, dedupe_iris(found_inboxes ++ remote_inboxes, [actor_inbox])}
     end
   end
 
@@ -753,14 +765,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          # Then return the the list of 'orderedItems'.
          {:ok, _ordered_collection_page} <-
            ActorFacade.db_update_collection(context, inbox_iri, %{add: [activity]}) do
-      {:ok, true}
+      {:ok, id}
     else
       {:error, reason} ->
         {:error, reason}
 
       # If the inbox already contains the URL, early exit.
       {:exists?, {:ok, _}} ->
-        {:ok, false}
+        {:ok, nil}
 
       {:activity_id, _} ->
         {:error, Utils.err_id_required(activity: activity)}
@@ -778,85 +790,62 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Ref: The server SHOULD recurse through these values to look for linked objects
   owned by the server, and SHOULD set a maximum limit for recursion.
   """
-  def has_inbox_forwarding_values(
-        %{box_iri: box_iri} = context,
+  def has_inbox_forwarding_values?(
+        %{box_iri: _box_iri} = context,
         %URI{} = inbox_iri,
         val,
         max_depth,
         curr_depth
       )
       when is_struct(val) do
-    # QUESTION Are these two values always the same?
-    # Could we eliminate the inbox_iri argument?
-    Logger.error("hi_fowarding_values inbox_iri #{inbox_iri}")
-    Logger.error("hi_fowarding_values c.box_iri #{box_iri}")
+    # TODO: inbox_iri and box_iri are always the same. Eliminate one.
 
     # Stop recurring if we are exceeding the maximum depth and the maximum
     # is a positive number.
     if max_depth > 0 && curr_depth >= max_depth do
-      {:ok, false}
+      false
     else
       # Determine if we own the 'id' of any values on the properties we care
       # about.
       {types, iris} = APUtils.get_inbox_forwarding_values(val)
 
-      cond do
-        # For IRIs, simply check if we own them.
-        owns_one_iri = owns_any_iri?(context, iris) ->
-          case owns_one_iri do
-            {:error, reason} -> {:error, reason}
-            {:ok, true} -> {:ok, true}
-          end
-
-        # For embedded literals, check the id.
-        owns_one_id = owns_any_id?(context, types) ->
-          case owns_one_id do
-            {:error, reason} -> {:error, reason}
-            {:ok, true} -> {:ok, true}
-          end
-
+      with false <- owns_any_iri?(context, iris),
+           false <- owns_any_id?(context, types) do
         # We must dereference the types
-        true ->
-          derefed_types = dereference_iris(context, iris)
-          # Recurse
-          owns_one_type =
-            Enum.find(types ++ derefed_types, fn next_val ->
-              has_inbox_forwarding_values(context, inbox_iri, next_val, max_depth, curr_depth + 1)
-            end)
-
-          case owns_one_type do
-            {:error, reason} -> {:error, reason}
-            {:ok, true} -> {:ok, true}
-            _ -> {:ok, false}
-          end
+        derefed_types = dereference_iris(context, iris)
+        # Recurse
+        Enum.any?(types ++ derefed_types, fn next_val ->
+          has_inbox_forwarding_values?(context, inbox_iri, next_val, max_depth, curr_depth + 1)
+        end)
       end
     end
   end
 
   # For IRIs, simply check if we own them.
   def owns_any_iri?(context, iris) do
-    Enum.find(iris, fn iri ->
+    Enum.any?(iris, fn iri ->
       case ActorFacade.db_owns?(context, iri) do
-        {:error, reason} -> {:error, reason}
-        {:ok, true} -> {:ok, true}
-        _ -> false
+        {:ok, true} ->
+          true
+
+        _ ->
+          false
       end
     end)
   end
 
   # For embedded literals, check the id.
   def owns_any_id?(context, types) do
-    Enum.find(types, fn as_value ->
+    Enum.any?(types, fn as_value ->
       case Utils.get_json_ld_id(as_value) do
         %URI{} = id ->
           case ActorFacade.db_owns?(context, id) do
-            {:error, reason} -> {:error, reason}
-            {:ok, true} -> {:ok, true}
+            {:ok, true} -> true
             _ -> false
           end
 
         _ ->
-          {:error, "No id for type"}
+          false
       end
     end)
   end
@@ -948,7 +937,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   * `:automatically_reject` triggers the side effect of sending a
     Reject of this Follow request in response.
   """
-  def wrap_for_federated_protocol(context, box_iri) do
+  def wrap_for_federated_protocol(context, box_iri, new_id \\ nil) do
     on_follow =
       case ActorFacade.on_follow(context) do
         {:ok, value} when is_atom(value) -> value
@@ -957,7 +946,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
     struct(context,
       box_iri: box_iri,
-      on_follow: on_follow
+      on_follow: on_follow,
+      new_activity_id: new_id
     )
   end
 end

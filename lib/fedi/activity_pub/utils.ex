@@ -151,7 +151,9 @@ defmodule Fedi.ActivityPub.Utils do
   def get_ids(%{values: values} = iter_prop) do
     Enum.reduce_while(values, [], fn prop, acc ->
       case to_id(prop) do
-        %URI{} = id -> {:cont, [id | acc]}
+        %URI{} = id ->
+          {:cont, [id | acc]}
+
         _ ->
           Logger.error("get_ids failed on #{inspect(iter_prop)}")
           {:halt, {:error, "No id or IRI was set"}}
@@ -269,7 +271,9 @@ defmodule Fedi.ActivityPub.Utils do
           {types, iris} =
             Enum.reduce(values, {[], []}, fn
               %{member: member}, {type_acc2, iri_acc2} when is_struct(member) ->
-                {[member | type_acc2], iri_acc2}
+                # Recurse into object and target
+                {member_types, member_iris} = get_inbox_forwarding_values(member)
+                {type_acc2 ++ [member | member_types], iri_acc2 ++ member_iris}
 
               %{iri: %URI{} = iri}, {type_acc2, iri_acc2} ->
                 {type_acc2, [iri | iri_acc2]}
@@ -281,7 +285,9 @@ defmodule Fedi.ActivityPub.Utils do
           {type_acc ++ types, iri_acc ++ iris}
 
         %{member: member} when is_struct(member) ->
-          {[member | type_acc], iri_acc}
+          # Recurse into object and target
+          {member_types, member_iris} = get_inbox_forwarding_values(member)
+          {type_acc ++ [member | member_types], iri_acc ++ member_iris}
 
         %{iri: %URI{} = iri} ->
           {type_acc, [iri | iri_acc]}
