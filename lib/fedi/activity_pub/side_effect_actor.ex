@@ -599,7 +599,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
 
     recipients
     |> MapSet.new()
-    |> MapSet.delete(ignored_set)
+    |> MapSet.difference(ignored_set)
     |> MapSet.to_list()
   end
 
@@ -676,7 +676,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         # A real actor
         {:ok, actor_or_collection, []}
       else
-        # Should be a (possibly empty) collection
+        # Should be a (possibly empty) collection.
+        # In production, you would want to see if this is a collection
+        # or a page, and traverse pages from "first", "next", etc.
         ["items", "orderedItems"]
         |> Enum.reduce_while([], fn prop_name, acc ->
           case Map.get(properties, prop_name) do

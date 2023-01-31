@@ -148,11 +148,13 @@ defmodule Fedi.ActivityPub.Utils do
   @doc """
   Returns all the ids, for an iterating property.
   """
-  def get_ids(%{values: values}) do
+  def get_ids(%{values: values} = iter_prop) do
     Enum.reduce_while(values, [], fn prop, acc ->
       case to_id(prop) do
         %URI{} = id -> {:cont, [id | acc]}
-        _ -> {:halt, {:error, "No id or IRI was set"}}
+        _ ->
+          Logger.error("get_ids failed on #{inspect(iter_prop)}")
+          {:halt, {:error, "No id or IRI was set"}}
       end
     end)
     |> case do
