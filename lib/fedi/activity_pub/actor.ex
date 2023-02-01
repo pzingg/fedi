@@ -25,11 +25,11 @@ defmodule Fedi.ActivityPub.Actor do
     :current_user,
     :app_agent,
     :box_iri,
-    :raw_activity,
     :new_activity_id,
+    :request_signed_by,
+    :raw_activity,
     deliverable: true,
-    on_follow: :do_nothing,
-    data: %{}
+    on_follow: :do_nothing
   ]
 
   @type t() :: %__MODULE__{
@@ -45,11 +45,11 @@ defmodule Fedi.ActivityPub.Actor do
           current_user: ActorFacade.current_user(),
           app_agent: String.t(),
           box_iri: URI.t() | nil,
-          raw_activity: map() | nil,
           new_activity_id: URI.t() | nil,
+          request_signed_by: URI.t() | nil,
+          raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: ActorFacade.on_follow(),
-          data: map()
+          on_follow: ActorFacade.on_follow()
         }
 
   @doc """
@@ -129,8 +129,8 @@ defmodule Fedi.ActivityPub.Actor do
          {:protocol_enabled, true} <-
            {:protocol_enabled, federated_protocol_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, context, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_post_inbox(context, conn, top_level: true)},
+         {:authentication, {:ok, context, conn, true}} <-
+           {:authentication, ActorFacade.authenticate_post_inbox(context, conn, top_level: true)},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
          # activities.
@@ -146,8 +146,8 @@ defmodule Fedi.ActivityPub.Actor do
            ActorFacade.post_inbox_request_body_hook(context, conn, activity, top_level: true),
 
          # Check authorization of the activity.
-         {:authorized, {:ok, conn, true}} <-
-           {:authorized,
+         {:authorization, {:ok, conn, true}} <-
+           {:authorization,
             ActorFacade.authorize_post_inbox(context, conn, activity, top_level: true)},
 
          # Post the activity to the actor's inbox and trigger side effects for
@@ -178,12 +178,12 @@ defmodule Fedi.ActivityPub.Actor do
          APUtils.send_json_resp(conn, :method_not_allowed, nil, actor_state: :protocol_enabled)}
 
       # Not authenticated
-      {:authenticated, {:ok, _, conn, _}} ->
-        {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :authenticated)}
+      {:authentication, {:ok, _, conn, _}} ->
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :authentication)}
 
       # Not authorized
-      {:authorized, {:ok, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
+      {:authorization, {:ok, conn, _}} ->
+        {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :authorization)}
 
       # Special cases: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
@@ -210,8 +210,8 @@ defmodule Fedi.ActivityPub.Actor do
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, context, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_get_inbox(context, conn, top_level: true)},
+         {:authentication, {:ok, context, conn, true}} <-
+           {:authentication, ActorFacade.authenticate_get_inbox(context, conn, top_level: true)},
 
          # Everything is good to begin processing the request.
          {:ok, conn, oc} <-
@@ -240,8 +240,8 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, _, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
+      {:authentication, {:ok, _, conn, _}} ->
+        {:ok, Plug.Conn.put_private(conn, :actor_state, :authentication)}
     end
   end
 
@@ -263,8 +263,8 @@ defmodule Fedi.ActivityPub.Actor do
          {:protocol_enabled, true} <-
            {:protocol_enabled, social_api_enabled?},
          # Check the peer request is authentic.
-         {:authenticated, {:ok, context, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_post_outbox(context, conn, top_level: true)},
+         {:authentication, {:ok, context, conn, true}} <-
+           {:authentication, ActorFacade.authenticate_post_outbox(context, conn, top_level: true)},
          # Begin processing the request, but have not yet applied
          # authorization (ex: blocks). Obtain the activity reject unknown
          # activities.
@@ -312,7 +312,7 @@ defmodule Fedi.ActivityPub.Actor do
          APUtils.send_json_resp(conn, :method_not_allowed, nil, actor_state: :protocol_enabled)}
 
       # Not authenticated
-      {:authenticated, {:ok, _, conn, _}} ->
+      {:authentication, {:ok, _, conn, _}} ->
         {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :autenticated)}
 
       # We know it is a bad request if the object or
@@ -326,8 +326,8 @@ defmodule Fedi.ActivityPub.Actor do
       {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
         {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :valid_activity)}
 
-      {:authorized, {:ok, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authorized)}
+      {:authorization, {:ok, conn, _}} ->
+        {:ok, Plug.Conn.put_private(conn, :actor_state, :authorization)}
 
       # Special case: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
@@ -361,8 +361,8 @@ defmodule Fedi.ActivityPub.Actor do
            {:is_activity_pub_get, APUtils.is_activity_pub_get(conn)},
 
          # Delegate authenticating and authorizing the request.
-         {:authenticated, {:ok, context, conn, true}} <-
-           {:authenticated, ActorFacade.authenticate_get_outbox(context, conn, top_level: true)},
+         {:authentication, {:ok, context, conn, true}} <-
+           {:authentication, ActorFacade.authenticate_get_outbox(context, conn, top_level: true)},
 
          # Everything is good to begin processing the request.
          {:ok, conn, oc} <-
@@ -387,8 +387,8 @@ defmodule Fedi.ActivityPub.Actor do
         {:ok, Plug.Conn.put_private(conn, :actor_state, :is_activity_pub_get)}
 
       # Not authenticated
-      {:authenticated, {:ok, _, conn, _}} ->
-        {:ok, Plug.Conn.put_private(conn, :actor_state, :authenticated)}
+      {:authentication, {:ok, _, conn, _}} ->
+        {:ok, Plug.Conn.put_private(conn, :actor_state, :authentication)}
     end
   end
 

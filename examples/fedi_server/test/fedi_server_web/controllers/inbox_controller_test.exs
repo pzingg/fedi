@@ -225,7 +225,7 @@ defmodule FediServerWeb.InboxControllerTest do
     }
 
     %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
-    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+    _conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
 
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
@@ -265,7 +265,7 @@ defmodule FediServerWeb.InboxControllerTest do
     }
 
     %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
-    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+    _conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
 
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
@@ -366,6 +366,31 @@ defmodule FediServerWeb.InboxControllerTest do
     assert json_body = response(conn, 200)
     assert json_body =~ "\"OrderedCollectionPage\""
     assert json_body =~ "/users/alyssa/inbox?page=true"
+  end
+
+  test "server security considerations inbox MAY verify content posted by actor (non-normative)",
+       %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" =>
+        "https://chatty.example/users/charlie/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/charlie",
+      "object" => %{
+        "type" => "Note",
+        "id" =>
+          "https://chatty.example/users/charlie/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://chatty.example/users/charlie",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 401)
   end
 
   defp sign_and_send(conn, url, body, %User{ap_id: actor_id}, keys_pem) do

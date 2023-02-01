@@ -60,11 +60,11 @@ defmodule Fedi.ActivityPub.ActorFacade do
           current_user: current_user(),
           app_agent: String.t(),
           box_iri: URI.t() | nil,
-          raw_activity: map() | nil,
           new_activity_id: URI.t() | nil,
+          request_signed_by: URI.t() | nil,
+          raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: on_follow(),
-          data: map()
+          on_follow: on_follow()
         }
 
   ### delegate and api callbacks

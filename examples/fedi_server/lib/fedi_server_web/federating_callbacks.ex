@@ -8,6 +8,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias FediServerWeb.CommonCallbacks
 
   @impl true
@@ -66,15 +67,12 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   @impl true
-  def authenticate_post_inbox(%{data: context_data} = context, %Plug.Conn{} = conn) do
+  def authenticate_post_inbox(context, %Plug.Conn{} = conn) do
     if HTTPSignatures.validate_conn(conn) do
-      context_data = Map.put(context_data, :valid_http_signature?, true)
-      {:ok, struct(context, data: context_data), conn, true}
+      signer_id = FediServer.HTTPClient.get_signing_actor_id(conn)
+      {:ok, struct(context, request_signed_by: signer_id), conn, true}
     else
-      header_keys = Enum.map(conn.req_headers, fn {name, _value} -> name end)
-      Logger.error("Invalid signature, headers were #{inspect(header_keys)}")
-      context_data = Map.put(context_data, :valid_http_signature?, false)
-      {:ok, struct(context, data: context_data), conn, false}
+      {:ok, struct(context, request_signed_by: nil), conn, false}
     end
   end
 
@@ -98,10 +96,27 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   @impl true
+  def authorize_post_inbox(
+        %{request_signed_by: %URI{} = signer_id} = _context,
+        %Plug.Conn{} = conn,
+        activity
+      ) do
+    with {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)} do
+      if URI.to_string(signer_id) == URI.to_string(actor_iri) do
+        {:ok, conn, true}
+      else
+        Logger.error("Actor #{actor_iri} spoofed by sender #{signer_id}")
+        {:ok, conn, false}
+      end
+    else
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: activity)}
+    end
+  end
+
   def authorize_post_inbox(_context, %Plug.Conn{} = conn, _activity) do
-    # For this example we allow anyone to do anything.
-    # Should check conn for a cookie or private token or something.
-    {:ok, conn, true}
+    Logger.error("No signer to authorize post inbox")
+    {:ok, conn, false}
   end
 
   @doc """

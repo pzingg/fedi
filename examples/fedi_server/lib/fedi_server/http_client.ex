@@ -359,8 +359,12 @@ defmodule FediServer.HTTPClient do
          {:ok, public_key} <- Activities.get_public_key(actor_id) do
       {:ok, public_key}
     else
-      {:error, reason} -> {:error, reason}
-      {:fetch_signature, _} -> {:error, "No signature in connection"}
+      {:error, reason} ->
+        Logger.error("fetch error #{reason}")
+        {:error, reason}
+
+      {:fetch_signature, _} ->
+        {:error, "No signature in connection"}
     end
   end
 
@@ -371,18 +375,31 @@ defmodule FediServer.HTTPClient do
   def refetch_public_key(%Plug.Conn{} = conn) do
     with {:fetch_signature, %{"keyId" => key_id}} <-
            {:fetch_signature, HTTPSignatures.signature_for_conn(conn)},
-         {:ok, actor_id} <- key_id_to_actor_id(key_id),
-         {:ok, %User{} = user} <- Activities.resolve_and_insert_user(actor_id) do
+         {:ok, actor_id} <-
+           key_id_to_actor_id(key_id),
+         {:ok, %User{} = user} <-
+           Activities.resolve_and_insert_user(actor_id) do
       User.get_public_key(user)
     else
-      {:error, reason} -> {:error, reason}
-      {:fetch_signature, _} -> {:error, "No signature in connection"}
+      {:error, reason} ->
+        {:error, reason}
+
+      {:fetch_signature, _} ->
+        {:error, "No signature in connection"}
     end
   end
 
-  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = uri) do
-    Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
-      !is_nil(path) && String.length(path) > 1
+  def get_signing_actor_id(%Plug.Conn{} = conn) do
+    case HTTPSignatures.signature_for_conn(conn) do
+      %{"keyId" => key_id} ->
+        case key_id_to_actor_id(key_id) do
+          {:ok, actor_id} -> actor_id
+          _ -> nil
+        end
+
+      _ ->
+        nil
+    end
   end
 
   @doc """
@@ -413,4 +430,9 @@ defmodule FediServer.HTTPClient do
   end
 
   defp remove_suffix(uri, []), do: uri
+
+  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = uri) do
+    Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
+      !is_nil(path) && String.length(path) > 1
+  end
 end

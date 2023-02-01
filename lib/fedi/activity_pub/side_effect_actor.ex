@@ -33,9 +33,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :box_iri,
     :raw_activity,
     :new_activity_id,
+    :request_signed_by,
     deliverable: true,
-    on_follow: :do_nothing,
-    data: %{}
+    on_follow: :do_nothing
   ]
 
   @type t() :: %__MODULE__{
@@ -51,11 +51,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           current_user: ActorFacade.current_user(),
           app_agent: String.t(),
           box_iri: URI.t() | nil,
-          raw_activity: map() | nil,
           new_activity_id: URI.t() | nil,
+          request_signed_by: URI.t() | nil,
+          raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: ActorFacade.on_follow(),
-          data: map()
+          on_follow: ActorFacade.on_follow()
         }
 
   # Same as above but just a map
@@ -152,11 +152,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          {:ok, actor_ids} <- APUtils.get_ids(actor_prop) do
       # Determine if the actor(s) sending this request are blocked.
       case ActorFacade.blocked(context, actor_ids) do
-        {:ok, unauthorized} ->
-          {:ok, conn, !unauthorized}
+        {:ok, true} ->
+          {:ok, conn, false}
 
-        {:error, :callback_not_found} ->
-          {:ok, conn, true}
+        {:ok, false} ->
+          ActorFacade.authorize_post_inbox(context, conn, activity)
 
         {:error, reason} ->
           {:error, reason}
@@ -241,11 +241,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
            get_collection_recipients(context, col_iris, cols, ocols, activity),
          {:ok, recipients} <-
            inboxes_for_recipients(context, recipients, inbox_iri) do
-      Logger.error("Inbox fowarding to #{inspect(Enum.map(recipients, &URI.to_string(&1)))}")
+      Logger.error("Inbox forwarding to #{inspect(Enum.map(recipients, &URI.to_string(&1)))}")
       deliver_to_recipients(context, activity, recipients)
     else
       {:error, reason} ->
-        Logger.error("Inbox fowarding error: #{reason}")
+        Logger.error("Inbox forwarding error: #{reason}")
         {:error, reason}
 
       # We have seen the activity before

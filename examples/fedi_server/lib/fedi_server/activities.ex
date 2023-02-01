@@ -841,8 +841,8 @@ defmodule FediServer.Activities do
   end
 
   def build_params(as_type) do
-    with {:get_actor, %URI{} = actor_iri} <-
-           {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
+    with {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
          {:ok, params} <-
            parse_basic_params(as_type),
          {:ok, json_data} <-
@@ -860,7 +860,7 @@ defmodule FediServer.Activities do
          data: json_data
        })}
     else
-      {:get_actor, _} -> {:error, Utils.err_actor_required(activity: as_type)}
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: as_type)}
     end
   end
 
@@ -938,8 +938,8 @@ defmodule FediServer.Activities do
   def new_id(value) do
     # endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
-    with {:get_actor, %URI{path: actor_path} = actor_iri} <-
-           {:get_actor, Utils.get_actor_or_attributed_to_iri(value)},
+    with {:activity_actor, %URI{path: actor_path} = actor_iri} <-
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(value)},
          {:local_actor, true} <- {:local_actor, local?(actor_iri)},
          {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
       ulid = Ecto.ULID.generate()
@@ -953,7 +953,7 @@ defmodule FediServer.Activities do
       {:error, reason} ->
         {:error, reason}
 
-      {:get_actor, _} ->
+      {:activity_actor, _} ->
         Logger.error(
           "Couldn't get attributed_to in object #{Utils.alias_module(value.__struct__)}"
         )
@@ -1233,28 +1233,35 @@ defmodule FediServer.Activities do
     end
   end
 
-  def ensure_user(%URI{} = id, local?, app_agent \\ nil) do
-    case repo_get_by_ap_id(:actors, id) do
+  def ensure_user(%URI{} = ap_id, local?, app_agent \\ nil) do
+    case repo_get_by_ap_id(:actors, ap_id) do
       %User{} = user ->
         {:ok, user}
 
       _ ->
         if local? do
-          {:error, "Local user #{id} not found"}
+          {:error, "Local user #{ap_id} not found"}
         else
-          resolve_and_insert_user(id, app_agent)
+          resolve_and_insert_user(ap_id, app_agent)
         end
     end
   end
 
-  def resolve_and_insert_user(%URI{} = id, app_agent \\ nil) do
+  def resolve_and_insert_user(%URI{} = ap_id, app_agent \\ nil) do
     app_agent = app_agent || FediServer.Application.app_agent()
 
     with client <- HTTPClient.anonymous(app_agent),
-         {:ok, json_body} <- HTTPClient.fetch_masto_user(client, id),
+         {:ok, json_body} <- HTTPClient.fetch_masto_user(client, ap_id),
          {:ok, data} <- Jason.decode(json_body),
-         user <- User.new_remote_user(data) do
-      User.changeset(user) |> Repo.insert(returning: true)
+         %User{} = user <- User.new_remote_user(data),
+         {:ok, %User{} = user} <- User.changeset(user) |> Repo.insert(returning: true) do
+      {:ok, user}
+    else
+      {:error, %Ecto.Changeset{}} ->
+        {:error, "Could not insert user #{ap_id}"}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
