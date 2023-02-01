@@ -741,7 +741,15 @@ defmodule FediServer.Activities do
   """
   @impl true
   def get(%URI{} = ap_id) do
-    case get_object_data(ap_id) do
+    if local?(ap_id) do
+      get_object_data(ap_id)
+    else
+      with {:error, reason} <- get_object_data(:objects, ap_id),
+           {:error, reason} <- get_object_data(:activities, ap_id) do
+        {:error, "Not found"}
+      end
+    end
+    |> case do
       {:ok, data} ->
         resolve_with_stripped_recipients(data)
 
@@ -762,17 +770,21 @@ defmodule FediServer.Activities do
         end
 
       {:ok, schema, _, _} ->
-        case repo_get_by_ap_id(schema, ap_id) do
-          %{__struct__: _module, data: data} when is_map(data) ->
-            {:ok, data}
+        get_object_data(schema, ap_id)
+    end
+  end
 
-          nil ->
-            {:error, "Not found"}
+  def get_object_data(schema, %URI{} = ap_id) do
+    case repo_get_by_ap_id(schema, ap_id) do
+      %{__struct__: _module, data: data} when is_map(data) ->
+        {:ok, data}
 
-          other ->
-            Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
-            {:error, "Internal database error"}
-        end
+      nil ->
+        {:error, "Not found"}
+
+      other ->
+        Logger.error("Get failed: Unexpected data returned from Repo: #{inspect(other)}")
+        {:error, "Internal database error"}
     end
   end
 
@@ -796,6 +808,39 @@ defmodule FediServer.Activities do
   """
   @impl true
   def create(as_type) do
+    with {:ok, params} <- build_params(as_type) do
+      case repo_insert(params.schema, params) do
+        {:error, reason} ->
+          {:error, reason}
+
+        {:ok, _object} ->
+          {:ok, as_type, params.data}
+      end
+    end
+  end
+
+  @doc """
+  Sets an existing entry to the database based on the value's id.
+
+  Note that Activity values received from federated peers may also be
+  updated in the database this way if the Federating Protocol is
+  enabled. The client may freely decide to store only the id instead of
+  the entire value.
+  """
+  @impl true
+  def update(as_type) do
+    with {:ok, params} <- build_params(as_type) do
+      case repo_update(params.schema, params) do
+        {:error, reason} ->
+          {:error, reason}
+
+        {:ok, _object} ->
+          {:ok, as_type}
+      end
+    end
+  end
+
+  def build_params(as_type) do
     with {:get_actor, %URI{} = actor_iri} <-
            {:get_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
          {:ok, params} <-
@@ -803,30 +848,19 @@ defmodule FediServer.Activities do
          {:ok, json_data} <-
            Fedi.Streams.Serializer.serialize(as_type),
          {:ok, recipients} <- APUtils.get_recipients(as_type, empty_ok: true),
-         actor_id <- URI.to_string(actor_iri),
-         object_id <- URI.to_string(params.ap_id),
          recipient_params <- canonical_recipients(recipients),
-         params <-
-           params
-           |> Map.merge(recipient_params)
-           |> Map.merge(%{
-             ap_id: object_id,
-             actor: actor_id,
-             data: json_data
-           }) do
-      case repo_insert(params.schema, params) do
-        {:error, reason} ->
-          {:error, reason}
-
-        {:ok, _object} ->
-          {:ok, as_type, json_data}
-      end
+         actor_id <- URI.to_string(actor_iri),
+         object_id <- URI.to_string(params.ap_id) do
+      {:ok,
+       params
+       |> Map.merge(recipient_params)
+       |> Map.merge(%{
+         ap_id: object_id,
+         actor: actor_id,
+         data: json_data
+       })}
     else
-      {:get_actor, _} ->
-        {:error, "Missing actor in activity"}
-
-      {:error, reason} ->
-        {:error, reason}
+      {:get_actor, _} -> {:error, Utils.err_actor_required(activity: as_type)}
     end
   end
 
@@ -873,98 +907,20 @@ defmodule FediServer.Activities do
   end
 
   @doc """
-  Sets an existing entry to the database based on the value's id.
-
-  Note that Activity values received from federated peers may also be
-  updated in the database this way if the Federating Protocol is
-  enabled. The client may freely decide to store only the id instead of
-  the entire value.
-  """
-  @impl true
-  def update(as_type) do
-    case parse_basic_params(as_type) do
-      {:error, reason} ->
-        {:error, reason}
-
-      {:ok, %{schema: :activities} = params} ->
-        update_activity(as_type, params)
-
-      {:ok, %{schema: :objects} = params} ->
-        update_object(as_type, params)
-
-      {:ok, params} ->
-        Logger.error("Don't know how to update #{inspect(as_type)}, params #{inspect(params)}")
-    end
-  end
-
-  def update_activity(as_type, %{schema: :activities} = params) do
-    with {:activity_actor, %URI{} = actor_iri} <-
-           {:activity_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
-         {:ok, json_data} <-
-           Fedi.Streams.Serializer.serialize(as_type),
-         {:ok, recipients} <- APUtils.get_recipients(as_type),
-         actor_id <- URI.to_string(actor_iri),
-         recipient_params <- canonical_recipients(recipients),
-         params <-
-           params
-           |> Map.merge(recipient_params)
-           |> Map.merge(%{
-             actor: actor_id,
-             data: json_data
-           }),
-         {:ok, object} <- repo_update(:activities, params) do
-      {:ok, object}
-    else
-      {:error, %Ecto.Changeset{} = changeset} ->
-        Logger.error("Update failed: #{describe_errors(changeset)}")
-        {:error, "Internal database error"}
-
-      {:error, reason} ->
-        {:error, reason}
-
-      {:activity_id, _} ->
-        {:error, Utils.err_id_required(activity: as_type)}
-
-      {:activity_actor, _} ->
-        {:error, Utils.err_actor_required(activity: as_type)}
-    end
-  end
-
-  def update_object(as_type, %{schema: :objects} = params) do
-    with {:get_actor, %URI{} = actor_iri} <-
-           {:get_actor, Utils.get_iri(as_type, "attributedTo")},
-         {:ok, json_data} <-
-           Fedi.Streams.Serializer.serialize(as_type),
-         params <-
-           Map.merge(params, %{
-             actor: URI.to_string(actor_iri),
-             data: json_data
-           }),
-         {:ok, object} <- repo_update(:objects, params) do
-      {:ok, object}
-    else
-      {:error, %Ecto.Changeset{} = changeset} ->
-        Logger.error("Update failed: #{describe_errors(changeset)}")
-        {:error, "Internal database error"}
-
-      {:error, reason} ->
-        {:error, reason}
-
-      {:get_actor, _} ->
-        {:error, "Missing attributedTo in object"}
-    end
-  end
-
-  @doc """
   Removes the entry with the given id.
 
   delete is only called for federated objects. Deletes from the Social
   API should call Update to create a Tombstone.
   """
   @impl true
-  def delete(ap_id) do
-    with {:ok, schema, _ulid_or_nickame, _collection} <- parse_iri_schema(ap_id) do
-      repo_delete(schema, ap_id)
+  def delete(%URI{} = ap_id) do
+    with {:objects, {0, _}} <- {:objects, repo_delete(:objects, ap_id)},
+         {:activities, {0, _}} <- {:activities, repo_delete(:activities, ap_id)} do
+      {:error, "Nothing was deleted"}
+    else
+      {schema, {n, _}} when is_integer(n) ->
+        Logger.debug("Deleted #{n} #{schema} at #{ap_id}")
+        :ok
     end
   end
 
@@ -1445,10 +1401,12 @@ defmodule FediServer.Activities do
 
   def repo_get_by_ap_id(:activities, %URI{} = ap_id) do
     Repo.get_by(Activity, ap_id: URI.to_string(ap_id))
+    |> Repo.preload([:direct_recipients, :following_recipients])
   end
 
   def repo_get_by_ap_id(:objects, %URI{} = ap_id) do
     Repo.get_by(Object, ap_id: URI.to_string(ap_id))
+    |> Repo.preload([:direct_recipients, :following_recipients])
   end
 
   def repo_get_by_ap_id(:followers, %URI{} = ap_id) do
@@ -1566,8 +1524,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_update(:activities, params) do
-    with %Activity{} = activity <- repo_get_by_ap_id(:activities, params.ap_id) do
-      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
+    with %Activity{} = activity <- repo_get_by_ap_id(:activities, URI.parse(params.ap_id)) do
       Activity.changeset(activity, params) |> Repo.update(returning: true)
     else
       _ ->
@@ -1576,9 +1533,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_update(:objects, params) do
-    with %Object{} = object <- repo_get_by_ap_id(:objects, params.ap_id) do
-      params = Map.put(params, :ap_id, URI.to_string(params.ap_id))
-
+    with %Object{} = object <- repo_get_by_ap_id(:objects, URI.parse(params.ap_id)) do
       try do
         Object.changeset(object, params) |> Repo.update(returning: true)
       rescue

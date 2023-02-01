@@ -14,12 +14,14 @@ defmodule FediServer.Activities.Activity do
 
     has_many(:direct_recipients, {"activities_recipients", FediServer.Activities.Recipient},
       foreign_key: :assoc_id,
-      where: [type: :direct]
+      where: [type: :direct],
+      on_replace: :delete_if_exists
     )
 
     has_many(:following_recipients, {"activities_recipients", FediServer.Activities.Recipient},
       foreign_key: :assoc_id,
-      where: [type: :following]
+      where: [type: :following],
+      on_replace: :delete_if_exists
     )
 
     timestamps()

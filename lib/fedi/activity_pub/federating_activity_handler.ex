@@ -108,8 +108,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   @impl true
   def delete(context, activity) when is_struct(activity) do
     with {:ok, %{values: values}} <- APUtils.objects_match_activity_origin?(activity),
-         :ok <- delete_objects(context, values),
-         :ok <- ActorFacade.db_delete(context, activity) do
+         :ok <- delete_objects(context, values) do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -117,15 +116,17 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   end
 
   def delete_objects(context, values) do
-    Enum.reduce_while(values, :ok, fn
-      %{member: as_type}, acc when is_struct(as_type) ->
-        case ActorFacade.db_delete(context, as_type) do
-          :ok -> {:cont, acc}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
+    Enum.reduce_while(values, :ok, fn prop, acc ->
+      case APUtils.to_id(prop) do
+        %URI{} = id ->
+          case ActorFacade.db_delete(context, id) do
+            :ok -> {:cont, acc}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
 
-      _, _ ->
-        {:halt, {:error, "Update requires an object to be wholly provided"}}
+        nil ->
+          {:halt, {:error, Utils.err_id_required(property: prop)}}
+      end
     end)
   end
 
