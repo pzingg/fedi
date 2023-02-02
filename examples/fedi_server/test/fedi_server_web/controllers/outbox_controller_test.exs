@@ -409,15 +409,15 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 422)
   end
 
-  test "outbox SHOULD NOT trust submitted content (bad actor)", %{conn: conn} do
+  test "outbox SHOULD NOT trust submitted content (bad attributedTo in Create)", %{conn: conn} do
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Update",
+      "type" => "Create",
       "to" => "https://chatty.example/users/ben",
-      "actor" => "https://example.com/users/daria",
+      "actor" => "https://example.com//users/alyssa",
       "object" => %{
         "type" => "Note",
-        "attributedTo" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://example.com/users/daria",
         "to" => "https://chatty.example/users/ben",
         "content" => "I take it all back."
       }
@@ -431,27 +431,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 422)
-  end
-
-  test "outbox SHOULD NOT trust submitted content (bad attributedTo in Create)", %{conn: conn} do
-    activity = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "type" => "Note",
-      "attributedTo" => "https://example.com/users/daria",
-      "to" => "https://chatty.example/users/ben",
-      "content" => "I take it all back."
-    }
-
-    %{alyssa: %{user: alyssa}} = user_fixtures()
-
-    conn =
-      conn
-      |> log_in_user(alyssa)
-      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
-      |> post("/users/alyssa/outbox", Jason.encode!(activity))
-
-    assert response(conn, 422)
+    assert response(conn, 401)
   end
 
   test "outbox SHOULD validate content (update)", %{conn: conn} do
@@ -738,6 +718,32 @@ defmodule FediServerWeb.OutboxControllerTest do
              "https://example.com/users/alyssa/outbox",
              "https://example.com/users/daria"
            )
+  end
+
+  test "server security considerations outbox MAY verify content posted by actor (non-normative)",
+       %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "to" => "https://chatty.example/users/ben",
+      "actor" => "https://example.com//users/daria",
+      "object" => %{
+        "type" => "Note",
+        "attributedTo" => "https://example.com/users/daria",
+        "to" => "https://chatty.example/users/ben",
+        "content" => "I take it all back."
+      }
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 401)
   end
 
   defp get_posted_item(coll_url \\ "https://example.com/users/alyssa/outbox", filtered_for \\ nil) do

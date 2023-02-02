@@ -58,41 +58,38 @@ defmodule FediServerWeb.SocialCallbacks do
         %{current_user: %{ap_id: current_user_id}} = context,
         activity
       ) do
-    actor_id =
-      case Utils.get_iri(activity, "actor") do
-        %URI{} = id -> URI.to_string(id)
-        _ -> nil
-      end
+    case Utils.get_iri(activity, "actor") do
+      %URI{} = id ->
+        actor_id = URI.to_string(id)
 
-    invalid_message =
-      cond do
-        actor_id != current_user_id ->
-          "Current user can not create activity for actor #{actor_id}"
+        if actor_id != current_user_id do
+          {:error,
+           %Error{
+             code: :unauthorized_create,
+             status: :unauthorized,
+             message: "Current user can not create activity for actor #{actor_id}"
+           }}
+        else
+          {:ok, context}
+        end
 
-        APUtils.is_or_extends?(activity, "Create") ->
-          with object when is_struct(object) <- Utils.get_object(activity),
-               %URI{} = id <- Utils.get_iri(object, "attributedTo") do
-            attributed_to_id = URI.to_string(id)
-
-            if attributed_to_id == current_user_id do
-              nil
-            else
-              "Current user can not create object attributed to #{attributed_to_id}"
-            end
-          else
-            _ ->
-              nil
-          end
-
-        true ->
-          nil
-      end
-
-    if invalid_message do
-      {:error,
-       %Error{code: :unauthorized_create, status: :unprocessable_entity, message: invalid_message}}
-    else
-      {:ok, context}
+      _ ->
+        # No 'actor'. Verify 'attributedTo'
+        with true <- APUtils.is_or_extends?(activity, "Create"),
+             object when is_struct(object) <- Utils.get_object(activity),
+             %URI{} = id <- Utils.get_iri(object, "attributedTo"),
+             attributed_to_id <- URI.to_string(id),
+             false <- attributed_to_id == current_user_id do
+          {:error,
+           %Error{
+             code: :unauthorized_create,
+             status: :unauthorized,
+             message: "Current user can not create object attributed to #{attributed_to_id}"
+           }}
+        else
+          _ ->
+            {:ok, context}
+        end
     end
   end
 
