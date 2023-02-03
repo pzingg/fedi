@@ -29,7 +29,8 @@ defmodule Fedi.ActivityPub.Actor do
     :request_signed_by,
     :raw_activity,
     deliverable: true,
-    on_follow: :do_nothing
+    on_follow: :do_nothing,
+    data: %{}
   ]
 
   @type t() :: %__MODULE__{
@@ -49,7 +50,8 @@ defmodule Fedi.ActivityPub.Actor do
           request_signed_by: URI.t() | nil,
           raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: ActorFacade.on_follow()
+          on_follow: ActorFacade.on_follow(),
+          data: map()
         }
 
   @doc """

@@ -6,7 +6,7 @@ defmodule FediServerWeb.FollowingController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
 
-  def following(conn, %{"nickname" => nickname} = params) do
+  def following(conn, %{"nickname" => _nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
     actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
@@ -15,7 +15,7 @@ defmodule FediServerWeb.FollowingController do
     handle_collection(conn, actor, params)
   end
 
-  def followers(conn, %{"nickname" => nickname} = params) do
+  def followers(conn, %{"nickname" => _nickname} = params) do
     # Get the Actor struct placed in the connection by the
     # `set_actor/2` plug in router.ex.
     actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)

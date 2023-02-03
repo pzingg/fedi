@@ -5,7 +5,7 @@ defmodule FediServerWeb.ActivitiesController do
 
   alias Fedi.ActivityPub.Utils, as: APUtils
 
-  def activity(%Plug.Conn{request_path: path} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
+  def activity(%Plug.Conn{} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
     with {:fetch, %{data: data}} when is_map(data) <-
            {:fetch, FediServer.Activities.repo_get(:activities, ulid)},
          {:ok, body} <- Jason.encode(data) do

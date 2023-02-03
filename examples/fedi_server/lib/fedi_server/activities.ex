@@ -5,8 +5,6 @@ defmodule FediServer.Activities do
 
   require Logger
 
-  alias Ecto.Changeset
-
   alias Fedi.Streams.Error
   alias Fedi.Streams.Utils
   alias Fedi.ActivityPub.Utils, as: APUtils
@@ -744,8 +742,8 @@ defmodule FediServer.Activities do
     if local?(ap_id) do
       get_object_data(ap_id)
     else
-      with {:error, reason} <- get_object_data(:objects, ap_id),
-           {:error, reason} <- get_object_data(:activities, ap_id) do
+      with {:error, _reason} <- get_object_data(:objects, ap_id),
+           {:error, _reason} <- get_object_data(:activities, ap_id) do
         {:error, "Not found"}
       end
     end
@@ -1605,18 +1603,18 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for delete #{other}"}
   end
 
-  def describe_errors(
-        %Changeset{action: action, data: %{__struct__: module}, errors: errors} = changeset
-      ) do
+  def describe_errors(%Ecto.Changeset{action: action, data: %{__struct__: module}} = changeset) do
     error_str =
-      Enum.map(errors, fn {field, _error_keywords} = error ->
-        "#{inspect(error)}"
-        # to_string(field)
+      Ecto.Changeset.traverse_errors(changeset, fn {msg, opts} ->
+        Regex.replace(~r"%{(\w+)}", msg, fn _, key ->
+          opts |> Keyword.get(String.to_existing_atom(key), key) |> to_string()
+        end)
       end)
+      |> Map.to_list()
+      |> Enum.map(fn {field, msg} -> "#{field} #{msg}" end)
       |> Enum.join(", ")
 
-    "#{Utils.alias_module(module)} #{action} error: #{inspect(changeset)}"
-    # "#{Utils.alias_module(module)} #{action} error on fields: #{error_str}"
+    "#{Utils.alias_module(module)} #{action} error: #{error_str}"
   end
 
   def dump_file(object, ap_id) do

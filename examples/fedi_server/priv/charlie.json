@@ -42,9 +42,9 @@
   "outbox": "https://other.example/users/charlie/outbox",
   "featured": "https://other.example/users/charlie/collections/featured",
   "featuredTags": "https://other.example/users/charlie/collections/tags",
-  "preferredUsername": "ben",
-  "name": "Chatty Ben",
-  "url": "https://other.example/@ben",
+  "preferredUsername": "charlie",
+  "name": "Chatty Charlie",
+  "url": "https://other.example/@charlie",
   "manuallyApprovesFollowers": false,
   "discoverable": true,
   "published": "2017-04-07T00:00:00Z",
@@ -52,7 +52,7 @@
   "publicKey": {
     "id": "https://other.example/users/charlie#main-key",
     "owner": "https://other.example/users/charlie",
-    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxM7ZDq/+RFSjZECH7otJ\n++hHa1XDm+c5EE0zh5TNcb/kl0ng3d+Zm+ZtUdobA2vcD8MV7KKCKPfgDY0Vg+vt\n4U5FsxNlvSXCQjlzP8zD0NZefnRdkfD64DVBLba/pJrQVAP0oB1ebpFoNClOarvL\nuGQVRvh5efKs0XH2CZym/okrC1Xyo887YKYaoS/k3ABTr2Nybl/ib67UhaXf3C5a\nMk+CBehgiH8t2lxeTEgoEihojWRwuoq1E0uFcHnq9R/1kEmQMJXMrAYCqsM/5Zc7\nwZIWotBOIPp6oWQtDFLJCvyJVfbDXswk2a7n2w3gzy71VkWvfouapdNka2RWOgtd\n8wIDAQAB\n-----END PUBLIC KEY-----"
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAmkRynqaJIL4Th23wL5AU\nUZ7n56mJgIwQGnYXJG6egq8knPLo5p04oz4i6IYFgo1k+NTUQELFqh+5ZGwdoiby\nFW2p5de0TR1b7QRewNomusR213f4t0wkFKCCISx2z940Ovk3b/Nlgj4HQFd6d1MQ\nM9JVvZIVkbcA9DHmzHJzovU2u7KMudGWB0BHkCtZtrh2f75dhIhuEZiHSEhy1pC5\naUjz9JhU3AYZYzIiyrvS5Su7qWljogQzQha57H9waxY594aThFAPJAi9ghyd/rlA\nQTo+Es73AgiQWXTD0D9S+Xtq2wltuDc4V2t/RFh4aygn9PzhraR/8Ao0uoaBRa8d\nAQIDAQAB\n-----END PUBLIC KEY-----"
   },
   "tag": [
     {

@@ -225,8 +225,6 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def follow(%{box_iri: box_iri} = context, activity)
       when is_struct(context) and is_struct(activity) do
-    recipients = APUtils.public_activity_streams()
-
     with {:activity_object, %P.Object{values: [_ | _]} = object} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, following_ids} <- APUtils.get_ids(object),
@@ -305,8 +303,6 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
     end
   end
 
-  @spec undo(any, %{:properties => map, optional(any) => any}) ::
-          :pass | {:error, any} | {:ok, struct, boolean} | Fedi.Streams.Error.t()
   @doc """
   Implements the social Undo activity side effects.
   """
@@ -334,8 +330,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   def block(context, activity) when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      context = Map.put(context, :deliverable, true)
-      ActorFacade.handle_c2s_activity(context, activity)
+      # Mark the activity as non-deliverable
+      ActorFacade.handle_c2s_activity(struct(context, deliverable: false), activity)
     else
       {:error, reason} -> {:error, reason}
       {:activity_object, _} -> Utils.err_object_required(activity: activity)

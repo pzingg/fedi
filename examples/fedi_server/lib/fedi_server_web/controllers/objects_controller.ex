@@ -12,7 +12,7 @@ defmodule FediServerWeb.ObjectsController do
   the HTTP 410 Gone status code if a Tombstone object is presented as the
   response body, otherwise respond with a HTTP 404 Not Found.
   """
-  def object(%Plug.Conn{request_path: path} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
+  def object(%Plug.Conn{} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
     opts =
       case conn.assigns[:current_user] do
         %User{ap_id: ap_id} ->

@@ -1,38 +1,88 @@
 defmodule FediServer.FixturesHelper do
   @moduledoc false
 
+  require Logger
+
   alias Fedi.Streams.Utils
-  alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Repo
   alias FediServer.Activities
   alias FediServer.Accounts.User
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
-  alias FediServer.Activities.Recipient
 
   def user_fixtures(opts \\ []) do
     # Add a remote user
     {ben, ben_private_key_pem} =
       with false <- Keyword.get(opts, :local_only, false),
-           {:ok, keys} <-
-             Path.join(:code.priv_dir(:fedi_server), "ben_private_key.pem") |> File.read(),
+           {:ok, private_key_json} <-
+             Path.join(:code.priv_dir(:fedi_server), "ben_private_key.json") |> File.read(),
+           {:ok, private_key} <-
+             Jason.decode(private_key_json),
            {:ok, contents} <-
              Path.join(:code.priv_dir(:fedi_server), "ben.json") |> File.read(),
            {:ok, data} <-
              Jason.decode(contents),
-           user <-
+           %User{} = user <-
              User.new_remote_user(data),
            {:ok, user} <-
              User.changeset(user)
              |> Repo.insert(returning: true) do
-        {user, keys}
+        {user, private_key}
       else
-        _ ->
+        other ->
+          Logger.error("Problem making ben: #{inspect(other)}")
+          {nil, nil}
+      end
+
+    # Add a remote user
+    {charlie, charlie_private_key_pem} =
+      with false <- Keyword.get(opts, :local_only, false),
+           {:ok, private_key_json} <-
+             Path.join(:code.priv_dir(:fedi_server), "charlie_private_key.json") |> File.read(),
+           {:ok, private_key} <-
+             Jason.decode(private_key_json),
+           {:ok, contents} <-
+             Path.join(:code.priv_dir(:fedi_server), "charlie.json") |> File.read(),
+           {:ok, data} <-
+             Jason.decode(contents),
+           %User{} = user <-
+             User.new_remote_user(data),
+           {:ok, user} <-
+             User.changeset(user)
+             |> Repo.insert(returning: true) do
+        {user, private_key}
+      else
+        other ->
+          Logger.error("Problem making charlie: #{inspect(other)}")
+          {nil, nil}
+      end
+
+    # Add a remote user
+    {emilia, emilia_private_key_pem} =
+      with false <- Keyword.get(opts, :local_only, false),
+           {:ok, private_key_json} <-
+             Path.join(:code.priv_dir(:fedi_server), "emilia_private_key.json") |> File.read(),
+           {:ok, private_key} <-
+             Jason.decode(private_key_json),
+           {:ok, contents} <-
+             Path.join(:code.priv_dir(:fedi_server), "emilia.json") |> File.read(),
+           {:ok, data} <-
+             Jason.decode(contents),
+           %User{} = user <-
+             User.new_remote_user(data),
+           {:ok, user} <-
+             User.changeset(user)
+             |> Repo.insert(returning: true) do
+        {user, private_key}
+      else
+        other ->
+          Logger.error("Problem making emilia: #{inspect(other)}")
           {nil, nil}
       end
 
     # Add a local user
     endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
+    shared_inbox_uri = %URI{endpoint_uri | path: "/inbox"} |> URI.to_string()
 
     alyssa =
       with false <- Keyword.get(opts, :remote_only, false),
@@ -44,6 +94,7 @@ defmodule FediServer.FixturesHelper do
              email: "alyssa@example.com",
              password: "pass",
              local?: true,
+             shared_inbox: shared_inbox_uri,
              data: %{}
            },
            {:ok, user} <-
@@ -65,6 +116,7 @@ defmodule FediServer.FixturesHelper do
              email: "daria@example.com",
              password: "pass",
              local?: true,
+             shared_inbox: shared_inbox_uri,
              data: %{}
            },
            {:ok, user} <-
@@ -78,6 +130,8 @@ defmodule FediServer.FixturesHelper do
 
     [
       {:ben, %{user: ben, keys: ben_private_key_pem}},
+      {:charlie, %{user: charlie, keys: charlie_private_key_pem}},
+      {:emilia, %{user: emilia, keys: emilia_private_key_pem}},
       {:alyssa, %{user: alyssa}},
       {:daria, %{user: daria}}
     ]

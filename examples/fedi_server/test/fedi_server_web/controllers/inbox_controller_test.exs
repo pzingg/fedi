@@ -394,7 +394,8 @@ defmodule FediServerWeb.InboxControllerTest do
   end
 
   defp sign_and_send(conn, url, body, %User{ap_id: actor_id}, keys_pem) do
-    {:ok, private_key, _} = FediServer.HTTPClient.keys_from_pem(keys_pem)
+    assert {:ok, private_key, _} = FediServer.HTTPClient.decode_keys(keys_pem)
+    assert is_tuple(private_key)
 
     headers =
       FediServer.HTTPClient.signed_headers(

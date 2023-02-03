@@ -54,7 +54,7 @@ defmodule FediServerWeb.InboxController do
     Fedi.ActivityPub.Utils.send_json_resp(conn, :forbidden)
   end
 
-  def post_shared_inbox(conn, params) do
+  def post_shared_inbox(conn, _params) do
     Fedi.ActivityPub.Utils.send_json_resp(conn, :forbidden)
   end
 end

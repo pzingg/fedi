@@ -46,7 +46,7 @@ defmodule FediServerWeb.CommonCallbacks do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_inbox(context, %Plug.Conn{} = conn, params) do
+  def get_inbox(_context, %Plug.Conn{} = conn, params) do
     inbox_iri = APUtils.request_id(conn)
     opts = APUtils.collection_opts(params, conn)
 
@@ -92,7 +92,7 @@ defmodule FediServerWeb.CommonCallbacks do
   Always called, regardless whether the Federated Protocol or Social
   API is enabled.
   """
-  def get_outbox(context, %Plug.Conn{} = conn, params) do
+  def get_outbox(_context, %Plug.Conn{} = conn, params) do
     outbox_iri = APUtils.request_id(conn)
     opts = APUtils.collection_opts(params, conn)
 
@@ -123,9 +123,7 @@ defmodule FediServerWeb.CommonCallbacks do
   values that are simply not present, the `raw_json` map is ONLY needed
   for this narrow and specific use case.
   """
-  def post_outbox(context, activity, %URI{} = outbox_iri, raw_json) do
-    Logger.error("CommonCallbacks.post_outbox")
-    # TODO FIXME IMPL
+  def post_outbox(_context, _activity, %URI{} = _outbox_iri, _raw_json) do
     {:ok, true}
   end
 end

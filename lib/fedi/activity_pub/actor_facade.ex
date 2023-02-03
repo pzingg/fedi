@@ -64,7 +64,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
           request_signed_by: URI.t() | nil,
           raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: on_follow()
+          on_follow: on_follow(),
+          data: map()
         }
 
   ### delegate and api callbacks

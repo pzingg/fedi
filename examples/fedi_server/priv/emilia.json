@@ -34,25 +34,25 @@
       "Hashtag": "as:Hashtag"
     }
   ],
-  "id": "https://chatty.example/users/ben",
+  "id": "https://chatty.example/users/emilia",
   "type": "Person",
-  "following": "https://chatty.example/users/ben/following",
-  "followers": "https://chatty.example/users/ben/followers",
-  "inbox": "https://chatty.example/users/ben/inbox",
-  "outbox": "https://chatty.example/users/ben/outbox",
-  "featured": "https://chatty.example/users/ben/collections/featured",
-  "featuredTags": "https://chatty.example/users/ben/collections/tags",
-  "preferredUsername": "ben",
-  "name": "Chatty Ben",
-  "url": "https://chatty.example/@ben",
+  "following": "https://chatty.example/users/emilia/following",
+  "followers": "https://chatty.example/users/emilia/followers",
+  "inbox": "https://chatty.example/users/emilia/inbox",
+  "outbox": "https://chatty.example/users/emilia/outbox",
+  "featured": "https://chatty.example/users/emilia/collections/featured",
+  "featuredTags": "https://chatty.example/users/emilia/collections/tags",
+  "preferredUsername": "emilia",
+  "name": "Chatty Emilia",
+  "url": "https://chatty.example/@emilia",
   "manuallyApprovesFollowers": false,
   "discoverable": true,
   "published": "2017-04-07T00:00:00Z",
-  "devices": "https://chatty.example/users/ben/collections/devices",
+  "devices": "https://chatty.example/users/emilia/collections/devices",
   "publicKey": {
-    "id": "https://chatty.example/users/ben#main-key",
-    "owner": "https://chatty.example/users/ben",
-    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr04GhTrzSiGAU82dQRtM\nKAmCONqQ8zOEX/pAs3Dw//z5OYEY2CT6xXwJFcpUYy4IMjCL3E054bY/DWIDg2PT\nnf+1OeK0ENBAUHgoSXvDvGCDCSsfHpqMLZV7WjMVWesfaE/h5ra9gEg9sQ1/DbyJ\nREBmRJT3J3HR+oNN8w5w6HX5hRzuWsfvqS8jJdPU6wxhfRQ0p3iwwg1+V9xh2OW5\ngbLE6QUp9hhm17GMPs5zFG8aMc5WGTMNjlWZvr1VChjXwA4ueM1KnbZsmHa8m/Nn\n+NLXlzOtjdjquno4dja0xe1x9IxTo5wDMaIEERTjBAk2e+jO4ZDRT5TGdCbczCJf\nMQIDAQAB\n-----END PUBLIC KEY-----"
+    "id": "https://chatty.example/users/emilia#main-key",
+    "owner": "https://chatty.example/users/emilia",
+    "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw4CJC+2uKX6GrHBpff6x\ndzdqVHSr1Tz3tYcWcsius246fyVUvHi4o1cnYrABTS73BC6ybTqa7o4lRJp8aD/L\nuMl1DEpW53wcliOnzqbPz7Dz3Ncr9cWSnqgyWLKHCMgRgM+hhHoDDZ51OJQeR12G\naxxCtH3YiPGNCEJA8cbP5r4CnZ+K681uMNs7MUcF/46z4M6RKloAstuRxEXI4nMD\nn9fM3qOu3gZffE+5z84Q9AoerlFRy+XAlre9/WyvwMvbBgDhE2usNEbID5uiYCP3\ngB0XDXt/engS+WJC4eyJGviNcy2yvKhDf6Xz664MieTW9BAMwl5LSQDwm4ZMtxG0\n2wIDAQAB\n-----END PUBLIC KEY-----"
   },
   "tag": [
     {

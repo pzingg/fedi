@@ -6,19 +6,24 @@ defmodule FediServerWeb.InboxDeliveryTest do
   require Logger
 
   alias Fedi.Streams.Utils
-  alias FediServer.Accounts.User
   alias FediServer.Activities
 
   @webfinger_prefix "https://example.com/.well-known/webfinger?resource=acct:"
 
   @remote_fingers %{
     "https://chatty.example/users/ben" => "ben@chatty.example",
+    "https://chatty.example/users/emilia" => "emilia@chatty.example",
     "https://other.example/users/charlie" => "charlie@other.example"
   }
   @remote_actors %{
     "https://chatty.example/users/ben" => "ben.json",
+    "https://chatty.example/users/emilia" => "emilia.json",
     "https://other.example/users/charlie" => "charlie.json"
   }
+  @remote_shared_inboxes [
+    "https://chatty.example/inbox",
+    "https://other.example/inbox"
+  ]
   @local_actors [
     "https://example.com/users/alyssa",
     "https://example.com/users/daria"
@@ -59,7 +64,7 @@ defmodule FediServerWeb.InboxDeliveryTest do
             mock_actor(url)
         end
 
-      # When we deliver message to ben's or charlie's inbox
+      # When we deliver message to a remote actors inbox
       %{
         method: :post,
         url: url,
@@ -69,6 +74,15 @@ defmodule FediServerWeb.InboxDeliveryTest do
         actor_url = String.replace_trailing(url, "/inbox", "")
 
         cond do
+          Enum.member?(@remote_shared_inboxes, url) ->
+            Logger.error("Delivered to shared inbox #{url}")
+
+            Agent.update(__MODULE__, fn acc ->
+              [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
+            end)
+
+            %Tesla.Env{status: 202, body: "Accepted"}
+
           Enum.member?(@local_actors, actor_url) ->
             # Actor.handle_post_inbox?
             type = Jason.decode!(body) |> Map.get("type", "activity")
@@ -78,14 +92,14 @@ defmodule FediServerWeb.InboxDeliveryTest do
               [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
             end)
 
-            %Tesla.Env{status: 201, body: "Created"}
+            %Tesla.Env{status: 202, body: "Accepted"}
 
           Map.has_key?(@remote_actors, actor_url) ->
             Agent.update(__MODULE__, fn acc ->
               [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
             end)
 
-            %Tesla.Env{status: 201, body: "Created"}
+            %Tesla.Env{status: 202, body: "Accepted"}
 
           true ->
             Logger.error("Unmocked actor #{url}")
@@ -124,8 +138,8 @@ defmodule FediServerWeb.InboxDeliveryTest do
 
     recipients = Enum.map(requests, fn {url, _} -> url end)
 
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox",
                "https://other.example/users/charlie/inbox"
              ])
@@ -158,8 +172,8 @@ defmodule FediServerWeb.InboxDeliveryTest do
       |> Enum.map(fn {url, _} -> url end)
 
     # FIXME: Alyssa is sender, she should not get delivered
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox",
                "https://other.example/users/charlie/inbox"
              ])
@@ -254,8 +268,8 @@ defmodule FediServerWeb.InboxDeliveryTest do
       Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
       |> Enum.map(fn {url, _} -> url end)
 
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox",
                "https://other.example/users/charlie/inbox",
                "https://example.com/users/daria/inbox"
@@ -297,8 +311,8 @@ defmodule FediServerWeb.InboxDeliveryTest do
       Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
       |> Enum.map(fn {url, _} -> url end)
 
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox",
                "https://other.example/users/charlie/inbox",
                "https://example.com/users/daria/inbox"
@@ -405,8 +419,8 @@ defmodule FediServerWeb.InboxDeliveryTest do
 
     assert Enum.count(recipients) == 3
 
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox",
                "https://other.example/users/charlie/inbox",
                "https://example.com/users/daria/inbox"
@@ -441,28 +455,38 @@ defmodule FediServerWeb.InboxDeliveryTest do
       Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
       |> Enum.map(fn {url, _} -> url end)
 
-    assert MapSet.new(recipients) ==
-             MapSet.new([
+    assert Enum.sort(recipients) ==
+             Enum.sort([
                "https://chatty.example/users/ben/inbox"
              ])
   end
 
-  defp sign_and_send(conn, url, body, %User{ap_id: actor_id}, keys_pem) do
-    {:ok, private_key, _} = FediServer.HTTPClient.keys_from_pem(keys_pem)
+  test "inbox delivery sharedInbox MAY deliver", %{conn: conn} do
+    # Sending to ben and emilia who have the same shared inbox
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Note",
+      "to" => "https://chatty.example/users/ben",
+      "cc" => "https://chatty.example/users/emilia",
+      "attributedTo" => "https://example.com/users/alyssa",
+      "content" => "Say, did you finish reading that book I lent you?"
+    }
 
-    headers =
-      FediServer.HTTPClient.signed_headers(
-        URI.parse(url),
-        private_key,
-        actor_id <> "#main-key",
-        "test",
-        body
-      )
+    %{alyssa: %{user: alyssa}} = user_fixtures()
 
-    Enum.reduce(headers, conn, fn {name, value}, acc ->
-      Plug.Conn.put_req_header(acc, name, value)
-    end)
-    |> post(url, body)
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    recipients =
+      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+      |> Enum.map(fn {url, _} -> url end)
+
+    assert Enum.sort(recipients) == Enum.sort(["https://chatty.example/inbox"])
   end
 
   defp mock_webfinger(actor_id) do

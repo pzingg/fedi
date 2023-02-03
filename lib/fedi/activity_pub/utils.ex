@@ -894,13 +894,14 @@ defmodule Fedi.ActivityPub.Utils do
   end
 
   @doc """
-  Collects the 'inbox' IRIs from a list of actor values.
+  Collects the 'inbox' and 'sharedInbox' IRIs from a list of actor types.
   """
   def get_inboxes(actors) when is_list(actors) do
     Enum.reduce_while(actors, [], fn actor, acc ->
       case get_inbox(actor) do
-        %URI{} = iri ->
-          {:cont, [iri | acc]}
+        %URI{} = inbox ->
+          shared_inbox = get_shared_inbox(actor)
+          {:cont, [{inbox, shared_inbox} | acc]}
 
         _ ->
           {:halt, {:error, "At least one Actor has no inbox"}}
@@ -911,6 +912,17 @@ defmodule Fedi.ActivityPub.Utils do
       iris -> {:ok, Enum.reverse(iris)}
     end
   end
+
+  @doc """
+  Extracts the 'sharedInbox' IRI from an actor type.
+  "endpoints" is not in the vocabulary, so find it in the "unknown".
+  """
+  def get_shared_inbox(%{unknown: %{"endpoints" => %{"sharedInbox" => shared_inbox}}} = _actor)
+      when is_binary(shared_inbox) do
+    Utils.to_uri(shared_inbox)
+  end
+
+  def get_shared_inbox(_actor), do: nil
 
   @doc """
   Extracts the 'inbox' IRI from an actor property or type.

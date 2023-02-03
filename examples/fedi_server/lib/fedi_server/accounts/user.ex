@@ -18,7 +18,7 @@ defmodule FediServer.Accounts.User do
     field(:email, :string)
     field(:password, :string, virtual: true, redact: true)
     field(:hashed_password, :string, redact: true)
-    field(:public_key, :string)
+    field(:shared_inbox, :string)
     field(:keys, :string)
     field(:data, :map)
 
@@ -35,13 +35,24 @@ defmodule FediServer.Accounts.User do
       name: data["name"],
       nickname: data["preferredUsername"],
       local?: false,
-      public_key: get_in(data, ["publicKey", "publicKeyPem"]),
+      keys: get_in(data, ["publicKey", "publicKeyPem"]),
+      shared_inbox: get_in(data, ["endpoints", "sharedInbox"]),
       data: data
     }
   end
 
-  def get_public_key(%__MODULE__{public_key: public_key_pem}) do
-    FediServer.HTTPClient.public_key_from_pem(public_key_pem)
+  def get_public_key(%__MODULE__{keys: pem}) do
+    case FediServer.HTTPClient.decode_keys(pem) do
+      {:ok, _, public_key} -> {:ok, public_key}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def shared_inbox_path, do: Routes.inbox_path(FediServerWeb.Endpoint, :get_shared_inbox)
+
+  def shared_inbox_uri do
+    uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
+    %URI{uri | path: shared_inbox_path()}
   end
 
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
@@ -54,7 +65,8 @@ defmodule FediServer.Accounts.User do
       :local?,
       :email,
       :password,
-      :public_key,
+      :keys,
+      :shared_inbox,
       :data
     ])
     |> validate_required([:ap_id, :inbox, :name, :nickname, :local?, :data])
@@ -62,6 +74,7 @@ defmodule FediServer.Accounts.User do
     |> unique_constraint(:nickname)
     |> unique_constraint(:email)
     |> validate_password()
+    |> maybe_put_shared_inbox()
     |> maybe_put_keys()
     |> maybe_put_data()
   end
@@ -92,13 +105,20 @@ defmodule FediServer.Accounts.User do
     end
   end
 
+  defp maybe_put_shared_inbox(changeset) do
+    if get_field(changeset, :local?) && is_nil(get_field(changeset, :shared_inbox)) do
+      put_change(changeset, :shared_inbox, shared_inbox_uri())
+    else
+      changeset
+    end
+  end
+
   defp maybe_put_keys(changeset) do
     if get_field(changeset, :local?) && is_nil(get_field(changeset, :keys)) do
-      {:ok, private_key_pem, public_key_pem} = FediServer.HTTPClient.generate_rsa_pem()
+      {:ok, private_key_pem, _public_key_pem} = FediServer.HTTPClient.generate_rsa_pem()
 
       changeset
       |> put_change(:keys, private_key_pem)
-      |> put_change(:public_key, public_key_pem)
     else
       changeset
     end
@@ -114,8 +134,19 @@ defmodule FediServer.Accounts.User do
           ap_id = get_field(changeset, :ap_id)
           name = get_field(changeset, :name)
           nickname = get_field(changeset, :nickname)
-          public_key = get_field(changeset, :public_key)
-          put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key))
+          keys_pem = get_field(changeset, :keys)
+
+          public_key_pem =
+            case FediServer.HTTPClient.public_key_pem_from_keys(keys_pem) do
+              {:ok, pem} ->
+                pem
+
+              {:error, reason} ->
+                Logger.error("Did not decode a public key #{reason}.")
+                nil
+            end
+
+          put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key_pem))
         else
           changeset
         end
@@ -126,13 +157,6 @@ defmodule FediServer.Accounts.User do
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
-    endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
-
-    shared_inbox_uri = %URI{
-      endpoint_uri
-      | path: Routes.inbox_path(FediServerWeb.Endpoint, :get_shared_inbox)
-    }
-
     %{
       "id" => ap_id,
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -151,9 +175,9 @@ defmodule FediServer.Accounts.User do
         "publicKeyPem" => public_key
       },
       "endpoints" => %{
-        "sharedInbox" => URI.to_string(shared_inbox_uri)
+        "sharedInbox" => shared_inbox_uri() |> URI.to_string()
       },
-      "discoverable" => Keyword.get(opts, :discoverable?, false)
+      "discoverable" => Keyword.get(opts, :discoverable?, true)
       # "featured" => "#{ap_id}/collections/featured",
       # "icon" => icon,
       # "attachment" => fields,

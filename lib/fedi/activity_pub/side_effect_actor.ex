@@ -35,7 +35,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     :new_activity_id,
     :request_signed_by,
     deliverable: true,
-    on_follow: :do_nothing
+    on_follow: :do_nothing,
+    data: %{}
   ]
 
   @type t() :: %__MODULE__{
@@ -55,7 +56,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
           request_signed_by: URI.t() | nil,
           raw_activity: map() | nil,
           deliverable: boolean(),
-          on_follow: ActorFacade.on_follow()
+          on_follow: ActorFacade.on_follow(),
+          data: map()
         }
 
   # Same as above but just a map
@@ -567,7 +569,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       Enum.reduce(recipients, [], fn actor_iri, acc ->
         case ActorFacade.db_inbox_for_actor(context, actor_iri) do
           {:ok, %URI{} = inbox_iri} ->
-            [{actor_iri, inbox_iri} | acc]
+            [{actor_iri, {inbox_iri, nil}} | acc]
 
           _ ->
             acc
@@ -607,11 +609,48 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   end
 
   def dedupe_iris(recipients, ignored) do
-    ignored_set = MapSet.new(ignored)
+    filtered_and_deduped_recipients =
+      recipients
+      |> Enum.filter(fn {inbox, _shared} -> !Enum.member?(ignored, inbox) end)
+      |> Map.new()
+      |> Map.to_list()
 
+    reduce_shared_inboxes(filtered_and_deduped_recipients)
+  end
+
+  def reduce_shared_inboxes(recipients) do
+    # Find any common shared inboxes (repeated more than once)
+    common_shared_inboxes =
+      recipients
+      |> Enum.map(&elem(&1, 1))
+      |> Enum.reduce(%{}, fn
+        %URI{} = inbox, acc ->
+          key = URI.to_string(inbox)
+          count = Map.get(acc, key, 0)
+          Map.put(acc, key, count + 1)
+
+        _, acc ->
+          acc
+      end)
+      |> Map.to_list()
+      |> Enum.filter(fn {_inbox_uri, count} -> count > 1 end)
+      |> Enum.map(&elem(&1, 0))
+
+    # Replace inbox with common shared inbox, then dedupe one more time!
     recipients
+    |> Enum.map(fn
+      {inbox, %URI{} = shared_inbox} ->
+        if Enum.member?(common_shared_inboxes, URI.to_string(shared_inbox)) do
+          Logger.error("Using shared inbox #{shared_inbox} for #{inbox}")
+          shared_inbox
+        else
+          inbox
+        end
+
+      {inbox, _} ->
+        inbox
+    end)
     |> MapSet.new()
-    |> MapSet.difference(ignored_set)
     |> MapSet.to_list()
   end
 

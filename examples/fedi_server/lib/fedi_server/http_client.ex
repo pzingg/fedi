@@ -62,7 +62,7 @@ defmodule FediServer.HTTPClient do
   """
   def credentialed(%User{ap_id: ap_id, keys: keys}, app_agent, opts \\ [])
       when is_binary(keys) and is_binary(app_agent) do
-    with {:ok, private_key, _} <- keys_from_pem(keys) do
+    with {:ok, private_key, _} <- decode_keys(keys) do
       public_key_id = ap_id <> "#main-key"
 
       {:ok,
@@ -88,12 +88,13 @@ defmodule FediServer.HTTPClient do
   end
 
   def signed_headers(
-        %URI{host: host, path: path} = url,
+        %URI{host: host, path: path} = _url,
         private_key,
         public_key_id,
         user_agent,
         nil
-      ) do
+      )
+      when is_tuple(private_key) and is_binary(public_key_id) and is_binary(user_agent) do
     date_str = Fedi.ActivityPub.Utils.date_header_value()
 
     headers_for_signature =
@@ -109,19 +110,21 @@ defmodule FediServer.HTTPClient do
     [
       {"accept", @accept_header_value},
       {"accept-charset", "utf-8"},
-      {"user-agent"},
+      {"user-agent", user_agent},
       {"date", date_str},
       {"signature", signature}
     ]
   end
 
   def signed_headers(
-        %URI{host: host, path: path} = url,
+        %URI{host: host, path: path} = _url,
         private_key,
         public_key_id,
         user_agent,
         body
-      ) do
+      )
+      when is_tuple(private_key) and is_binary(public_key_id) and is_binary(user_agent) and
+             is_binary(body) do
     date_str = Fedi.ActivityPub.Utils.date_header_value()
     digest = "SHA-256=" <> (:crypto.hash(:sha256, body) |> Base.encode64())
     content_length = byte_size(body) |> to_string()
@@ -315,45 +318,70 @@ defmodule FediServer.HTTPClient do
     private_key_entry = :public_key.pem_entry_encode(:RSAPrivateKey, key)
     private_key_pem = :public_key.pem_encode([private_key_entry]) |> String.trim_trailing()
 
-    {:ok, _, public_key} = keys_from_pem(private_key_pem)
-    public_key_entry = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
-    public_key_pem = :public_key.pem_encode([public_key_entry]) |> String.trim_trailing()
+    case decode_keys(private_key_pem) do
+      {:ok, _, public_key} when not is_nil(public_key) ->
+        public_key_entry = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+        public_key_pem = :public_key.pem_encode([public_key_entry]) |> String.trim_trailing()
 
-    {:ok, private_key_pem, public_key_pem}
-  end
+        {:ok, private_key_pem, public_key_pem}
 
-  def public_key_from_pem(public_key_pem) do
-    if is_binary(public_key_pem) && public_key_pem != "" do
-      with [public_key_code | _] <- :public_key.pem_decode(public_key_pem),
-           public_key <- :public_key.pem_entry_decode(public_key_code) do
-        {:ok, public_key}
-      else
-        _ ->
-          {:error, "Could not decode public key"}
-      end
-    else
-      {:error, "Missing public key"}
-    end
-  end
-
-  def keys_from_pem(pem) when is_binary(pem) do
-    with [private_key_code | _] <- :public_key.pem_decode(pem),
-         private_key <- :public_key.pem_entry_decode(private_key_code),
-         {:RSAPrivateKey, _, modulus, exponent, _, _, _, _, _, _, _} <- private_key do
-      {:ok, private_key, {:RSAPublicKey, modulus, exponent}}
-    else
       _ ->
-        {:error, "Could not decode private key"}
+        {:error, "Could not decode public key from pem"}
     end
   end
 
-  def keys_from_pem(_), do: {:error, "No keys to decode"}
+  def public_key_pem_from_keys(keys_pem) when is_binary(keys_pem) do
+    case String.trim(keys_pem) do
+      "" ->
+        {:error, "No keys to decode"}
+
+      pem ->
+        case decode_keys(pem) do
+          {:ok, _private_key, public_key} ->
+            public_key_entry = :public_key.pem_entry_encode(:SubjectPublicKeyInfo, public_key)
+            {:ok, :public_key.pem_encode([public_key_entry]) |> String.trim_trailing()}
+
+          {:error, reason} ->
+            {:error, reason}
+        end
+    end
+  end
+
+  def public_key_pem_from_keys(_), do: {:error, "No keys to decode"}
+
+  def decode_keys(keys_pem) when is_binary(keys_pem) do
+    case String.trim(keys_pem) do
+      "" ->
+        {:error, "No keys to decode"}
+
+      pem ->
+        with {:pem_decode, [key_code | _]} <- {:pem_decode, :public_key.pem_decode(pem)},
+             {:pem_entry_decode, entry} <-
+               {:pem_entry_decode, :public_key.pem_entry_decode(key_code)} do
+          case entry do
+            {:RSAPrivateKey, _, modulus, exponent, _, _, _, _, _, _, _} = private_key ->
+              {:ok, private_key, {:RSAPublicKey, modulus, exponent}}
+
+            {:RSAPublicKey, _, _} = public_key ->
+              {:ok, nil, public_key}
+
+            other ->
+              {:error, "No public or private key in #{inspect(other)}"}
+          end
+        else
+          {step, result} ->
+            {:error, "Could not decode keys: #{step} was #{inspect(result)}"}
+        end
+    end
+  end
+
+  def decode_keys(_), do: {:error, "No keys to decode"}
 
   @doc """
   Fetch a public key, given a `Plug.Conn` structure.
   """
   def fetch_public_key(%Plug.Conn{} = conn) do
-    with {:fetch_signature, %{"keyId" => key_id} = signature} <-
+    with {:fetch_signature, %{"keyId" => key_id} = _signature} <-
            {:fetch_signature, HTTPSignatures.signature_for_conn(conn)},
          {:ok, actor_id} <- key_id_to_actor_id(key_id),
          {:ok, public_key} <- Activities.get_public_key(actor_id) do
@@ -431,7 +459,7 @@ defmodule FediServer.HTTPClient do
 
   defp remove_suffix(uri, []), do: uri
 
-  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = uri) do
+  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = _uri) do
     Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
       !is_nil(path) && String.length(path) > 1
   end
