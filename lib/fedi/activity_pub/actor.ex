@@ -164,7 +164,7 @@ defmodule Fedi.ActivityPub.Actor do
            ActorFacade.inbox_forwarding(context, inbox_iri, activity, top_level: true) do
       # Request has been processed. Begin responding to the request.
       # Simply respond with an OK status to the peer.
-      {:ok, Plug.Conn.send_resp(conn, :ok, "OK")}
+      {:ok, APUtils.send_json_resp(conn, :ok, nil)}
     else
       {:error, reason} ->
         {:error, reason}
@@ -232,7 +232,7 @@ defmodule Fedi.ActivityPub.Actor do
       {:ok,
        conn
        |> APUtils.add_response_headers(json_body)
-       |> Plug.Conn.send_resp(:ok, json_body)}
+       |> APUtils.send_json_resp(:ok, json_body)}
     else
       {:error, reason} ->
         {:error, reason}
@@ -282,7 +282,7 @@ defmodule Fedi.ActivityPub.Actor do
            ActorFacade.post_outbox_request_body_hook(context, conn, activity, top_level: true),
          # The HTTP request steps are complete, complete the rest of the outbox
          # and delivery process.
-         {:delivered, :ok} <-
+         {:delivered, {:ok, count}} <-
            {:delivered, deliver(context, outbox_iri, activity, m)} do
       # Respond to the request with the new Activity's IRI location.
       #
@@ -290,11 +290,13 @@ defmodule Fedi.ActivityPub.Actor do
       # Servers MUST return a 201 Created HTTP code, and unless the activity
       # is transient, MUST include the new id in the Location header.
       location = URI.to_string(activity_id)
+      # status = if count == 0, do: :created, else: :accepted
+      body = if count == 0, do: "", else: "Delivery queued for #{count} recipients"
 
       {:ok,
        conn
        |> Plug.Conn.put_resp_header("location", location)
-       |> Plug.Conn.send_resp(:created, "")}
+       |> APUtils.send_json_resp(:created, body)}
     else
       {:error, reason} ->
         Logger.error("handle_post_outbox #{reason}")
@@ -379,7 +381,7 @@ defmodule Fedi.ActivityPub.Actor do
       {:ok,
        conn
        |> APUtils.add_response_headers(json_body)
-       |> Plug.Conn.send_resp(:ok, json_body)}
+       |> APUtils.send_json_resp(:ok, json_body)}
     else
       {:error, reason} ->
         {:error, reason}
@@ -457,7 +459,7 @@ defmodule Fedi.ActivityPub.Actor do
       if federated_protocol_enabled? && deliverable do
         ActorFacade.deliver(actor, outbox_iri, activity, top_level: true)
       else
-        :ok
+        {:ok, 0}
       end
     else
       {:error, reason} -> {:error, reason}

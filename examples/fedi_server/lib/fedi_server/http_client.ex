@@ -232,7 +232,7 @@ defmodule FediServer.HTTPClient do
   """
   def batch_deliver(%__MODULE__{}, body, []) do
     Logger.debug("No recipients specified for batch_deliver of #{body}")
-    :ok
+    {:ok, 0}
   end
 
   def batch_deliver(
@@ -253,7 +253,7 @@ defmodule FediServer.HTTPClient do
       |> Enum.filter(fn item -> !is_nil(item) end)
 
     if Enum.empty?(errors) do
-      :ok
+      {:ok, Enum.count(recipients)}
     else
       errors = Enum.join(errors, ", ")
       msg = "At least one failure: #{errors}"

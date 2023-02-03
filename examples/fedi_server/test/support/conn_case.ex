@@ -17,6 +17,10 @@ defmodule FediServerWeb.ConnCase do
 
   use ExUnit.CaseTemplate
 
+  require Phoenix.ConnTest
+
+  @endpoint FediServerWeb.Endpoint
+
   using do
     quote do
       # Import conveniences for testing with connections
@@ -35,7 +39,7 @@ defmodule FediServerWeb.ConnCase do
   def fix_request_conn(%Plug.Conn{} = conn) do
     # Why doesn't Phoenix do this?
     url = FediServerWeb.Endpoint.url()
-    %URI{scheme: scheme, host: host, port: port} = uri = URI.parse(url)
+    %URI{scheme: scheme, host: host, port: port} = URI.parse(url)
     %Plug.Conn{conn | scheme: String.to_atom(scheme), host: host, port: port}
   end
 
@@ -50,6 +54,32 @@ defmodule FediServerWeb.ConnCase do
     conn
     |> Phoenix.ConnTest.init_test_session(%{})
     |> Plug.Conn.put_session(:user_token, token)
+  end
+
+  def sign_and_send(
+        %Plug.Conn{} = conn,
+        url,
+        body,
+        %{ap_id: actor_id} = _user,
+        keys_pem
+      )
+      when is_binary(url) and is_binary(body) and is_binary(actor_id) and is_binary(keys_pem) do
+    assert {:ok, private_key, _} = FediServer.HTTPClient.decode_keys(keys_pem)
+    assert is_tuple(private_key)
+
+    headers =
+      FediServer.HTTPClient.signed_headers(
+        URI.parse(url),
+        private_key,
+        actor_id <> "#main-key",
+        "test",
+        body
+      )
+
+    Enum.reduce(headers, conn, fn {name, value}, acc ->
+      Plug.Conn.put_req_header(acc, name, value)
+    end)
+    |> Phoenix.ConnTest.post(url, body)
   end
 
   setup tags do

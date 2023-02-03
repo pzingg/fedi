@@ -1105,6 +1105,38 @@ defmodule FediServer.Activities do
     end
   end
 
+  def block(%User{} = actor, %URI{} = blocked_id) do
+    blocked_id = URI.to_string(blocked_id)
+    # May throw exception?
+    FediServer.Accounts.BlockedAccount.build_block(actor, blocked_id)
+    |> Repo.insert()
+  end
+
+  def unblock(%User{id: user_id} = _actor, %URI{} = blocked_id) do
+    blocked_id = URI.to_string(blocked_id)
+
+    query =
+      from(b in FediServer.Accounts.BlockedAccount,
+        where: b.user_id == ^user_id and b.ap_id == ^blocked_id
+      )
+
+    case Repo.delete_all(query) do
+      {0, _} -> {:error, "Not found"}
+      {_, _} -> :ok
+    end
+  end
+
+  def any_blocked?(%User{id: user_id} = _actor, actor_iris) do
+    blocked_ids = Enum.map(actor_iris, fn %URI{} = id -> URI.to_string(id) end)
+
+    query =
+      from(b in FediServer.Accounts.BlockedAccount,
+        where: b.user_id == ^user_id and b.ap_id in ^blocked_ids
+      )
+
+    Repo.exists?(query)
+  end
+
   @doc """
   Returns true if the IRI is for this server.
   """

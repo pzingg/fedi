@@ -282,7 +282,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   `Actor.handle_post_outbox/3`.
   """
   @callback deliver(context :: context(), outbox_iri :: URI.t(), activity :: term()) ::
-              :ok | {:error, term()}
+              {:ok, queued :: non_neg_integer()} | {:error, term()}
 
   @doc """
   Wraps the provided object in a Create ActivityStreams

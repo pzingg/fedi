@@ -242,9 +242,13 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          {:ok, recipients} <-
            get_collection_recipients(context, col_iris, cols, ocols, activity),
          {:ok, recipients} <-
-           inboxes_for_recipients(context, recipients, inbox_iri) do
-      Logger.error("Inbox forwarding to #{inspect(Enum.map(recipients, &URI.to_string(&1)))}")
-      deliver_to_recipients(context, activity, recipients)
+           inboxes_for_recipients(context, recipients, inbox_iri),
+         _ <-
+           Logger.error(
+             "Inbox forwarding to #{inspect(Enum.map(recipients, &URI.to_string(&1)))}"
+           ),
+         {:ok, _count} <- deliver_to_recipients(context, activity, recipients) do
+      :ok
     else
       {:error, reason} ->
         Logger.error("Inbox forwarding error: #{reason}")

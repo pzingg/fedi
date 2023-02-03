@@ -141,7 +141,7 @@ defmodule Fedi.ActivityPub.FederatingApi do
   `Actor.handle_post_outbox/3`.
   """
   @callback deliver(context :: context(), outbox_iri :: URI.t(), activity :: struct()) ::
-              :ok | {:error, term()}
+              {:ok, queued :: non_neg_integer()} | {:error, term()}
 
   @doc """
   Called for types that can be deserialized but

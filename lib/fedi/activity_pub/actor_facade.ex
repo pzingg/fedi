@@ -432,7 +432,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           json_body :: String.t(),
           recipients :: list()
         ) ::
-          :ok | {:error, term()}
+          {:ok, queued :: non_neg_integer()} | {:error, term()}
   def db_batch_deliver(context, transport, json_body, recipients) do
     database_apply(context, :batch_deliver, [transport, json_body, recipients])
   end
@@ -442,7 +442,7 @@ defmodule Fedi.ActivityPub.ActorFacade do
           json_body :: String.t(),
           recipients :: list()
         ) ::
-          :ok | {:error, term()}
+          {:ok, queued :: non_neg_integer()} | {:error, term()}
   def db_batch_deliver(%{box_iri: box_iri, app_agent: app_agent} = context, json_body, recipients) do
     database_apply(context, :batch_deliver, [box_iri, app_agent, json_body, recipients])
   end

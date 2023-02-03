@@ -11,57 +11,8 @@ defmodule FediServerWeb.OutboxControllerTest do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
 
-  @remote_actors %{
-    "https://chatty.example/users/ben" => "ben.json",
-    "https://other.example/users/charlie" => "charlie.json"
-  }
-  @local_actors [
-    "https://example.com/users/alyssa",
-    "https://example.com/users/daria"
-  ]
-
   setup do
-    _ = Agent.start_link(fn -> [] end, name: __MODULE__)
-
-    Tesla.Mock.mock_global(fn
-      # When we dereference ben and charlie
-      %{
-        method: :get,
-        url: url
-      } ->
-        mock_actor(url)
-
-      # When we deliver message to ben's or charlie's inbox
-      %{
-        method: :post,
-        url: url,
-        body: body
-      } ->
-        actor_url = String.replace_trailing(url, "/inbox", "")
-
-        cond do
-          Enum.member?(@local_actors, actor_url) ->
-            # Actor.handle_post_inbox?
-            type = Jason.decode!(body) |> Map.get("type", "activity")
-            Logger.error("#{actor_url} got a #{type}")
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
-            %Tesla.Env{status: 201, body: "Created"}
-
-          Map.has_key?(@remote_actors, actor_url) ->
-            Agent.update(__MODULE__, fn acc -> [{url, Jason.decode!(body)} | acc] end)
-            %Tesla.Env{status: 201, body: "Created"}
-
-          true ->
-            Logger.error("Unmocked actor #{url}")
-            %Tesla.Env{status: 404, body: "Not found"}
-        end
-
-      %{method: method, url: url} ->
-        Logger.error("Unhandled #{method} #{url}")
-        %Tesla.Env{status: 404, body: "Not found"}
-    end)
-
-    :ok
+    FediServerWeb.MockRequestHelper.setup_mocks(__MODULE__)
   end
 
   test "GET /users/alyssa/outbox", %{conn: conn} do
@@ -143,7 +94,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
   end
 
   test "outbox MUST accept non activity objects", %{conn: conn} do
@@ -163,7 +114,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
   end
 
   test "outbox MUST remove bto and bcc", %{conn: conn} do
@@ -191,7 +142,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
 
     # Now fetch activity, its object, and the object id
     assert activity = get_posted_item()
@@ -200,7 +151,7 @@ defmodule FediServerWeb.OutboxControllerTest do
     # Also check on the activities delivered to ben and charlie
     requests = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
 
-    Map.keys(@remote_actors)
+    ["https://chatty.example/users/ben", "https://other.example/users/charlie"]
     |> Enum.each(fn actor_url ->
       case Enum.find(requests, fn {url, _data} -> url == "#{actor_url}/inbox" end) do
         nil -> flunk("No payload was delivered to #{actor_url}/inbox")
@@ -229,7 +180,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
 
     # Now fetch activity, its object, and the object id
     assert response(conn, 201)
@@ -256,7 +207,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
   end
 
   test "outbox MUST set location header", %{conn: conn} do
@@ -375,7 +326,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
   end
 
   test "outbox update MUST check authorization (failure)", %{conn: conn} do
@@ -485,7 +436,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     # QUESTION Should a Follow return 202?
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
 
     assert %URI{} = following_id = get_posted_item("https://example.com/users/alyssa/following")
     assert URI.to_string(following_id) == "https://chatty.example/users/ben"
@@ -513,7 +464,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     # TODO Add a todo collection to our application
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
     assert Utils.to_uri(note.ap_id) == get_posted_item("https://example.com/users/alyssa/todo")
   end
 
@@ -554,7 +505,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
     refute get_posted_item("https://example.com/users/alyssa/todo")
   end
 
@@ -577,8 +528,49 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
     assert %T.Note{} = get_posted_item("https://example.com/users/alyssa/liked")
+  end
+
+  test "outbox block SHOULD prevent interaction with actor", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Block",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
+    }
+
+    %{alyssa: %{user: alyssa}, ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 401)
   end
 
   test "outbox retrieval MUST respond unuathorized with public contents", %{
@@ -605,7 +597,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
 
     assert %T.Create{} = get_posted_item("https://example.com/users/alyssa/outbox", "")
   end
@@ -634,7 +626,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    assert response(conn, 201) == ""
+    assert response(conn, 201)
 
     assert %T.Create{} =
              get_posted_item(
@@ -779,27 +771,5 @@ defmodule FediServerWeb.OutboxControllerTest do
 
     opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
     Utils.to_uri(coll_url) |> Activities.get_collection(opts)
-  end
-
-  defp mock_actor(url) do
-    case Map.get(@remote_actors, url) do
-      nil ->
-        Logger.error("Unmocked actor #{url}")
-        %Tesla.Env{status: 404, body: "Not found"}
-
-      filename ->
-        case Path.join(:code.priv_dir(:fedi_server), filename) |> File.read() do
-          {:ok, contents} ->
-            %Tesla.Env{
-              status: 200,
-              body: contents,
-              headers: [{"content-type", "application/jrd+json; charset=utf-8"}]
-            }
-
-          _ ->
-            Logger.error("Failed to load #{filename}")
-            %Tesla.Env{status: 404, body: "Not found"}
-        end
-    end
   end
 end

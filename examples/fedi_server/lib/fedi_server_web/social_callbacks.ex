@@ -270,4 +270,37 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, "No id in object"}
     end
   end
+
+  @impl true
+  def block(_context, activity) when is_struct(activity) do
+    with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
+         {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
+         {:actor_id, %URI{} = actor_id} <- {:actor_id, APUtils.to_id(actor)},
+         {:blocked_id, %URI{} = blocked_id} <- {:blocked_id, APUtils.to_id(object)},
+         {:ok, %User{} = user} <- Activities.ensure_user(actor_id, true),
+         {:ok, _blocked_account} <- Activities.block(user, blocked_id) do
+      Logger.error("Blocked #{blocked_id}")
+      {:ok, activity, false}
+    else
+      {:error, %Ecto.Changeset{} = changeset} ->
+        Logger.error("Insert error #{Activities.describe_errors(changeset)}")
+        {:error, "Internal database error"}
+
+      {:error, reason} ->
+        Logger.error("Block error #{reason}")
+        {:error, reason}
+
+      {:activity_actor, _} ->
+        Utils.err_actor_required(activity: activity)
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: activity)
+
+      {:actor_id, _} ->
+        {:error, "No id in actor"}
+
+      {:blocked_id, _} ->
+        {:error, "No id in object"}
+    end
+  end
 end

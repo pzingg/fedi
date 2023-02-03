@@ -10,6 +10,7 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   alias Fedi.Streams.Utils
   alias FediServerWeb.CommonCallbacks
+  alias FediServer.Activities
 
   @impl true
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
@@ -200,9 +201,11 @@ defmodule FediServerWeb.FederatingCallbacks do
   to be processed.
   """
   @impl true
-  def blocked(_context, actor_iris) when is_list(actor_iris) do
-    # For this example we don't maintain block lists.
-    {:ok, false}
+  def blocked(%{box_iri: inbox_iri} = _context, actor_iris) when is_list(actor_iris) do
+    with {:ok, actor_iri} <- Activities.actor_for_inbox(inbox_iri),
+         {:ok, user} <- Activities.ensure_user(actor_iri, true) do
+      {:ok, Activities.any_blocked?(user, actor_iris)}
+    end
   end
 
   @doc """
