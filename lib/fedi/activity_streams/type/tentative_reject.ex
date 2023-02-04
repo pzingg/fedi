@@ -1,33 +1,28 @@
 defmodule Fedi.ActivityStreams.Type.TentativeReject do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
   A specialization of Reject in which the rejection is considered tentative.
-
-  Example 26 (https://www.w3.org/TR/activitystreams-vocabulary/#ex27-jsonld):
-    {
-      "actor": {
-        "name": "Sally",
-        "type": "Person"
-      },
-      "object": {
-        "actor": "http://john.example.org",
-        "object": {
-          "name": "Going-Away Party for Jim",
-          "type": "Event"
-        },
-        "type": "Invite"
-      },
-      "summary": "Sally tentatively rejected an invitation to a party",
-      "type": "TentativeReject"
-    }
   """
 
-  defmodule Meta do
-    def namespace, do: :activity_streams
-    def type_name, do: "TentativeReject"
-    def disjoint_with, do: ["Link", "Mention"]
-    def extended_by, do: []
-    def extends, do: ["Activity", "Object", "Reject"]
-  end
+  @namespace :activity_streams
+  @type_name "TentativeReject"
+  @extended_by []
+  @is_or_extends [
+    "TentativeReject",
+    "Activity",
+    "Object",
+    "Reject"
+  ]
+  @disjoint_with []
+  @known_properties [
+    "actor",
+    "instrument",
+    "origin",
+    "result",
+    "target"
+  ]
 
   @enforce_keys [:alias]
   defstruct [
@@ -41,6 +36,23 @@ defmodule Fedi.ActivityStreams.Type.TentativeReject do
           properties: map(),
           unknown: term()
         }
+
+  def namespace, do: @namespace
+  def type_name, do: @type_name
+  def extended_by, do: @extended_by
+  def is_or_extends?(type_name), do: Enum.member?(@is_or_extends, type_name)
+  def disjoint_with?(type_name), do: Enum.member?(@disjoint_with, type_name)
+  def known_property?(prop_name), do: Enum.member?(@known_properties, prop_name)
+
+  def new(opts \\ []) do
+    alias = Keyword.get(opts, :alias, "")
+    properties = Keyword.get(opts, :properties, %{})
+    context = Keyword.get(opts, :context, :simple)
+
+    %__MODULE__{alias: alias, properties: properties}
+    |> Fedi.Streams.Utils.as_type_set_json_ld_type(@type_name)
+    |> Fedi.Streams.Utils.set_context(context)
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)

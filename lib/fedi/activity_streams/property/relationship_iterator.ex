@@ -7,14 +7,19 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
   """
 
   @namespace :activity_streams
-  @member_types [:iri, :object]
+  @range [:iri, :object]
+  @domain [
+    {"Relationship", Fedi.ActivityStreams.Type.Relationship},
+    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency}
+  ]
+  @prop_name "relationship"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
@@ -24,6 +29,13 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
           iri: URI.t() | nil
         }
 
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.ActivityStreams.Property.Relationship
+
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
   end
@@ -32,7 +44,7 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       prop_name,
       mapped_property?,
       i,

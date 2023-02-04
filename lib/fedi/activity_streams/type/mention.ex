@@ -1,80 +1,86 @@
 defmodule Fedi.ActivityStreams.Type.Mention do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
   A specialized Link that represents an @mention.
-
-  Example 58 (https://www.w3.org/TR/activitystreams-vocabulary/#ex181-jsonld):
-    {
-      "name": "Joe",
-      "summary": "Mention of Joe by Carrie in her note",
-      "type": "Mention",
-      "url": "http://example.org/joe"
-    }
   """
 
-  defmodule Meta do
-    def namespace, do: :activity_streams
-    def type_name, do: "Mention"
-
-    def disjoint_with,
-      do: [
-        "Accept",
-        "Activity",
-        "Add",
-        "Announce",
-        "Application",
-        "Arrive",
-        "Article",
-        "Audio",
-        "Block",
-        "Collection",
-        "CollectionPage",
-        "Create",
-        "Delete",
-        "Dislike",
-        "Document",
-        "Event",
-        "Flag",
-        "Follow",
-        "Group",
-        "Ignore",
-        "Image",
-        "IntransitiveActivity",
-        "Invite",
-        "Join",
-        "Leave",
-        "Like",
-        "Listen",
-        "Move",
-        "Note",
-        "Object",
-        "Offer",
-        "OrderedCollection",
-        "OrderedCollectionPage",
-        "OrderedCollectionPage",
-        "Organization",
-        "Page",
-        "Person",
-        "Place",
-        "Profile",
-        "Question",
-        "Read",
-        "Reject",
-        "Relationship",
-        "Remove",
-        "Service",
-        "TentativeAccept",
-        "TentativeReject",
-        "Tombstone",
-        "Travel",
-        "Undo",
-        "Update",
-        "Video",
-        "View"
-      ]
-
-    def extended_by, do: []
-    def extends, do: ["Link"]
-  end
+  @namespace :activity_streams
+  @type_name "Mention"
+  @extended_by []
+  @is_or_extends [
+    "Mention",
+    "Link"
+  ]
+  @disjoint_with [
+    "Accept",
+    "Activity",
+    "Add",
+    "Announce",
+    "Application",
+    "Article",
+    "Audio",
+    "Branch",
+    "Collection",
+    "CollectionPage",
+    "Commit",
+    "Create",
+    "Delete",
+    "Dislike",
+    "Document",
+    "Emoji",
+    "Event",
+    "Flag",
+    "Follow",
+    "Group",
+    "IdentityProof",
+    "Ignore",
+    "Image",
+    "IntransitiveActivity",
+    "Join",
+    "Leave",
+    "Like",
+    "Listen",
+    "Move",
+    "Note",
+    "Object",
+    "Offer",
+    "OrderedCollection",
+    "Organization",
+    "Page",
+    "Person",
+    "Place",
+    "Profile",
+    "Push",
+    "Read",
+    "Reject",
+    "Relationship",
+    "Remove",
+    "Repository",
+    "Service",
+    "Ticket",
+    "TicketDependency",
+    "Tombstone",
+    "Undo",
+    "Update",
+    "Video",
+    "View"
+  ]
+  @known_properties [
+    "attributedTo",
+    "height",
+    "href",
+    "hreflang",
+    "mediaType",
+    "name",
+    "nameMap",
+    "preview",
+    "rel",
+    "summary",
+    "summaryMap",
+    "width"
+  ]
 
   @enforce_keys [:alias]
   defstruct [
@@ -88,6 +94,23 @@ defmodule Fedi.ActivityStreams.Type.Mention do
           properties: map(),
           unknown: term()
         }
+
+  def namespace, do: @namespace
+  def type_name, do: @type_name
+  def extended_by, do: @extended_by
+  def is_or_extends?(type_name), do: Enum.member?(@is_or_extends, type_name)
+  def disjoint_with?(type_name), do: Enum.member?(@disjoint_with, type_name)
+  def known_property?(prop_name), do: Enum.member?(@known_properties, prop_name)
+
+  def new(opts \\ []) do
+    alias = Keyword.get(opts, :alias, "")
+    properties = Keyword.get(opts, :properties, %{})
+    context = Keyword.get(opts, :context, :simple)
+
+    %__MODULE__{alias: alias, properties: properties}
+    |> Fedi.Streams.Utils.as_type_set_json_ld_type(@type_name)
+    |> Fedi.Streams.Utils.set_context(context)
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)

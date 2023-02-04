@@ -171,9 +171,7 @@ defmodule FediServerWeb.SocialCallbacks do
   `Actor.handle_post_outbox/3`.
   """
   @impl true
-  def add_new_ids(%SideEffectActor{} = context, activity) do
-    SideEffectActor.add_new_ids(context, activity)
-  end
+  defdelegate add_new_ids(context, activity), to: SideEffectActor
 
   @doc """
   Delegates the authentication and authorization of a POST to an outbox.
@@ -216,9 +214,7 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Social API is enabled.
   """
   @impl true
-  def wrap_in_create(%SideEffectActor{} = context, value, %URI{} = outbox_iri) do
-    SideEffectActor.wrap_in_create(context, value, outbox_iri)
-  end
+  defdelegate wrap_in_create(context, value, outbox_iri), to: SideEffectActor
 
   @doc """
   A no-op for the Social API.

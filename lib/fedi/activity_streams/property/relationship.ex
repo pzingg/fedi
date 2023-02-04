@@ -8,6 +8,11 @@ defmodule Fedi.ActivityStreams.Property.Relationship do
   """
 
   @namespace :activity_streams
+  @range [:iri, :object]
+  @domain [
+    {"Relationship", Fedi.ActivityStreams.Type.Relationship},
+    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency}
+  ]
   @prop_name "relationship"
 
   @enforce_keys :alias
@@ -20,6 +25,13 @@ defmodule Fedi.ActivityStreams.Property.Relationship do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.RelationshipIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

@@ -18,16 +18,14 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
     :alias,
     :unknown,
     :xsd_any_uri_member,
-    :xsd_string_member,
-    has_string_member?: false
+    :xsd_string_member
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
           xsd_any_uri_member: URI.t() | nil,
-          xsd_string_member: String.t() | nil,
-          has_string_member?: boolean()
+          xsd_string_member: String.t() | nil
         }
 
   # deserialize creates an iterator from an element that
@@ -40,7 +38,7 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
       _ ->
         case Fedi.Streams.Literal.String.deserialize(i) do
           {:ok, v} ->
-            {:ok, %__MODULE__{alias: "", has_string_member?: true, xsd_string_member: v}}
+            {:ok, %__MODULE__{alias: "", xsd_string_member: v}}
 
           _ ->
             {:ok, %__MODULE__{alias: "", unknown: i}}
@@ -74,8 +72,7 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
       prop
       | unknown: %{},
         xsd_any_uri_member: nil,
-        xsd_string_member: nil,
-        has_string_member?: false
+        xsd_string_member: nil
     }
   end
 end

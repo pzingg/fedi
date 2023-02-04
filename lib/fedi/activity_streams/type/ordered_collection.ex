@@ -1,33 +1,72 @@
 defmodule Fedi.ActivityStreams.Type.OrderedCollection do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
   A subtype of Collection in which members of the logical collection are assumed
   to always be strictly ordered.
-
-  Example 6 (https://www.w3.org/TR/activitystreams-vocabulary/#ex6-jsonld):
-    {
-      "orderedItems": [
-        {
-          "name": "A Simple Note",
-          "type": "Note"
-        },
-        {
-          "name": "Another Simple Note",
-          "type": "Note"
-        }
-      ],
-      "summary": "Sally's notes",
-      "totalItems": 2,
-      "type": "OrderedCollection"
-    }
   """
 
-  defmodule Meta do
-    def namespace, do: :activity_streams
-    def type_name, do: "OrderedCollection"
-    def disjoint_with, do: ["Link", "Mention"]
-    def extended_by, do: ["OrderedCollectionPage"]
-    def extends, do: ["Collection", "Object"]
-  end
+  @namespace :activity_streams
+  @type_name "OrderedCollection"
+  @extended_by [
+    "OrderedCollectionPage"
+  ]
+  @is_or_extends [
+    "OrderedCollection",
+    "Collection",
+    "Object"
+  ]
+  @disjoint_with [
+    "Link",
+    "Mention"
+  ]
+  @known_properties [
+    "altitude",
+    "attachment",
+    "attributedTo",
+    "audience",
+    "bcc",
+    "bto",
+    "cc",
+    "content",
+    "contentMap",
+    "context",
+    "current",
+    "duration",
+    "earlyItems",
+    "endTime",
+    "first",
+    "generator",
+    "icon",
+    "image",
+    "inReplyTo",
+    "last",
+    "likes",
+    "location",
+    "mediaType",
+    "name",
+    "nameMap",
+    "object",
+    "orderedItems",
+    "preview",
+    "published",
+    "replies",
+    "sensitive",
+    "shares",
+    "source",
+    "startTime",
+    "summary",
+    "summaryMap",
+    "tag",
+    "team",
+    "ticketsTrackedBy",
+    "to",
+    "totalItems",
+    "tracksTicketsFor",
+    "updated",
+    "url"
+  ]
 
   @enforce_keys [:alias]
   defstruct [
@@ -41,6 +80,23 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollection do
           properties: map(),
           unknown: term()
         }
+
+  def namespace, do: @namespace
+  def type_name, do: @type_name
+  def extended_by, do: @extended_by
+  def is_or_extends?(type_name), do: Enum.member?(@is_or_extends, type_name)
+  def disjoint_with?(type_name), do: Enum.member?(@disjoint_with, type_name)
+  def known_property?(prop_name), do: Enum.member?(@known_properties, prop_name)
+
+  def new(opts \\ []) do
+    alias = Keyword.get(opts, :alias, "")
+    properties = Keyword.get(opts, :properties, %{})
+    context = Keyword.get(opts, :context, :simple)
+
+    %__MODULE__{alias: alias, properties: properties}
+    |> Fedi.Streams.Utils.as_type_set_json_ld_type(@type_name)
+    |> Fedi.Streams.Utils.set_context(context)
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)

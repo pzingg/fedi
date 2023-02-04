@@ -7,24 +7,34 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
   """
 
   @namespace :activity_streams
-  @member_types [:rfc5988]
+  @range [:rfc5988]
+  @domain [
+    {"Link", Fedi.ActivityStreams.Type.Link},
+    {"Mention", Fedi.ActivityStreams.Type.Mention}
+  ]
+  @prop_name "rel"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
     :rfc_rfc5988_member,
-    has_rfc5988_member?: false
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_rfc5988_member?: boolean(),
           rfc_rfc5988_member: String.t() | nil,
           iri: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.ActivityStreams.Property.Rel
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -34,7 +44,7 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       prop_name,
       mapped_property?,
       i,

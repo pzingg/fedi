@@ -7,26 +7,35 @@ defmodule Fedi.ActivityStreams.Property.FormerTypeIterator do
   """
 
   @namespace :activity_streams
-  @member_types [:iri, :object, :string]
+  @range [:iri, :object, :string]
+  @domain [
+    {"Tombstone", Fedi.ActivityStreams.Type.Tombstone}
+  ]
+  @prop_name "formerType"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member,
     :xsd_string_member,
-    has_string_member?: false
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_string_member?: boolean(),
           xsd_string_member: String.t() | nil,
           member: term(),
           iri: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.ActivityStreams.Property.FormerType
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -36,7 +45,7 @@ defmodule Fedi.ActivityStreams.Property.FormerTypeIterator do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       prop_name,
       mapped_property?,
       i,

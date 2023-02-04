@@ -9,25 +9,33 @@ defmodule Fedi.ActivityStreams.Property.Radius do
   """
 
   @namespace :activity_streams
-  @member_types [:float]
+  @range [:float]
+  @domain [
+    {"Place", Fedi.ActivityStreams.Type.Place}
+  ]
   @prop_name "radius"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
     :xsd_float_member,
-    has_float_member?: false
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_float_member?: boolean(),
           xsd_float_member: float() | nil,
           iri: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -37,7 +45,7 @@ defmodule Fedi.ActivityStreams.Property.Radius do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

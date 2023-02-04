@@ -8,6 +8,11 @@ defmodule Fedi.ActivityStreams.Property.Items do
   """
 
   @namespace :activity_streams
+  @range [:iri, :object]
+  @domain [
+    {"Collection", Fedi.ActivityStreams.Type.Collection},
+    {"CollectionPage", Fedi.ActivityStreams.Type.CollectionPage}
+  ]
   @prop_name "items"
 
   @enforce_keys :alias
@@ -20,6 +25,13 @@ defmodule Fedi.ActivityStreams.Property.Items do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.ItemsIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

@@ -8,25 +8,33 @@ defmodule Fedi.ActivityStreams.Property.Deleted do
   """
 
   @namespace :activity_streams
-  @member_types [:date_time]
+  @range [:date_time]
+  @domain [
+    {"Tombstone", Fedi.ActivityStreams.Type.Tombstone}
+  ]
   @prop_name "deleted"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
     :xsd_date_time_member,
-    has_date_time_member?: false
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_date_time_member?: boolean(),
           xsd_date_time_member: DateTime.t() | nil,
           iri: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -36,7 +44,7 @@ defmodule Fedi.ActivityStreams.Property.Deleted do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

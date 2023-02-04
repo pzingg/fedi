@@ -7,6 +7,14 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKey do
   """
 
   @namespace :w3_id_security_v1
+  @range [:iri, :object]
+  @domain [
+    {"Application", Fedi.W3IDSecurityV1.Type.Application},
+    {"Group", Fedi.W3IDSecurityV1.Type.Group},
+    {"Organization", Fedi.W3IDSecurityV1.Type.Organization},
+    {"Person", Fedi.W3IDSecurityV1.Type.Person},
+    {"Service", Fedi.W3IDSecurityV1.Type.Service}
+  ]
   @prop_name "publicKey"
 
   @enforce_keys :alias
@@ -19,6 +27,13 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKey do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.W3IDSecurityV1.Property.PublicKeyIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

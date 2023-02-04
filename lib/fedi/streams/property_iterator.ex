@@ -123,7 +123,6 @@ defmodule Fedi.Streams.PropertyIterator do
           [
             struct(prop_mod,
               alias: alias_,
-              has_string_member?: true,
               xsd_string_member: v
             )
           ]
@@ -173,7 +172,6 @@ defmodule Fedi.Streams.PropertyIterator do
       values: [
         struct(prop_mod,
           alias: alias_,
-          has_string_member?: true,
           xsd_string_member: v
         )
         | values
@@ -248,7 +246,6 @@ defmodule Fedi.Streams.PropertyIterator do
           i,
           struct(prop_mod,
             alias: alias_,
-            has_string_member?: true,
             xsd_string_member: v
           )
         )
@@ -311,7 +308,6 @@ defmodule Fedi.Streams.PropertyIterator do
         List.update_at(values, i, fn _ ->
           struct(prop_mod,
             alias: alias_,
-            has_string_member?: true,
             xsd_string_member: v
           )
         end)

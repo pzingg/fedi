@@ -8,6 +8,10 @@ defmodule Fedi.ActivityStreams.Property.FormerType do
   """
 
   @namespace :activity_streams
+  @range [:iri, :object, :string]
+  @domain [
+    {"Tombstone", Fedi.ActivityStreams.Type.Tombstone}
+  ]
   @prop_name "formerType"
 
   @enforce_keys :alias
@@ -20,6 +24,13 @@ defmodule Fedi.ActivityStreams.Property.FormerType do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.FormerTypeIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

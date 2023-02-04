@@ -190,8 +190,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_string_member: v,
-                 has_string_member?: true
+                 xsd_string_member: v
                )}
         }
 
@@ -211,8 +210,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_boolean_member: v,
-                 has_boolean_member?: true
+                 xsd_boolean_member: v
                )}
         }
 
@@ -232,8 +230,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_non_neg_integer_member: v,
-                 has_non_neg_integer_member?: true
+                 xsd_non_neg_integer_member: v
                )}
         }
 
@@ -253,8 +250,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_float_member: v,
-                 has_float_member?: true
+                 xsd_float_member: v
                )}
         }
 
@@ -274,8 +270,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_date_time_member: v,
-                 has_date_time_member?: true
+                 xsd_date_time_member: v
                )}
         }
 
@@ -295,8 +290,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 xsd_duration_member: v,
-                 has_duration_member?: true
+                 xsd_duration_member: v
                )}
         }
 
@@ -316,8 +310,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 rfc_bcp47_member: v,
-                 has_bcp47_member?: true
+                 rfc_bcp47_member: v
                )}
         }
 
@@ -337,8 +330,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 rfc_rfc2045_member: v,
-                 has_rfc2045_member?: true
+                 rfc_rfc2045_member: v
                )}
         }
 
@@ -358,8 +350,7 @@ defmodule Fedi.Streams.BaseProperty do
               {:ok,
                struct(pipeline.module,
                  alias: pipeline.alias,
-                 rfc_rfc5988_member: v,
-                 has_rfc5988_member?: true
+                 rfc_rfc5988_member: v
                )}
         }
 
@@ -603,14 +594,13 @@ defmodule Fedi.Streams.BaseProperty do
   def set_xsd_string(
         %{
           __struct__: module,
-          xsd_string_member: _old_string,
-          has_string_member?: _old_has
+          xsd_string_member: _old_string
         } = prop,
         v
       )
       when is_binary(v) do
     apply(module, :clear, [prop])
-    |> struct(xsd_string_member: v, has_string_member?: true)
+    |> struct(xsd_string_member: v)
   end
 
   # kind_index computes an arbitrary value for indexing this kind of value.

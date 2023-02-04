@@ -9,6 +9,10 @@ defmodule Fedi.ActivityStreams.Property.OneOf do
   """
 
   @namespace :activity_streams
+  @range [:iri, :object]
+  @domain [
+    {"Question", Fedi.ActivityStreams.Type.Question}
+  ]
   @prop_name "oneOf"
 
   @enforce_keys :alias
@@ -21,6 +25,13 @@ defmodule Fedi.ActivityStreams.Property.OneOf do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.OneOfIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

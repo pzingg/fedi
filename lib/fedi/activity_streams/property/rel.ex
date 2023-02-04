@@ -11,6 +11,11 @@ defmodule Fedi.ActivityStreams.Property.Rel do
   """
 
   @namespace :activity_streams
+  @range [:rfc5988]
+  @domain [
+    {"Link", Fedi.ActivityStreams.Type.Link},
+    {"Mention", Fedi.ActivityStreams.Type.Mention}
+  ]
   @prop_name "rel"
 
   @enforce_keys :alias
@@ -23,6 +28,13 @@ defmodule Fedi.ActivityStreams.Property.Rel do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.RelIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

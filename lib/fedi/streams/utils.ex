@@ -265,16 +265,13 @@ defmodule Fedi.Streams.Utils do
   end
 
   def set_prop(%{member: member} = value, v, as_type_set_prop_fn) when is_struct(member) do
-    case as_type_set_prop_fn.(member, v) do
-      {:ok, member_with_id} -> {:ok, struct(value, member: member_with_id)}
-      {:error, reason} -> {:error, reason}
-    end
+    {:ok, struct(value, member: as_type_set_prop_fn.(member, v))}
   end
 
   # On a type
   def set_prop(%{properties: properties} = as_type, v, as_type_set_prop_fn)
       when is_map(properties) do
-    as_type_set_prop_fn.(as_type, v)
+    {:ok, as_type_set_prop_fn.(as_type, v)}
   end
 
   def set_prop(_, _, _), do: {:error, "Not a type or property"}
@@ -299,8 +296,7 @@ defmodule Fedi.Streams.Utils do
 
   def as_type_set_json_ld_id(%{properties: properties} = as_type, %URI{} = id)
       when is_struct(as_type) do
-    {:ok,
-     struct(as_type, properties: Map.put(properties, "id", Fedi.JSONLD.Property.Id.new_id(id)))}
+    struct(as_type, properties: Map.put(properties, "id", Fedi.JSONLD.Property.Id.new_id(id)))
   end
 
   def get_json_ld_type(prop_or_type), do: get_prop(prop_or_type, &as_type_get_json_ld_type/1)
@@ -310,7 +306,6 @@ defmodule Fedi.Streams.Utils do
     with %Fedi.JSONLD.Property.Type{
            values: [
              %Fedi.JSONLD.Property.TypeIterator{
-               has_string_member?: true,
                xsd_string_member: type
              }
              | _
@@ -330,10 +325,20 @@ defmodule Fedi.Streams.Utils do
   # On a type
   def as_type_set_json_ld_type(%{properties: properties} = as_type, type)
       when is_map(properties) and is_binary(type) do
-    {:ok,
-     struct(as_type,
-       properties: Map.put(properties, "type", Fedi.JSONLD.Property.Type.new_type(type))
-     )}
+    struct(as_type,
+      properties: Map.put(properties, "type", Fedi.JSONLD.Property.Type.new_type(type))
+    )
+  end
+
+  def set_context(%{unknown: unknown} = type, context)
+      when is_binary(context) or is_list(context) do
+    struct(type, unknown: Map.put(unknown || %{}, "@context", context))
+  end
+
+  def set_context(%{unknown: unknown} = type, _simple) do
+    struct(type,
+      unknown: Map.put(unknown || %{}, "@context", "https://www.w3.org/ns/activitystreams")
+    )
   end
 
   def get_id_type_name_and_category(as_value) do

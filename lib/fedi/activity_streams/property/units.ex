@@ -8,25 +8,33 @@ defmodule Fedi.ActivityStreams.Property.Units do
   """
 
   @namespace :activity_streams
-  @member_types [:any_uri, :string]
+  @range [:any_uri, :string]
+  @domain [
+    {"Place", Fedi.ActivityStreams.Type.Place}
+  ]
   @prop_name "units"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :xsd_any_uri_member,
     :xsd_string_member,
-    has_string_member?: false
+    :xsd_any_uri_member
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_string_member?: boolean(),
           xsd_string_member: String.t() | nil,
           xsd_any_uri_member: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -36,7 +44,7 @@ defmodule Fedi.ActivityStreams.Property.Units do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

@@ -9,15 +9,19 @@ defmodule Fedi.ActivityStreams.Property.Subject do
   """
 
   @namespace :activity_streams
-  @member_types [:iri, :object]
+  @range [:iri, :object]
+  @domain [
+    {"Relationship", Fedi.ActivityStreams.Type.Relationship},
+    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency}
+  ]
   @prop_name "subject"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
@@ -27,6 +31,13 @@ defmodule Fedi.ActivityStreams.Property.Subject do
           iri: URI.t() | nil
         }
 
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
+
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
   end
@@ -35,7 +46,7 @@ defmodule Fedi.ActivityStreams.Property.Subject do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

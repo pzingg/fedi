@@ -337,8 +337,7 @@ defmodule Fedi.ActivityPub.Utils do
         copy_property(acc, object_props, prop_name)
       end)
 
-    as_context = as_context || "https://www.w3.org/ns/activitystreams"
-    %T.Create{alias: "", properties: create_props, unknown: %{"@context" => as_context}}
+    T.Create.new(properties: create_props, context: as_context || :simple)
   end
 
   def copy_property(dest, source, prop_name) do
@@ -501,34 +500,12 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
-  def get_type_meta(%{__struct__: module}) do
-    with mod_parts <- Module.split(module),
-         {["Fedi", _namespace], ["Type", _type]} <- Enum.split(mod_parts, -2) do
-      Module.concat(mod_parts ++ ["Meta"])
-    else
-      _ -> nil
-    end
+  def is_or_extends?(%{__struct__: module}, type_name) when is_binary(type_name) do
+    apply(module, :is_or_extends?, [type_name])
   end
 
-  # TODO ONTOLOGY Change to one function call, `metadata(:is_or_extends?)`
   def is_or_extends?(as_value, type_names) when is_struct(as_value) and is_list(type_names) do
-    Enum.find(type_names, &is_or_extends?(as_value, &1))
-  end
-
-  def is_or_extends?(as_value, type_name) when is_struct(as_value) and is_binary(type_name) do
-    case get_type_meta(as_value) do
-      nil ->
-        false
-
-      meta ->
-        if type_name == apply(meta, :type_name, []) do
-          true
-        else
-          meta
-          |> apply(:extends, [])
-          |> Enum.member?(type_name)
-        end
-    end
+    Enum.any?(type_names, &is_or_extends?(as_value, &1))
   end
 
   @doc """
@@ -625,8 +602,7 @@ defmodule Fedi.ActivityPub.Utils do
       values: [
         %P.FormerTypeIterator{
           alias: alias_,
-          xsd_string_member: type_name,
-          has_string_member?: true
+          xsd_string_member: type_name
         }
       ]
     }

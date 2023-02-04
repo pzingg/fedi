@@ -36,7 +36,7 @@ defmodule Mix.Tasks.Ontology.Gen do
     ]
   end
 
-  defmodule Value do
+  defmodule Type do
     defstruct [
       :namespace,
       :section,
@@ -45,13 +45,14 @@ defmodule Mix.Tasks.Ontology.Gen do
       typeless?: false,
       extends: [],
       extended_by: [],
-      disjoint_with: []
+      disjoint_with: [],
+      properties: []
     ]
   end
 
   defmodule Ontology do
     defstruct namespaces: %{},
-              values: [],
+              types: [],
               properties: []
   end
 
@@ -69,11 +70,11 @@ defmodule Mix.Tasks.Ontology.Gen do
     end
   end
 
-  def dump(%{values: values, properties: properties} = ontology, filename) do
-    values = Enum.map(values, fn val -> Map.from_struct(val) end)
+  def dump(%{types: types, properties: properties} = ontology, filename) do
+    types = Enum.map(types, fn val -> Map.from_struct(val) end)
     properties = Enum.map(properties, fn prop -> Map.from_struct(prop) end)
 
-    content = Jason.encode!(%{values: values, properties: properties}, pretty: true)
+    content = Jason.encode!(%{types: types, properties: properties}, pretty: true)
     File.write(filename, content)
 
     ontology
@@ -93,16 +94,26 @@ defmodule Mix.Tasks.Ontology.Gen do
 
     ontology = Enum.reduce(paths, ontology, fn path, acc -> parse_file(path, acc) end)
 
-    values =
-      Enum.reverse(ontology.values)
+    types =
+      Enum.reverse(ontology.types)
       |> map_extended_by()
+      |> map_extends()
+      |> extend_disjoint_with()
 
     properties =
       Enum.reverse(ontology.properties)
       |> map_extended_by()
-      |> extend_domains(values)
+      |> extend_domains(types)
 
-    %Ontology{ontology | properties: properties, values: values}
+    properties_by_type = inverted_domains(properties)
+
+    types =
+      Enum.map(types, fn %Type{name: name} = type ->
+        new_props = Map.get(properties_by_type, name)
+        %Type{type | properties: new_props}
+      end)
+
+    %Ontology{ontology | properties: properties, types: types}
   end
 
   def parse_file(path, ontology) do
@@ -244,7 +255,7 @@ defmodule Mix.Tasks.Ontology.Gen do
     {disjoint_with, _} = refs(member, "disjointWith")
     typeless? = Map.get(member, "@wtf_typeless")
 
-    value = %Value{
+    type = %Type{
       namespace: namespace,
       section: section,
       name: name,
@@ -255,7 +266,7 @@ defmodule Mix.Tasks.Ontology.Gen do
       extended_by: []
     }
 
-    %Ontology{ontology | values: [value | ontology.values]}
+    %Ontology{ontology | types: [type | ontology.types]}
   end
 
   def ref(item, relation, default \\ nil) do
@@ -287,7 +298,7 @@ defmodule Mix.Tasks.Ontology.Gen do
   def map_extended_by(coll) do
     initial_map =
       coll
-      |> Enum.map(&parent_and_child/1)
+      |> Enum.map(fn %{name: name, extends: extends} -> {name, extends} end)
       |> Enum.reduce(%{}, &parents_by_child/2)
 
     extended_map =
@@ -307,8 +318,33 @@ defmodule Mix.Tasks.Ontology.Gen do
     end)
   end
 
-  def parent_and_child(%{name: name, extends: extends}) do
-    {name, extends}
+  def map_extends(types) do
+    initial_map =
+      types
+      |> Enum.reduce([], fn %{name: name, extends: extends}, acc ->
+        acc ++ Enum.map(extends, fn parent -> {name, parent} end)
+      end)
+      |> Enum.into(%{})
+
+    types
+    |> Enum.map(fn %Type{extends: extends} = type ->
+      new_extends = extends ++ all_extends(initial_map, extends, [])
+      new_extends = MapSet.new(new_extends) |> MapSet.to_list()
+      %Type{type | extends: new_extends}
+    end)
+  end
+
+  def all_extends(initial_map, extends, acc) do
+    Enum.reduce(extends, acc, fn type_name, acc2 ->
+      case Map.get(initial_map, type_name) do
+        nil ->
+          acc2
+
+        parent ->
+          ancestors = all_extends(initial_map, [parent], acc2)
+          [parent | ancestors]
+      end
+    end)
   end
 
   def parents_by_child({parent, children}, acc) do
@@ -317,7 +353,55 @@ defmodule Mix.Tasks.Ontology.Gen do
     end)
   end
 
-  def extend_domains(properties, values) do
+  def extend_disjoint_with(types) do
+    dw_map =
+      Enum.map(types, fn %Type{name: name, disjoint_with: disjoint_with} ->
+        if Enum.empty?(disjoint_with) do
+          nil
+        else
+          {name, disjoint_with}
+        end
+      end)
+      |> Enum.filter(fn i -> !is_nil(i) end)
+      |> Enum.into(%{})
+
+    eb_map =
+      Enum.map(types, fn %Type{name: name, extended_by: extended_by} ->
+        {name, extended_by}
+      end)
+      |> Enum.into(%{})
+
+    dw_keys = Map.keys(dw_map)
+
+    base_map =
+      Enum.reduce(types, [], fn %Type{name: name, extended_by: extended_by}, acc ->
+        if Enum.member?(dw_keys, name) do
+          acc ++ Enum.map(extended_by, fn child -> {child, name} end)
+        else
+          acc
+        end
+      end)
+      |> Enum.into(%{})
+
+    Enum.map(types, fn %Type{name: name} = type ->
+      base_type = Map.get(base_map, name, name)
+
+      case Map.get(dw_map, base_type, []) do
+        [] ->
+          type
+
+        base_dws ->
+          extended_dw =
+            Enum.reduce(base_dws, [], fn base_dw, acc ->
+              acc ++ [base_dw | Map.get(eb_map, base_dw, [])]
+            end)
+
+          %Type{type | disjoint_with: extended_dw}
+      end
+    end)
+  end
+
+  def extend_domains(properties, types) do
     Enum.map(
       properties,
       fn %Property{
@@ -325,8 +409,8 @@ defmodule Mix.Tasks.Ontology.Gen do
            except_domain: except_domain
          } = item ->
         domain =
-          Enum.reduce(values, base_domain, fn %{name: value_name, extended_by: value_extended_by},
-                                              acc ->
+          Enum.reduce(types, base_domain, fn %{name: value_name, extended_by: value_extended_by},
+                                             acc ->
             if Enum.member?(base_domain, value_name) do
               acc ++ value_extended_by
             else
@@ -352,16 +436,21 @@ defmodule Mix.Tasks.Ontology.Gen do
   ##### Outputting templates
 
   def output_templates(ontology) do
-    Enum.each(ontology.properties, fn prop ->
-      prop = prepare_for_template(prop)
+    output_properties(ontology.properties)
+    output_types(ontology.types)
+  end
+
+  def output_properties(properties) do
+    Enum.each(properties, fn prop ->
+      prop = prepare_property(prop)
 
       cond do
         prop[:nonfunctional?] ->
-          prop_iterator(prop)
-          prop_iterating(prop)
+          render_iterator_prop(prop)
+          render_non_functional_prop(prop)
 
         prop[:functional?] || prop[:object?] ->
-          prop_functional(prop)
+          render_functional_prop(prop)
 
         true ->
           :ok
@@ -369,7 +458,14 @@ defmodule Mix.Tasks.Ontology.Gen do
     end)
   end
 
-  def prepare_for_template(prop) do
+  def output_types(types) do
+    Enum.each(types, fn type ->
+      type = prepare_type(type)
+      render_type(type)
+    end)
+  end
+
+  def prepare_property(prop) do
     {defstruct_members, type_members} =
       if Enum.member?(prop.range_set, :any_uri) do
         {[":xsd_any_uri_member"], ["xsd_any_uri_member: URI.t() | nil"]}
@@ -379,110 +475,72 @@ defmodule Mix.Tasks.Ontology.Gen do
 
     {defstruct_members, type_members} =
       {defstruct_members, type_members}
-      |> add_members_if(prop.range_set, :object, [":member"], [
-        "member: term()"
-      ])
-      |> add_members_if(prop.range_set, :lang_string, [":rdf_lang_string_member"], [
-        "rdf_lang_string_member: map() | nil"
-      ])
+      |> add_members_if(prop.range_set, :object, [":member"], ["member: term()"])
+      |> add_members_if(
+        prop.range_set,
+        :lang_string,
+        [":rdf_lang_string_member"],
+        ["rdf_lang_string_member: map() | nil"]
+      )
       |> add_members_if(
         prop.range_set,
         :string,
-        [":xsd_string_member", "has_string_member?: false"],
-        [
-          "xsd_string_member: String.t() | nil",
-          "has_string_member?: boolean()"
-        ]
+        [":xsd_string_member"],
+        ["xsd_string_member: String.t() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :boolean,
-        [":xsd_boolean_member", "has_boolean_member?: false"],
-        ["xsd_boolean_member: boolean() | nil", "has_boolean_member?: boolean()"]
+        [":xsd_boolean_member"],
+        ["xsd_boolean_member: boolean() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :non_neg_integer,
-        [":xsd_non_neg_integer_member", "has_non_neg_integer_member?: false"],
-        [
-          "xsd_non_neg_integer_member: non_neg_integer() | nil",
-          "has_non_neg_integer_member?: boolean()"
-        ]
+        [":xsd_non_neg_integer_member"],
+        ["xsd_non_neg_integer_member: non_neg_integer() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :float,
-        [":xsd_float_member", "has_float_member?: false"],
-        [
-          "xsd_float_member: float() | nil",
-          "has_float_member?: boolean()"
-        ]
+        [":xsd_float_member"],
+        ["xsd_float_member: float() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :date_time,
-        [":xsd_date_time_member", "has_date_time_member?: false"],
-        ["xsd_date_time_member: DateTime.t() | nil", "has_date_time_member?: boolean()"]
+        [":xsd_date_time_member"],
+        ["xsd_date_time_member: DateTime.t() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :duration,
-        [":xsd_duration_member", "has_duration_member?: false"],
-        [
-          "xsd_duration_member: Timex.Duration.t() | nil",
-          "has_duration_member?: boolean()"
-        ]
+        [":xsd_duration_member"],
+        ["xsd_duration_member: Timex.Duration.t() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :bcp47,
-        [":rfc_bcp47_member", "has_bcp47_member?: false"],
-        [
-          "rfc_bcp47_member: String.t() | nil",
-          "has_bcp47_member?: boolean()"
-        ]
+        [":rfc_bcp47_member"],
+        ["rfc_bcp47_member: String.t() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :rfc2045,
-        [":rfc_rfc2045_member", "has_rfc2045_member?: false"],
-        ["rfc_rfc2045_member: String.t() | nil", "has_rfc2045_member?: boolean()"]
+        [":rfc_rfc2045_member"],
+        ["rfc_rfc2045_member: String.t() | nil"]
       )
       |> add_members_if(
         prop.range_set,
         :rfc5988,
-        [":rfc_rfc5988_member", "has_rfc5988_member?: false"],
-        ["rfc_rfc5988_member: String.t() | nil", "has_rfc5988_member?: boolean()"]
+        [":rfc_rfc5988_member"],
+        ["rfc_rfc5988_member: String.t() | nil"]
       )
 
-    defstruct_members =
-      case defstruct_members do
-        [] ->
-          []
+    # Enum.sort(defstruct_members, fn a, _b -> String.ends_with?(a, ": false") end)
 
-        _ ->
-          [last | prev] =
-            Enum.sort(defstruct_members, fn a, _b -> String.ends_with?(a, ": false") end)
-
-          lines =
-            [last | Enum.map(prev, fn line -> line <> "," end)]
-            |> Enum.reverse()
-
-          ["," | lines]
-      end
-
-    type_members =
-      case type_members do
-        [] ->
-          []
-
-        [last | prev] ->
-          lines =
-            [last | Enum.map(prev, fn line -> line <> "," end)]
-            |> Enum.reverse()
-
-          ["," | lines]
-      end
+    defstruct_members = concat_members(defstruct_members)
+    type_members = concat_members(type_members)
 
     {prop_names, defstruct_mapped, typet_mapped} =
       if Enum.member?(prop.range_set, :lang_string) do
@@ -492,13 +550,21 @@ defmodule Mix.Tasks.Ontology.Gen do
           [",", "mapped_values: list()"]
         }
       else
-        {"\"#{prop.name}\"", [], []}
+        {enquote(prop.name), [], []}
       end
 
-    member_types =
+    range =
       prop.range_set
       |> Enum.map(fn atom -> ":#{Atom.to_string(atom)}" end)
       |> Enum.join(", ")
+
+    domain =
+      prop.extended_domain
+      |> Enum.sort(:desc)
+      |> Enum.map(fn type_name ->
+        "{\"#{type_name}\", Fedi.#{prop.namespace}.Type.#{type_name}}"
+      end)
+      |> concat_members(nil)
 
     prop = Map.from_struct(prop) |> Enum.into([])
 
@@ -509,7 +575,8 @@ defmodule Mix.Tasks.Ontology.Gen do
       typet_mapped: indent_lines(typet_mapped, 10),
       typedoc: wrap_text(prop[:typedoc], 2, 78),
       ns_atom: Macro.underscore(prop[:namespace]),
-      member_types: "[#{member_types}]",
+      range: "[#{range}]",
+      domain: indent_lines(domain, 4),
       names: prop_names
     )
   end
@@ -519,6 +586,22 @@ defmodule Mix.Tasks.Ontology.Gen do
       {d_mem ++ d_add, t_mem ++ t_add}
     else
       {d_mem, t_mem}
+    end
+  end
+
+  def concat_members(members, prefix \\ ",")
+
+  def concat_members([], _prefix), do: []
+
+  def concat_members([last | prev], prefix) do
+    lines =
+      [last | Enum.map(prev, fn line -> line <> "," end)]
+      |> Enum.reverse()
+
+    if prefix do
+      [prefix | lines]
+    else
+      lines
     end
   end
 
@@ -573,17 +656,143 @@ defmodule Mix.Tasks.Ontology.Gen do
     end
   end
 
-  def render_file(template, data, dir, filename) do
-    contents = EEx.eval_string(template, data)
+  def prepare_type(type) do
+    is_or_extends =
+      type.extends
+      |> Enum.sort(:desc)
+      |> Enum.map(&enquote(&1))
 
-    dir = Path.join(@output_dir, dir)
-    File.mkdir_p(dir)
+    is_or_extends =
+      (is_or_extends ++ [enquote(type.name)])
+      |> concat_members(nil)
 
-    Path.join(dir, filename)
-    |> File.write(contents)
+    disjoint_with =
+      type.disjoint_with
+      |> Enum.sort(:desc)
+      |> Enum.map(&enquote(&1))
+      |> concat_members(nil)
+
+    extended_by =
+      type.extended_by
+      |> Enum.sort(:desc)
+      |> Enum.map(&enquote(&1))
+      |> concat_members(nil)
+
+    properties =
+      type.properties
+      |> Enum.sort(:desc)
+      |> Enum.map(&enquote(&1))
+      |> concat_members(nil)
+
+    type = Map.from_struct(type) |> Enum.into([])
+
+    Keyword.merge(type,
+      typedoc: wrap_text(type[:typedoc], 2, 78),
+      ns_atom: Macro.underscore(type[:namespace]),
+      disjoint_with: indent_lines(disjoint_with, 4),
+      extended_by: indent_lines(extended_by, 4),
+      is_or_extends: indent_lines(is_or_extends, 4),
+      properties: indent_lines(properties, 4)
+    )
   end
 
-  def prop_functional(prop) do
+  def enquote(s), do: "\"#{s}\""
+
+  def inverted_domains(properties) do
+    Enum.reduce(properties, [], fn prop, acc ->
+      elems =
+        if Enum.member?(prop.range_set, :lang_string) do
+          Enum.map(prop.extended_domain, fn type_name ->
+            [{type_name, prop.name}, {type_name, "#{prop.name}Map"}]
+          end)
+          |> List.flatten()
+        else
+          Enum.map(prop.extended_domain, fn type_name -> {type_name, prop.name} end)
+        end
+
+      acc ++ elems
+    end)
+    |> Enum.sort()
+    |> Enum.chunk_by(&elem(&1, 0))
+    |> Enum.map(fn [{type_name, _prop_name} | _] = prop_list ->
+      {type_name, Enum.map(prop_list, &elem(&1, 1)) |> Enum.sort()}
+    end)
+    |> Enum.into(%{})
+  end
+
+  def render_type(type) do
+    dir = Path.join(type[:ns_atom], "type")
+    filename = Macro.underscore(type[:name]) <> @file_ext
+    module = "Fedi.#{type[:namespace]}.Type.#{type[:name]}"
+    data = [type: type, q3: "\"\"\"", module: module]
+
+    """
+    defmodule <%= module %> do
+      # This module was generated from an ontology. DO NOT EDIT!
+      # Run `mix help ontology.gen` for details.
+
+      @moduledoc <%= q3 %>
+      <%= type[:typedoc] %>
+      <%= q3 %>
+
+      @namespace :<%= type[:ns_atom] %>
+      @type_name "<%= type[:name] %>"
+      @extended_by [
+        <%= type[:extended_by] %>
+      ]
+      @is_or_extends [
+        <%= type[:is_or_extends] %>
+      ]
+      @disjoint_with [
+        <%= type[:disjoint_with] %>
+      ]
+      @known_properties [
+        <%= type[:properties] %>
+      ]
+
+      @enforce_keys [:alias]
+      defstruct [
+        :alias,
+        :unknown,
+        properties: %{}
+      ]
+
+      @type t() :: %__MODULE__{
+              alias: String.t(),
+              properties: map(),
+              unknown: term()
+            }
+
+      def namespace, do: @namespace
+      def type_name, do: @type_name
+      def extended_by, do: @extended_by
+      def is_or_extends?(type_name), do: Enum.member?(@is_or_extends, type_name)
+      def disjoint_with?(type_name), do: Enum.member?(@disjoint_with, type_name)
+      def known_property?(prop_name), do: Enum.member?(@known_properties, prop_name)
+
+      def new(opts \\\\ []) do
+        alias = Keyword.get(opts, :alias, "")
+        properties = Keyword.get(opts, :properties, %{})
+        context = Keyword.get(opts, :context, :simple)
+
+        %__MODULE__{alias: alias, properties: properties}
+        |> Fedi.Streams.Utils.as_type_set_json_ld_type(@type_name)
+        |> Fedi.Streams.Utils.set_context(context)
+      end
+
+      def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+        Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)
+      end
+
+      def serialize(%__MODULE__{} = object) do
+        Fedi.Streams.BaseType.serialize(object)
+      end
+    end
+    """
+    |> render_file(data, dir, filename)
+  end
+
+  def render_functional_prop(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> @file_ext
     mod_name = Fedi.Streams.Utils.capitalize(prop[:name])
@@ -600,7 +809,10 @@ defmodule Mix.Tasks.Ontology.Gen do
       <%= q3 %>
 
       @namespace :<%= prop[:ns_atom] %>
-      @member_types <%= prop[:member_types] %>
+      @range <%= prop[:range] %>
+      @domain [
+        <%= prop[:domain] %>
+      ]
       @prop_name <%= prop[:names] %>
 
       @enforce_keys [:alias]
@@ -614,6 +826,13 @@ defmodule Mix.Tasks.Ontology.Gen do
               unknown: term()<%= prop[:typet] %>
             }
 
+      def prop_name, do: @prop_name
+      def range, do: @range
+      def domain, do: @domain
+      def functional?, do: true
+      def iterator_module, do: nil
+      def parent_module, do: nil
+
       def new(alias_ \\\\ "") do
         %__MODULE__{alias: alias_}
       end
@@ -622,7 +841,7 @@ defmodule Mix.Tasks.Ontology.Gen do
         Fedi.Streams.BaseProperty.deserialize(
           @namespace,
           __MODULE__,
-          @member_types,
+          @range,
           @prop_name,
           m,
           alias_map
@@ -637,7 +856,7 @@ defmodule Mix.Tasks.Ontology.Gen do
     |> render_file(data, dir, filename)
   end
 
-  def prop_iterating(prop) do
+  def render_non_functional_prop(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> @file_ext
     mod_name = Fedi.Streams.Utils.capitalize(prop[:name])
@@ -654,6 +873,10 @@ defmodule Mix.Tasks.Ontology.Gen do
       <%= q3 %>
 
       @namespace :<%= prop[:ns_atom] %>
+      @range <%= prop[:range] %>
+      @domain [
+        <%= prop[:domain] %>
+      ]
       @prop_name <%= prop[:names] %>
 
       @enforce_keys :alias
@@ -666,6 +889,13 @@ defmodule Mix.Tasks.Ontology.Gen do
               alias: String.t(),
               values: list()<%= prop[:typet_mapped] %>
             }
+
+      def prop_name, do: @prop_name
+      def range, do: @range
+      def domain, do: @domain
+      def functional?, do: false
+      def iterator_module, do: <%= module %>Iterator
+      def parent_module, do: nil
 
       def new(alias_ \\\\ "") do
         %__MODULE__{alias: alias_}
@@ -689,12 +919,13 @@ defmodule Mix.Tasks.Ontology.Gen do
     |> render_file(data, dir, filename)
   end
 
-  def prop_iterator(prop) do
+  def render_iterator_prop(prop) do
     dir = Path.join(prop[:ns_atom], "property")
     filename = Macro.underscore(prop[:name]) <> "_iterator" <> @file_ext
-    mod_name = Fedi.Streams.Utils.capitalize(prop[:name]) <> "Iterator"
-    module = "Fedi.#{prop[:namespace]}.Property.#{mod_name}"
-    data = [prop: prop, q3: "\"\"\"", module: module]
+    parent_mod_name = Fedi.Streams.Utils.capitalize(prop[:name])
+    module = "Fedi.#{prop[:namespace]}.Property.#{parent_mod_name}Iterator"
+    parent_module = "Fedi.#{prop[:namespace]}.Property.#{parent_mod_name}"
+    data = [prop: prop, q3: "\"\"\"", module: module, parent_module: parent_module]
 
     """
     defmodule <%= module %> do
@@ -706,7 +937,11 @@ defmodule Mix.Tasks.Ontology.Gen do
       <%= q3 %>
 
       @namespace :<%= prop[:ns_atom] %>
-      @member_types <%= prop[:member_types] %>
+      @range <%= prop[:range] %>
+      @domain [
+        <%= prop[:domain] %>
+      ]
+      @prop_name <%= prop[:names] %>
 
       @enforce_keys [:alias]
       defstruct [
@@ -719,6 +954,13 @@ defmodule Mix.Tasks.Ontology.Gen do
               unknown: term()<%= prop[:typet] %>
             }
 
+      def prop_name, do: @prop_name
+      def range, do: @range
+      def domain, do: @domain
+      def functional?, do: false
+      def iterator_module, do: nil
+      def parent_module, do: <%= parent_module %>
+
       def new(alias_ \\\\ "") do
         %__MODULE__{alias: alias_}
       end
@@ -727,7 +969,7 @@ defmodule Mix.Tasks.Ontology.Gen do
         Fedi.Streams.PropertyIterator.deserialize(
           @namespace,
           __MODULE__,
-          @member_types,
+          @range,
           prop_name,
           mapped_property?,
           i,
@@ -741,5 +983,15 @@ defmodule Mix.Tasks.Ontology.Gen do
     end
     """
     |> render_file(data, dir, filename)
+  end
+
+  def render_file(template, data, dir, filename) do
+    contents = EEx.eval_string(template, data)
+
+    dir = Path.join(@output_dir, dir)
+    File.mkdir_p(dir)
+
+    Path.join(dir, filename)
+    |> File.write(contents)
   end
 end

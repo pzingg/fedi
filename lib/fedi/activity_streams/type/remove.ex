@@ -1,49 +1,69 @@
 defmodule Fedi.ActivityStreams.Type.Remove do
+  # This module was generated from an ontology. DO NOT EDIT!
+  # Run `mix help ontology.gen` for details.
+
   @moduledoc """
   Indicates that the actor is removing the object. If specified, the origin
   indicates the context from which the object is being removed.
-
-  Example 27 (https:www.w3.org/TR/activitystreams-vocabulary/#ex28-jsonld):
-    {
-      "actor": {
-        "name": "Sally",
-        "type": "Person"
-      },
-      "object": "http:example.org/notes/1",
-      "summary": "Sally removed a note from her notes folder",
-      "target": {
-        "name": "Notes Folder",
-        "type": "Collection"
-      },
-      "type": "Remove"
-    }
-
-  Example 28 (https:www.w3.org/TR/activitystreams-vocabulary/#ex29-jsonld):
-    {
-      "actor": {
-        "name": "The Moderator",
-        "type": "http:example.org/Role"
-      },
-      "object": {
-        "name": "Sally",
-        "type": "Person"
-      },
-      "origin": {
-        "name": "A Simple Group",
-        "type": "Group"
-      },
-      "summary": "The moderator removed Sally from a group",
-      "type": "Remove"
-    }
   """
 
-  defmodule Meta do
-    def namespace, do: :activity_streams
-    def type_name, do: "Remove"
-    def disjoint_with, do: ["Link", "Mention"]
-    def extended_by, do: []
-    def extends, do: ["Activity", "Object"]
-  end
+  @namespace :activity_streams
+  @type_name "Remove"
+  @extended_by []
+  @is_or_extends [
+    "Remove",
+    "Activity",
+    "Object"
+  ]
+  @disjoint_with [
+    "Link",
+    "Mention"
+  ]
+  @known_properties [
+    "actor",
+    "altitude",
+    "attachment",
+    "attributedTo",
+    "audience",
+    "bcc",
+    "bto",
+    "cc",
+    "content",
+    "contentMap",
+    "context",
+    "duration",
+    "endTime",
+    "generator",
+    "icon",
+    "image",
+    "inReplyTo",
+    "instrument",
+    "likes",
+    "location",
+    "mediaType",
+    "name",
+    "nameMap",
+    "object",
+    "origin",
+    "preview",
+    "published",
+    "replies",
+    "result",
+    "sensitive",
+    "shares",
+    "source",
+    "startTime",
+    "summary",
+    "summaryMap",
+    "tag",
+    "target",
+    "team",
+    "ticketsTrackedBy",
+    "to",
+    "tracksTicketsFor",
+    "updated",
+    "url"
+  ]
 
   @enforce_keys [:alias]
   defstruct [
@@ -57,6 +77,23 @@ defmodule Fedi.ActivityStreams.Type.Remove do
           properties: map(),
           unknown: term()
         }
+
+  def namespace, do: @namespace
+  def type_name, do: @type_name
+  def extended_by, do: @extended_by
+  def is_or_extends?(type_name), do: Enum.member?(@is_or_extends, type_name)
+  def disjoint_with?(type_name), do: Enum.member?(@disjoint_with, type_name)
+  def known_property?(prop_name), do: Enum.member?(@known_properties, prop_name)
+
+  def new(opts \\ []) do
+    alias = Keyword.get(opts, :alias, "")
+    properties = Keyword.get(opts, :properties, %{})
+    context = Keyword.get(opts, :context, :simple)
+
+    %__MODULE__{alias: alias, properties: properties}
+    |> Fedi.Streams.Utils.as_type_set_json_ld_type(@type_name)
+    |> Fedi.Streams.Utils.set_context(context)
+  end
 
   def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
     Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)

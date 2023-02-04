@@ -57,7 +57,6 @@ defmodule Fedi.JSONLD.Property.Type do
       | values: [
           %Fedi.JSONLD.Property.TypeIterator{
             alias: alias_,
-            has_string_member?: true,
             xsd_string_member: type
           }
         ]

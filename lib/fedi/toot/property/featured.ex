@@ -7,15 +7,22 @@ defmodule Fedi.Toot.Property.Featured do
   """
 
   @namespace :toot
-  @member_types [:iri, :object]
+  @range [:iri, :object]
+  @domain [
+    {"Application", Fedi.Toot.Type.Application},
+    {"Group", Fedi.Toot.Type.Group},
+    {"Organization", Fedi.Toot.Type.Organization},
+    {"Person", Fedi.Toot.Type.Person},
+    {"Service", Fedi.Toot.Type.Service}
+  ]
   @prop_name "featured"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
@@ -25,6 +32,13 @@ defmodule Fedi.Toot.Property.Featured do
           iri: URI.t() | nil
         }
 
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
+
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
   end
@@ -33,7 +47,7 @@ defmodule Fedi.Toot.Property.Featured do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

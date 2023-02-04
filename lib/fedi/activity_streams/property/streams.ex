@@ -7,6 +7,14 @@ defmodule Fedi.ActivityStreams.Property.Streams do
   """
 
   @namespace :activity_streams
+  @range [:iri, :object]
+  @domain [
+    {"Application", Fedi.ActivityStreams.Type.Application},
+    {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Organization", Fedi.ActivityStreams.Type.Organization},
+    {"Person", Fedi.ActivityStreams.Type.Person},
+    {"Service", Fedi.ActivityStreams.Type.Service}
+  ]
   @prop_name "streams"
 
   @enforce_keys :alias
@@ -19,6 +27,13 @@ defmodule Fedi.ActivityStreams.Property.Streams do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.StreamsIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

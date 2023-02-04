@@ -6,8 +6,7 @@ defmodule Fedi.Streams.BaseType do
   alias Fedi.Streams.Utils
 
   def get_type_name(%{__struct__: module}, opts \\ []) do
-    meta_module = Module.concat([module, Meta])
-    type_name = apply(meta_module, :type_name, [])
+    type_name = apply(module, :type_name, [])
 
     type_name =
       cond do
@@ -22,46 +21,28 @@ defmodule Fedi.Streams.BaseType do
       end
 
     if Keyword.get(opts, :with_namespace, false) do
-      {type_name, apply(meta_module, :namespace, [])}
+      {type_name, apply(module, :namespace, [])}
     else
       type_name
     end
   end
 
-  def disjoint_with(%{__struct__: module}, other) when is_struct(other) do
+  def disjoint_with?(%{__struct__: module}, other) when is_struct(other) do
     other_type_name = get_type_name(other)
 
-    Module.concat([module, Meta])
-    |> apply(:disjoint_with, [])
-    |> Enum.member?(other_type_name)
+    apply(module, :disjoint_with?, [other_type_name])
   end
 
-  def is_extended_by(%{__struct__: module}, other) when is_struct(other) do
+  def extended_by?(%{__struct__: module}, other) when is_struct(other) do
     other_type_name = get_type_name(other)
 
-    Module.concat([module, Meta])
-    |> apply(:extended_by, [])
-    |> Enum.member?(other_type_name)
-  end
-
-  def extends(%{__struct__: module}, other) when is_struct(other) do
-    other_type_name = get_type_name(other)
-
-    Module.concat([module, Meta])
-    |> apply(:extends, [])
+    apply(module, :extended_by, [])
     |> Enum.member?(other_type_name)
   end
 
   def is_or_extends?(%{__struct__: module}, other) when is_struct(other) do
     other_type_name = get_type_name(other)
-    module = Module.concat([module, Meta])
-
-    if apply(module, :type_name, []) == other_type_name do
-      true
-    else
-      apply(module, :extends, [])
-      |> Enum.member?(other_type_name)
-    end
+    apply(module, :is_or_extends?, [other_type_name])
   end
 
   def deserialize(namespace, module, m, alias_map) when is_map(m) and is_map(alias_map) do
@@ -71,7 +52,7 @@ defmodule Fedi.Streams.BaseType do
         a -> {a, a <> ":"}
       end
 
-    type_name = Module.concat([module, Meta]) |> apply(:type_name, [])
+    type_name = apply(module, :type_name, [])
 
     case find_type(m, alias_prefix, type_name) do
       {:error, reason} ->
@@ -124,7 +105,7 @@ defmodule Fedi.Streams.BaseType do
   end
 
   def serialize(%{__struct__: module, alias: alias_, properties: properties, unknown: unknown}) do
-    type_name = Module.concat([module, Meta]) |> apply(:type_name, [])
+    type_name = apply(module, :type_name, [])
 
     type_name =
       case alias_ do

@@ -7,14 +7,22 @@ defmodule Fedi.ActivityStreams.Property.StreamsIterator do
   """
 
   @namespace :activity_streams
-  @member_types [:iri, :object]
+  @range [:iri, :object]
+  @domain [
+    {"Application", Fedi.ActivityStreams.Type.Application},
+    {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Organization", Fedi.ActivityStreams.Type.Organization},
+    {"Person", Fedi.ActivityStreams.Type.Person},
+    {"Service", Fedi.ActivityStreams.Type.Service}
+  ]
+  @prop_name "streams"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
@@ -24,6 +32,13 @@ defmodule Fedi.ActivityStreams.Property.StreamsIterator do
           iri: URI.t() | nil
         }
 
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.ActivityStreams.Property.Streams
+
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
   end
@@ -32,7 +47,7 @@ defmodule Fedi.ActivityStreams.Property.StreamsIterator do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       prop_name,
       mapped_property?,
       i,

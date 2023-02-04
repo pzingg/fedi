@@ -7,6 +7,10 @@ defmodule Fedi.ActivityStreams.Property.Closed do
   """
 
   @namespace :activity_streams
+  @range [:boolean, :date_time, :iri, :object]
+  @domain [
+    {"Question", Fedi.ActivityStreams.Type.Question}
+  ]
   @prop_name "closed"
 
   @enforce_keys :alias
@@ -19,6 +23,13 @@ defmodule Fedi.ActivityStreams.Property.Closed do
           alias: String.t(),
           values: list()
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: Fedi.ActivityStreams.Property.ClosedIterator
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}

@@ -7,25 +7,33 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyPem do
   """
 
   @namespace :w3_id_security_v1
-  @member_types [:string]
+  @range [:string]
+  @domain [
+    {"PublicKey", Fedi.W3IDSecurityV1.Type.PublicKey}
+  ]
   @prop_name "publicKeyPem"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
     :xsd_string_member,
-    has_string_member?: false
+    :iri
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           unknown: term(),
-          has_string_member?: boolean(),
           xsd_string_member: String.t() | nil,
           iri: URI.t() | nil
         }
+
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: true
+  def iterator_module, do: nil
+  def parent_module, do: nil
 
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
@@ -35,7 +43,7 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyPem do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       @prop_name,
       m,
       alias_map

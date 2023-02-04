@@ -206,10 +206,10 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     # Prepare the response
     case on_follow do
       :automatically_accept ->
-        %T.Accept{alias: alias_} |> Utils.set_json_ld_type("Accept")
+        {:ok, T.Accept.new(alias: alias_, context: :simple)}
 
       :automatically_reject ->
-        %T.Reject{alias: alias_} |> Utils.set_json_ld_type("Reject")
+        {:ok, T.Reject.new(alias: alias_, context: :simple)}
 
       _ ->
         {:error, "Invalid 'on_follow' behavior #{on_follow}"}

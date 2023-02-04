@@ -7,14 +7,22 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyIterator do
   """
 
   @namespace :w3_id_security_v1
-  @member_types [:iri, :object]
+  @range [:iri, :object]
+  @domain [
+    {"Application", Fedi.W3IDSecurityV1.Type.Application},
+    {"Group", Fedi.W3IDSecurityV1.Type.Group},
+    {"Organization", Fedi.W3IDSecurityV1.Type.Organization},
+    {"Person", Fedi.W3IDSecurityV1.Type.Person},
+    {"Service", Fedi.W3IDSecurityV1.Type.Service}
+  ]
+  @prop_name "publicKey"
 
   @enforce_keys [:alias]
   defstruct [
     :alias,
     :unknown,
-    :iri,
-    :member
+    :member,
+    :iri
   ]
 
   @type t() :: %__MODULE__{
@@ -24,6 +32,13 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyIterator do
           iri: URI.t() | nil
         }
 
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.W3IDSecurityV1.Property.PublicKey
+
   def new(alias_ \\ "") do
     %__MODULE__{alias: alias_}
   end
@@ -32,7 +47,7 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKeyIterator do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
-      @member_types,
+      @range,
       prop_name,
       mapped_property?,
       i,

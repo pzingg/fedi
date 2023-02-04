@@ -330,16 +330,17 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   def block(context, activity) when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]}} <-
            {:activity_object, Utils.get_object(activity)} do
-      # Mark the activity as non-deliverable
       case ActorFacade.handle_c2s_activity(context, activity) do
         {:error, reason} ->
           {:error, reason}
 
         {:ok, activity, deliverable} ->
           Logger.error("Implementation blocked, deliverable was #{deliverable}")
+          # Mark the activity as non-deliverable
           {:ok, activity, false}
 
         :pass ->
+          # Mark the activity as non-deliverable
           {:ok, activity, false}
       end
     else

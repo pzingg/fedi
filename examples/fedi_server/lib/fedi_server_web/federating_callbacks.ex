@@ -180,9 +180,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   `Actor.handle_post_outbox/3`.
   """
   @impl true
-  def deliver(%SideEffectActor{} = context, %URI{} = outbox_iri, activity) do
-    SideEffectActor.deliver(context, outbox_iri, activity)
-  end
+  defdelegate deliver(context, outbox_iri, activity), to: SideEffectActor
 
   @doc """
   Blocked should determine whether to permit a set of actors given by

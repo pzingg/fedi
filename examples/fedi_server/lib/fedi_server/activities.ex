@@ -191,8 +191,7 @@ defmodule FediServer.Activities do
 
     total_items_prop = %P.TotalItems{
       alias: "",
-      xsd_non_neg_integer_member: total_items,
-      has_non_neg_integer_member?: true
+      xsd_non_neg_integer_member: total_items
     }
 
     properties = %{
