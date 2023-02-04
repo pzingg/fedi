@@ -1127,6 +1127,9 @@ defmodule Fedi.ActivityPub.Utils do
           {:ok, recipients} -> {:cont, acc ++ recipients}
         end
 
+      %{iri: %URI{} = iri}, acc ->
+        {:cont, acc ++ [iri]}
+
       _, _ ->
         {:halt, {:error, "No type in actor property"}}
     end)

@@ -12,6 +12,7 @@ defmodule FediServerWeb.SocialCallbacks do
   alias Fedi.Streams.Error
   alias Fedi.Streams.Utils
   alias Fedi.ActivityPub.ActorFacade
+  alias Fedi.ActivityPub.SideEffectActor
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
   alias FediServer.Accounts.User
@@ -170,9 +171,8 @@ defmodule FediServerWeb.SocialCallbacks do
   `Actor.handle_post_outbox/3`.
   """
   @impl true
-  def add_new_ids(_context, _activity) do
-    # Handled by SideEffectActor.
-    {:error, "Unexpected"}
+  def add_new_ids(%SideEffectActor{} = context, activity) do
+    SideEffectActor.add_new_ids(context, activity)
   end
 
   @doc """
@@ -216,9 +216,8 @@ defmodule FediServerWeb.SocialCallbacks do
   Only called if the Social API is enabled.
   """
   @impl true
-  def wrap_in_create(_context, _value, %URI{} = _outbox_iri) do
-    # Handled by SideEffectActor.
-    {:error, "Unexpected"}
+  def wrap_in_create(%SideEffectActor{} = context, value, %URI{} = outbox_iri) do
+    SideEffectActor.wrap_in_create(context, value, outbox_iri)
   end
 
   @doc """

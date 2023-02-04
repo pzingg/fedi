@@ -204,70 +204,83 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
         alias_
       ) do
     # Prepare the response
-    response =
-      case on_follow do
-        :automatically_accept ->
-          %T.Accept{alias: alias_}
+    case on_follow do
+      :automatically_accept ->
+        %T.Accept{alias: alias_} |> Utils.set_json_ld_type("Accept")
 
-        :automatically_reject ->
-          %T.Reject{alias: alias_}
+      :automatically_reject ->
+        %T.Reject{alias: alias_} |> Utils.set_json_ld_type("Reject")
 
-        _ ->
-          {:error, "Invalid `on_follow` behavior #{on_follow}"}
-      end
+      _ ->
+        {:error, "Invalid 'on_follow' behavior #{on_follow}"}
+    end
+    |> case do
+      {:error, reason} ->
+        {:error, reason}
 
-    # Set us as the 'actor'.
-    me = %P.Actor{alias: alias_} |> Utils.append_iri(actor_iri)
+      {:ok, %{properties: resp_properties} = response} ->
+        # Set us as the 'actor'.
+        me = %P.Actor{alias: alias_} |> Utils.append_iri(actor_iri)
 
-    # Set the Follow as the 'object' property.
-    object = %P.Object{
-      alias: alias_,
-      values: [%P.ObjectIterator{alias: alias_, member: follow}]
-    }
+        # Set the Follow as the 'object' property.
+        object = %P.Object{
+          alias: alias_,
+          values: [%P.ObjectIterator{alias: alias_, member: follow}]
+        }
 
-    # Add all actors on the original Follow to the 'to' property.
-    with {:follow_actor, %{values: _} = actor_prop} when is_struct(actor_prop) <-
-           {:follow_actor, Utils.get_actor(follow)},
-         {:ok, recipients} <- APUtils.get_recipients(actor_prop, which: :to_only) do
-      to_iters =
-        Enum.map(recipients, fn iri ->
-          %P.ToIterator{alias: alias_, iri: iri}
-        end)
+        # Add all actors on the original Follow to the 'to' property.
+        with {:follow_actor, %{values: _} = actor_prop} when is_struct(actor_prop) <-
+               {:follow_actor, Utils.get_actor(follow)},
+             {:ok, recipients} <- APUtils.get_ids(actor_prop) do
+          to_iters =
+            Enum.map(recipients, fn iri ->
+              %P.ToIterator{alias: alias_, iri: iri}
+            end)
 
-      to = %P.To{alias: alias_, values: to_iters}
-      response = struct(response, properties: %{"actor" => me, "object" => object, "to" => to})
+          to = %P.To{alias: alias_, values: to_iters}
 
-      if on_follow == :automatically_accept do
-        # If automatically accepting, then also update our
-        # followers collection with the new actors.
+          response =
+            struct(response,
+              properties:
+                Map.merge(resp_properties, %{"actor" => me, "object" => object, "to" => to})
+            )
 
-        # If automatically rejecting, do not update the
-        # followers collection.
-        update_collection(context, "/followers", actor_iri, recipients)
-      else
-        :ok
-      end
-      |> case do
-        {:error, reason} ->
-          {:error, reason}
+          if on_follow == :automatically_accept do
+            # If automatically accepting, then also update our
+            # followers collection with the new actors.
 
-        _ ->
-          with {:ok, outbox_iri} <- ActorFacade.db_outbox_for_inbox(context, inbox_iri),
-               {:ok, response} <- ActorFacade.add_new_ids(context, response) do
-            ActorFacade.deliver(context, outbox_iri, response)
+            # If automatically rejecting, do not update the
+            # followers collection.
+            update_collection(context, "/followers", actor_iri, recipients)
           else
-            {:error, reason} -> {:error, reason}
+            :ok
           end
-      end
-    else
-      {:error, reason} -> {:error, reason}
-      {:follow_actor, _} -> {:error, "No actor in Follow activity"}
+          |> case do
+            {:error, reason} ->
+              {:error, reason}
+
+            _ ->
+              with {:ok, outbox_iri} <- ActorFacade.db_outbox_for_inbox(context, inbox_iri),
+                   {:ok, response} <- ActorFacade.add_new_ids(context, response) do
+                ActorFacade.deliver(context, outbox_iri, response)
+              else
+                {:error, reason} -> {:error, reason}
+              end
+          end
+        else
+          {:error, reason} -> {:error, reason}
+          {:follow_actor, _} -> {:error, "No actor in Follow activity"}
+        end
     end
   end
 
   def update_collection(context, collection, %URI{path: path} = actor_iri, recipients) do
     coll_id = %URI{actor_iri | path: path <> collection}
-    Logger.error("S2S update collection #{coll_id} with #{inspect(recipients)}")
+
+    Logger.error(
+      "S2S update collection #{coll_id} with #{inspect(Enum.map(recipients, fn iri -> URI.to_string(iri) end))}"
+    )
+
     ActorFacade.db_update_collection(context, coll_id, %{add: recipients})
   end
 

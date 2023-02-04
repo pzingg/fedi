@@ -162,7 +162,9 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200) =~ "OK"
 
     object_id =
-      URI.parse("https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19")
+      Utils.to_uri(
+        "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19"
+      )
 
     assert {:error, "Not found"} = Activities.get_object_data(:objects, object_id)
   end
@@ -208,7 +210,9 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200) =~ "OK"
 
     object_id =
-      URI.parse("https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19")
+      Utils.to_uri(
+        "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19"
+      )
 
     assert {:ok, m} = Activities.get_object_data(:objects, object_id)
     assert String.contains?(m["content"], "wasn't worth reading")
@@ -258,6 +262,52 @@ defmodule FediServerWeb.InboxControllerTest do
       |> post("/users/alyssa/inbox", activity)
 
     assert response(conn, 401)
+  end
+
+  test "inbox accept follow SHOULD add actor to users followers", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => "https://example.com/users/alyssa"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    ben_iri = Utils.to_uri("https://chatty.example/users/ben")
+
+    assert {:ok, %{properties: %{"orderedItems" => followers}}} =
+             Utils.to_uri("https://example.com/users/alyssa/followers")
+             |> Activities.get_collection_unfiltered()
+
+    assert APUtils.get_ids(followers) == {:ok, [ben_iri]}
+  end
+
+  test "inbox accept follow SHOULD generate accept or reject", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => "https://example.com/users/alyssa"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    recipients = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+    assert Enum.count(recipients) == 1
+    {url, %{json: body}} = List.first(recipients)
+    assert url == "https://chatty.example/users/ben/inbox"
+    assert body["type"] == "Accept"
   end
 
   test "server inbox MAY respond to get (non-normative)", %{conn: conn} do

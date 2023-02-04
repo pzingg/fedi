@@ -9,6 +9,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.SideEffectActor
   alias FediServerWeb.CommonCallbacks
   alias FediServer.Activities
 
@@ -179,9 +180,8 @@ defmodule FediServerWeb.FederatingCallbacks do
   `Actor.handle_post_outbox/3`.
   """
   @impl true
-  def deliver(_context, %URI{} = _outbox_iri, _activity) do
-    # TODO IMPL
-    {:error, "Unimplemented"}
+  def deliver(%SideEffectActor{} = context, %URI{} = outbox_iri, activity) do
+    SideEffectActor.deliver(context, outbox_iri, activity)
   end
 
   @doc """
