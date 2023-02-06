@@ -58,14 +58,6 @@ defmodule FediServer.Activities do
           |> where([c], c.outgoing == ^outgoing)
           |> where([c, o], o.ap_id == ^activity_id)
 
-        :liked ->
-          activity_id = URI.to_string(id)
-
-          Activity
-          |> where([c], c.actor == ^actor_id)
-          |> where([c], c.type == "Like")
-          |> where([c], c.ap_id == ^activity_id)
-
         :following ->
           following_id = URI.to_string(id)
 
@@ -86,7 +78,7 @@ defmodule FediServer.Activities do
           |> where([c, u], u.ap_id == ^follower_id)
           |> where([c], c.state == ^:accept)
 
-        # Special collections
+        # Special collections, ObjectActions
         _ ->
           nil
       end
@@ -146,12 +138,11 @@ defmodule FediServer.Activities do
           |> where([c], c.outgoing == ^outgoing)
           |> select([c, o], count(o.id))
 
-        :liked ->
+        {:object_action, type} ->
           ObjectAction
-          |> join(:inner, [c], o in Object, on: o.ap_id == c.object)
-          |> where([c], c.actor == ^actor_id)
-          |> where([c], c.type == :like)
-          |> select([c, o], count(o.id))
+          |> where([o], o.object == ^actor_id)
+          |> where([o], o.type == ^type)
+          |> select([o], count(o.id))
 
         :following ->
           FollowingRelationship
@@ -167,7 +158,7 @@ defmodule FediServer.Activities do
 
         # Special collections
         {:user_collection, name} ->
-          coll_id = actor_id <> "/#{name}"
+          coll_id = Path.join(actor_id, name)
 
           UserCollection
           |> where([c], c.collection_id == ^coll_id)
@@ -187,7 +178,7 @@ defmodule FediServer.Activities do
   def build_summary(query, %URI{path: actor_path} = actor_iri, coll_name, _opts) do
     type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollection")
 
-    coll_id = %URI{actor_iri | path: "#{actor_path}/#{coll_name}"}
+    coll_id = %URI{actor_iri | path: Path.join(actor_path, coll_name)}
     id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
 
     first_id = %URI{coll_id | query: "page=true"}
@@ -219,23 +210,26 @@ defmodule FediServer.Activities do
         {:mailbox, outgoing} ->
           Activity
           |> distinct(true)
-          |> join(:inner, [o], c in Mailbox, on: c.activity_id == o.ap_id)
-          |> select([o], %{id: o.id, data: o.data})
+          |> join(:inner, [a], c in Mailbox, on: c.activity_id == a.ap_id)
+          |> select([a], %{id: a.id, data: a.data})
           |> filter_collection(opts, 2)
-          |> where([o, c], c.actor == ^actor_id)
-          |> where([o, c], c.outgoing == ^outgoing)
+          |> where([a, c], c.actor == ^actor_id)
+          |> where([a, c], c.outgoing == ^outgoing)
           |> limit(^page_size)
-          |> order_by([o], desc: o.id)
+          |> order_by([a], desc: a.id)
 
-        :liked ->
-          Object
-          |> distinct(true)
-          |> join(:inner, [o], c in ObjectAction, on: c.object == o.ap_id)
-          |> select([o], %{id: o.id, data: o.data})
-          |> filter_collection(opts, 2)
-          |> where([o, c], c.actor == ^actor_id)
-          |> where([o, c], c.type == :like)
-          |> order_by([o], desc: o.id)
+        {:object_action, type} ->
+          # `actor_id` is really the `object_id`
+          object_id = actor_id
+
+          User
+          |> join(:inner, [u], c in ObjectAction, on: c.actor == u.ap_id)
+          |> select([u], %{id: u.id, data: u.data})
+          # TODO should visibility be filtered by the visibilty of `c.object`?
+          # |> filter_collection(opts, 2)
+          |> where([u, c], c.object == ^object_id)
+          |> where([u, c], c.type == ^type)
+          |> order_by([u, c], desc: c.activity)
           |> limit(^page_size)
 
         :following ->
@@ -256,7 +250,7 @@ defmodule FediServer.Activities do
 
         # Special collections
         {:user_collection, name} ->
-          coll_id = "#{actor_id}/#{name}"
+          coll_id = Path.join(actor_id, name)
 
           Object
           |> distinct(true)
@@ -370,9 +364,10 @@ defmodule FediServer.Activities do
     case coll_name do
       "inbox" -> {:mailbox, false}
       "outbox" -> {:mailbox, true}
-      "liked" -> :liked
       "following" -> :following
       "followers" -> :followers
+      "likes" -> {:object_action, "like"}
+      "shares" -> {:object_action, "share"}
       other -> {:user_collection, other}
     end
   end
@@ -409,7 +404,7 @@ defmodule FediServer.Activities do
 
     type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollectionPage")
 
-    coll_id = %URI{actor_iri | path: "#{actor_path}/#{coll_name}"}
+    coll_id = %URI{actor_iri | path: Path.join(actor_path, coll_name)}
     part_of_prop = %P.PartOf{alias: "", iri: coll_id}
 
     page_id = %URI{coll_id | query: "page=true"}
@@ -523,21 +518,28 @@ defmodule FediServer.Activities do
     end
   end
 
-  def add_collection_item(:liked, %URI{} = actor_iri, {object_id, recipients}, acc) do
-    Logger.error("#{actor_iri} liked #{object_id}")
+  def add_collection_item(
+        {:object_action, type},
+        %URI{} = object_iri,
+        {%URI{} = actor_iri, %URI{} = activity_iri},
+        acc
+      ) do
+    Logger.error("#{actor_iri} #{type}d #{object_iri}")
+    object_id = URI.to_string(object_iri)
     actor_id = URI.to_string(actor_iri)
-    object_id = URI.to_string(object_id)
+    activity_id = URI.to_string(activity_iri)
 
-    params =
-      canonical_recipients(recipients)
-      |> Map.merge(%{
-        actor: actor_id,
-        object: object_id
-      })
+    params = %{
+      type: type,
+      actor: actor_id,
+      activity: activity_id,
+      object: object_id,
+      local?: local?(activity_iri)
+    }
 
-    case repo_insert(:likes, params) do
-      {:ok, %ObjectAction{}} ->
-        {:cont, [object_id | acc]}
+    case repo_insert({:object_action, type}, params) do
+      {:ok, _} ->
+        {:cont, [activity_id | acc]}
 
       {:error, reason} ->
         {:halt, {:error, reason}}
@@ -565,16 +567,16 @@ defmodule FediServer.Activities do
     end
   end
 
-  def add_collection_item({:user_collection, name}, %URI{} = actor_id, %URI{} = object_id, acc) do
+  def add_collection_item({:user_collection, name}, %URI{} = actor_iri, %URI{} = object_id, acc) do
     case repo_get_by_ap_id(:objects, object_id) do
       %Object{type: type} ->
-        actor = URI.to_string(actor_id)
-        coll_id = actor <> "/#{name}"
+        actor_id = URI.to_string(actor_iri)
+        coll_id = Path.join(actor_id, name)
 
         params = %{
           collection_id: coll_id,
           type: type,
-          actor: actor,
+          actor: actor_id,
           object: URI.to_string(object_id)
         }
 
@@ -588,8 +590,20 @@ defmodule FediServer.Activities do
     end
   end
 
-  def add_collection_item(type, _actor_id, _object_id, _acc) do
-    {:halt, {:error, "Add item unimplemented for #{inspect(type)}"}}
+  def add_collection_item(type, actor_iri, object_id, _acc) do
+    case actor_iri do
+      %URI{} ->
+        case object_id do
+          %URI{} ->
+            {:halt, {:error, "Add item unimplemented for #{inspect(type)}"}}
+
+          _ ->
+            {:halt, {:error, "Add item: object #{inspect(object_id)} is not a URI"}}
+        end
+
+      _ ->
+        {:halt, {:error, "Add item: actor #{inspect(actor_iri)} is not a URI"}}
+    end
   end
 
   def update_collection_items(type, actor_iri, items, state) do
@@ -625,10 +639,10 @@ defmodule FediServer.Activities do
 
   def remove_collection_items(_type, _actor_id, []), do: :ok
 
-  def remove_collection_items({:user_collection, name}, %URI{} = actor_id, object_ids) do
+  def remove_collection_items({:user_collection, name}, %URI{} = actor_iri, object_ids) do
     # TODO dereference to get object_type?
-    actor = URI.to_string(actor_id)
-    coll_id = actor <> "/#{name}"
+    actor_id = URI.to_string(actor_iri)
+    coll_id = Path.join(actor_id, name)
     object_ids = Enum.map(object_ids, &URI.to_string(&1))
     to_delete = Enum.count(object_ids)
 
@@ -677,16 +691,25 @@ defmodule FediServer.Activities do
   Used in federated SideEffectActor and `like` Activity callbacks.
   """
   @impl true
-  def actor_for_collection(%URI{} = iri) do
-    with true <- local?(iri),
-         {:ok, :actors, nickname, _} <- parse_iri_schema(iri) do
-      {:ok, Utils.base_uri(iri, "/users/#{nickname}")}
-    else
-      false ->
-        {:error, "Not our actor #{iri}"}
+  def actor_for_collection(%URI{path: path} = coll_id) do
+    if local?(coll_id) do
+      coll_name = Path.basename(path)
 
-      {:error, _} ->
-        {:error, "Invalid collection #{iri}"}
+      if Enum.member?(["likes", "shares"], coll_name) do
+        # Return the object id
+        {:ok, Utils.base_uri(coll_id, Path.dirname(path))}
+      else
+        case parse_iri_schema(coll_id) do
+          {:ok, :actors, nickname, _} ->
+            # Return the actor id
+            {:ok, Utils.base_uri(coll_id, "/users/#{nickname}")}
+
+          {:error, _} ->
+            {:error, "Invalid collection #{coll_id}"}
+        end
+      end
+    else
+      {:error, "Not our actor #{coll_id}"}
     end
   end
 
@@ -1528,10 +1551,6 @@ defmodule FediServer.Activities do
     Repo.get_by(Object, ap_id: URI.to_string(ap_id))
   end
 
-  def repo_get_by_ap_id(:liked, %URI{} = ap_id) do
-    Repo.get_by(Object, ap_id: URI.to_string(ap_id))
-  end
-
   def repo_get_by_ap_id(:collections, %URI{} = ap_id) do
     query = UserCollection |> where([u], u.collection_id == ^ap_id)
     Repo.all(query)
@@ -1583,18 +1602,10 @@ defmodule FediServer.Activities do
     |> handle_insert_result(:objects)
   end
 
-  def repo_insert(:likes, params) do
-    Logger.debug("Inserting like: #{params.object}")
+  def repo_insert({:object_action, type}, params) do
+    Logger.debug("Inserting #{type}: #{params.object}")
 
-    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :like))
-    |> Repo.insert(on_conflict: :nothing, returning: true)
-    |> handle_insert_result(:objects)
-  end
-
-  def repo_insert(:shares, params) do
-    Logger.debug("Inserting share: #{params.object}")
-
-    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, :share))
+    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, type))
     |> Repo.insert(on_conflict: :nothing, returning: true)
     |> handle_insert_result(:objects)
   end
@@ -1684,18 +1695,6 @@ defmodule FediServer.Activities do
   def repo_delete(:objects, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
     query = Object |> where([o], o.ap_id == ^ap_id)
-    Repo.delete_all(query)
-  end
-
-  def repo_delete(:likes, %URI{} = ap_id) do
-    ap_id = URI.to_string(ap_id)
-    query = ObjectAction |> where([o], o.object == ^ap_id)
-    Repo.delete_all(query)
-  end
-
-  def repo_delete(:shares, %URI{} = ap_id) do
-    ap_id = URI.to_string(ap_id)
-    query = ObjectAction |> where([o], o.object == ^ap_id)
     Repo.delete_all(query)
   end
 

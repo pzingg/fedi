@@ -71,7 +71,7 @@ defmodule FediServerWeb.MockRequestHelper do
         headers: headers,
         body: body
       } ->
-        actor_url = String.replace_trailing(url, "/inbox", "")
+        actor_iri = String.replace_trailing(url, "/inbox", "")
 
         cond do
           Enum.member?(@remote_shared_inboxes, url) ->
@@ -83,10 +83,10 @@ defmodule FediServerWeb.MockRequestHelper do
 
             %Tesla.Env{status: 202, body: "Accepted"}
 
-          Enum.member?(@local_actors, actor_url) ->
+          Enum.member?(@local_actors, actor_iri) ->
             # Actor.handle_post_inbox?
             type = Jason.decode!(body) |> Map.get("type", "activity")
-            Logger.error("#{actor_url} got a #{type}")
+            Logger.error("#{actor_iri} got a #{type}")
 
             Agent.update(module, fn acc ->
               [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
@@ -94,7 +94,7 @@ defmodule FediServerWeb.MockRequestHelper do
 
             %Tesla.Env{status: 202, body: "Accepted"}
 
-          Map.has_key?(@remote_actors, actor_url) ->
+          Map.has_key?(@remote_actors, actor_iri) ->
             Agent.update(module, fn acc ->
               [{url, %{headers: headers, json: Jason.decode!(body)}} | acc]
             end)

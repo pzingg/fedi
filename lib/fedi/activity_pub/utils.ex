@@ -17,6 +17,7 @@ defmodule Fedi.ActivityPub.Utils do
   @public_json_ld "Public"
   @public_json_ld_as "as:Public"
   @public_addresses [@public_activity_streams, @public_json_ld, @public_json_ld_as]
+  @reserved_collection_names ["inbox", "outbox", "following", "followers", "likes", "shares"]
 
   @doc """
   activity_streams_media_types contains all of the accepted ActivityStreams media
@@ -854,7 +855,10 @@ defmodule Fedi.ActivityPub.Utils do
   def add(context, object_prop, target_prop) do
     case to_id(target_prop) do
       %URI{} = coll_id ->
-        with {:ok, object_ids} <-
+        Logger.error("adding to #{coll_id}")
+
+        with :ok <- valid_collection_name?(coll_id),
+             {:ok, object_ids} <-
                get_ids(object_prop),
              {:owns?, {:ok, true}} <-
                {:owns?, ActorFacade.db_owns?(context, coll_id)},
@@ -891,7 +895,10 @@ defmodule Fedi.ActivityPub.Utils do
   def remove(context, object_prop, target_prop) do
     case to_id(target_prop) do
       %URI{} = coll_id ->
-        with {:ok, object_ids} <-
+        Logger.error("removing from #{coll_id}")
+
+        with :ok <- valid_collection_name?(coll_id),
+             {:ok, object_ids} <-
                get_ids(object_prop),
              {:owns?, {:ok, true}} <-
                {:owns?, ActorFacade.db_owns?(context, coll_id)},
@@ -918,6 +925,17 @@ defmodule Fedi.ActivityPub.Utils do
 
       _ ->
         {:error, Utils.err_target_required()}
+    end
+  end
+
+  def valid_collection_name?(%URI{path: path} = _coll_id) do
+    coll_name = Path.basename(path)
+
+    if Enum.member?(@reserved_collection_names, coll_name) do
+      reserved_names = Enum.join(@reserved_collection_names, ", ")
+      {:error, "Collection cannot be one of #{reserved_names}"}
+    else
+      :ok
     end
   end
 

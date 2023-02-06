@@ -338,62 +338,22 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
-         {:activity_id, %URI{} = id} <-
+         {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)},
+         {:activity_id, %URI{} = activity_id} <-
            {:activity_id, APUtils.get_id(activity)},
-         {:ok, op_ids} <-
-           APUtils.get_ids(object_prop) do
-      Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, obj_id)},
-             {:ok, %{alias: alias_, properties: properties} = like} <-
-               ActorFacade.db_get(context, obj_id) do
-          # Get 'likes' property on the object, creating default if
-          # necessary.
-          # Get 'likes' value, defaulting to a collection.
-          {prop, col} =
-            case Map.get(properties, "likes") do
-              %P.Likes{member: col} = likes when is_struct(col) ->
-                {likes, col}
-
-              _ ->
-                {%P.Likes{alias: alias_}, %T.Collection{alias: alias_}}
-            end
-
-          # Prepend the activity's 'id' on the 'likes' Collection or
-          # OrderedCollection.
-          col =
-            case col do
-              %T.Collection{} ->
-                Utils.prepend_iris(col, "items", [id])
-
-              %T.OrderedCollection{} ->
-                Utils.prepend_iris(col, "orderedItems", [id])
-
-              _ ->
-                {:error, "Likes type is neither a Collection nor an OrderedCollection"}
-            end
-
-          with col when is_struct(col) <- col,
-               prop <- struct(prop, member: col),
-               like <- struct(like, properties: Map.put(properties, "likes", prop)),
-               {:ok, _updated} <- ActorFacade.db_update(context, like) do
-            {:cont, acc}
-          else
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        else
-          {:owns?, {:ok, _}} -> {:cont, acc}
-          {_, {:error, reason}} -> {:halt, {:error, reason}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      end)
-      |> case do
-        {:error, reason} -> {:error, reason}
-        _ -> ActorFacade.handle_s2s_activity(context, activity)
-      end
+         {:ok, object_ids} <-
+           APUtils.get_ids(object_prop),
+         {:ok, object_ids} <-
+           filter_owned_objects(context, object_ids),
+         :ok <-
+           update_object_collections(context, actor_iri, activity_id, object_ids, "likes") do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
     end
   end
 
@@ -405,63 +365,48 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       when is_struct(activity) do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
-         {:activity_id, %URI{} = id} <-
+         {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)},
+         {:activity_id, %URI{} = activity_id} <-
            {:activity_id, APUtils.get_id(activity)},
-         {:ok, op_ids} <-
-           APUtils.get_ids(object_prop) do
-      Enum.reduce_while(op_ids, :ok, fn obj_id, acc ->
-        with {:owns?, {:ok, true}} <- {:owns?, ActorFacade.db_owns?(context, obj_id)},
-             {:ok, %{alias: alias_, properties: properties} = share} <-
-               ActorFacade.db_get(context, obj_id) do
-          # Get 'shares' property on the object, creating default if
-          # necessary.
-          # Get 'shares' value, defaulting to a collection.
-          {prop, col} =
-            case Map.get(properties, "shares") do
-              %P.Shares{member: col} = shares when is_struct(col) ->
-                {shares, col}
-
-              _ ->
-                {%P.Shares{alias: alias_}, %T.Collection{alias: alias_}}
-            end
-
-          # Prepend the activity's 'id' on the 'shares' Collection or
-          # OrderedCollection.
-          col =
-            case col do
-              %T.Collection{} ->
-                Utils.prepend_iris(col, "items", [id])
-
-              %T.OrderedCollection{} ->
-                Utils.prepend_iris(col, "orderedItems", [id])
-
-              _ ->
-                {:error, "Shares type is neither a Collection nor an OrderedCollection"}
-            end
-
-          with col when is_struct(col) <- col,
-               prop <- struct(prop, member: col),
-               share <- struct(share, properties: Map.put(properties, "shares", prop)),
-               {:ok, _updated} <- ActorFacade.db_update(context, share) do
-            {:cont, acc}
-          else
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        else
-          {:owns?, {:ok, _}} -> {:cont, acc}
-          {_, {:error, reason}} -> {:halt, {:error, reason}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      end)
-      |> case do
-        {:error, reason} -> {:error, reason}
-        _ -> ActorFacade.handle_s2s_activity(context, activity)
-      end
+         {:ok, object_ids} <-
+           APUtils.get_ids(object_prop),
+         {:ok, object_ids} <-
+           filter_owned_objects(context, object_ids),
+         :ok <-
+           update_object_collections(context, actor_iri, activity_id, object_ids, "shares") do
+      ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
       {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
+      {:activity_id, _} -> Utils.err_id_required(activity: activity)
     end
+  end
+
+  def filter_owned_objects(context, object_ids) do
+    Enum.reduce_while(object_ids, [], fn object_id, acc ->
+      case ActorFacade.db_owns?(context, object_id) do
+        {:ok, true} -> {:cont, [object_id | acc]}
+        {:ok, _} -> {:cont, acc}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:error, reason} -> {:error, reason}
+      filtered_ids -> {:ok, Enum.reverse(filtered_ids)}
+    end
+  end
+
+  def update_object_collections(context, actor_iri, activity_id, object_ids, coll_name) do
+    Enum.reduce_while(object_ids, :ok, fn %URI{path: object_path} = object_id, acc ->
+      coll_id = %URI{object_id | path: Path.join(object_path, coll_name)}
+
+      case ActorFacade.db_update_collection(context, coll_id, %{add: [{actor_iri, activity_id}]}) do
+        {:error, reason} -> {:halt, {:error, reason}}
+        _ -> {:cont, acc}
+      end
+    end)
   end
 
   @doc """

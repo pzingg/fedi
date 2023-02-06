@@ -349,14 +349,60 @@ defmodule FediServerWeb.InboxControllerTest do
 
     assert response(conn, 200) =~ "OK"
 
-    assert {:ok,
-            %{
-              properties: %{
-                "orderedItems" => %Fedi.ActivityStreams.Property.OrderedItems{values: values}
-              }
-            }} = get_page("https://example.com/users/alyssa/following")
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
+             get_page("https://example.com/users/alyssa/following")
 
     assert values == []
+  end
+
+  test "inbox accept like SHOULD indicate like performed", %{conn: conn} do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Like",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => note.ap_id
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    # Now check likes collection
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
+             get_page(note.ap_id <> "/likes")
+
+    assert [%P.OrderedItemsIterator{alias: "", member: person}] = values
+    assert APUtils.get_id(person) |> URI.to_string() == "https://chatty.example/users/ben"
+  end
+
+  test "inbox accept announce SHOULD add to shares collection", %{conn: conn} do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Announce",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => note.ap_id
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    # Now check shares collection
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
+             get_page(note.ap_id <> "/shares")
+
+    assert [%P.OrderedItemsIterator{alias: "", member: person}] = values
+    assert APUtils.get_id(person) |> URI.to_string() == "https://chatty.example/users/ben"
   end
 
   test "server inbox MAY respond to get (non-normative)", %{conn: conn} do
@@ -440,8 +486,9 @@ defmodule FediServerWeb.InboxControllerTest do
     Map.put(follow, "id", body["id"])
   end
 
-  defp count_inbox_items(coll_url \\ "https://example.com/users/alyssa/inbox") do
-    case get_page(coll_url, nil) do
+  defp count_inbox_items(coll_id \\ "https://example.com/users/alyssa/inbox")
+       when is_binary(coll_id) do
+    case get_page(coll_id, nil) do
       {:ok,
        %{
          properties: %{
@@ -455,13 +502,13 @@ defmodule FediServerWeb.InboxControllerTest do
     end
   end
 
-  def get_page(coll_url, viewer_ap_id \\ nil)
+  def get_page(coll_id, viewer_ap_id \\ nil)
 
-  def get_page(coll_url, nil) do
-    Utils.to_uri(coll_url) |> Activities.get_collection_unfiltered()
+  def get_page(coll_id, nil) when is_binary(coll_id) do
+    Utils.to_uri(coll_id) |> Activities.get_collection_unfiltered()
   end
 
-  def get_page(coll_url, viewer_ap_id) when is_binary(viewer_ap_id) do
+  def get_page(coll_id, viewer_ap_id) when is_binary(coll_id) and is_binary(viewer_ap_id) do
     viewer_ap_id =
       if Activities.local?(Utils.to_uri(viewer_ap_id)) do
         viewer_ap_id
@@ -470,6 +517,6 @@ defmodule FediServerWeb.InboxControllerTest do
       end
 
     opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
-    Utils.to_uri(coll_url) |> Activities.get_collection(opts)
+    Utils.to_uri(coll_id) |> Activities.get_collection(opts)
   end
 end

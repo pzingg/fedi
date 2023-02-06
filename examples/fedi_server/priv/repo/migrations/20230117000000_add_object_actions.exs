@@ -6,7 +6,9 @@ defmodule FediServer.Repo.Migrations.AddObjectActions do
       add :id, :binary_id, null: false, primary_key: true
       add :type, :string, null: false
       add :actor, :string, null: false
+      add :activity, :string, null: false
       add :object, :string, null: false
+      add :local?, :boolean, null: false, default: false
 
       timestamps(type: :utc_datetime)
     end

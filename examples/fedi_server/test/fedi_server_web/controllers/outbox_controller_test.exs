@@ -152,9 +152,9 @@ defmodule FediServerWeb.OutboxControllerTest do
     requests = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
 
     ["https://chatty.example/users/ben", "https://other.example/users/charlie"]
-    |> Enum.each(fn actor_url ->
-      case Enum.find(requests, fn {url, _data} -> url == "#{actor_url}/inbox" end) do
-        nil -> flunk("No payload was delivered to #{actor_url}/inbox")
+    |> Enum.each(fn actor_id ->
+      case Enum.find(requests, fn {url, _data} -> url == actor_id <> "/inbox" end) do
+        nil -> flunk("No payload was delivered to #{actor_id}/inbox")
         {_url, data} -> assert :ok = APUtils.verify_no_hidden_recipients(data, "activity")
       end
     end)
@@ -529,7 +529,8 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
-    assert %T.Note{} = get_posted_item("https://example.com/users/alyssa/liked")
+    assert %URI{} = object_id = get_posted_item("https://example.com/users/alyssa/liked")
+    assert URI.to_string(object_id) == note.ap_id
   end
 
   test "outbox block SHOULD prevent interaction with actor", %{conn: conn} do
