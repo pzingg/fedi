@@ -1,4 +1,9 @@
 defmodule FediServer.Activities do
+  @moduledoc """
+  Main context. Handles all ActivityPub actions that interact with
+  the database.
+  """
+
   @behaviour Fedi.ActivityPub.DatabaseApi
 
   import Ecto.Query
@@ -12,6 +17,7 @@ defmodule FediServer.Activities do
   alias Fedi.ActivityStreams.Type, as: T
 
   alias FediServer.Accounts.User
+  alias FediServer.Accounts.BlockedAccount
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
   alias FediServer.Activities.Mailbox
@@ -1179,7 +1185,7 @@ defmodule FediServer.Activities do
   end
 
   def block(%User{} = actor, %URI{} = blocked_id) do
-    FediServer.Accounts.BlockedAccount.build_block(actor, blocked_id)
+    BlockedAccount.build_block(actor, blocked_id)
     |> Repo.insert()
     |> handle_insert_result(:blocked_account)
   end
@@ -1188,7 +1194,7 @@ defmodule FediServer.Activities do
     blocked_id = URI.to_string(blocked_id)
 
     query =
-      FediServer.Accounts.BlockedAccount
+      BlockedAccount
       |> where([b], b.user_id == ^user_id and b.ap_id == ^blocked_id)
 
     case Repo.delete_all(query) do
@@ -1200,7 +1206,7 @@ defmodule FediServer.Activities do
   def any_blocked?(%User{id: user_id} = _actor, actor_iris) do
     blocked_ids = Enum.map(actor_iris, fn %URI{} = id -> URI.to_string(id) end)
 
-    FediServer.Accounts.BlockedAccount
+    BlockedAccount
     |> where([b], b.user_id == ^user_id and b.ap_id in ^blocked_ids)
     |> Repo.exists?()
   end

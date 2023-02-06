@@ -104,6 +104,7 @@ partial followers collection but not known locally per [FEP-8fcf](https://social
 
 ## Notes
 
-- `(outbox:remove-bto-and-bcc:MUST)` go-fed adds activities to the outbox first, then delivers.
-  This means that 'bto' and 'bcc' are not stripped when they are added to the outbox.
-  So I added code to remove 'bto' and 'bcc' when delivering data from the database.
+- `(outbox:remove-bto-and-bcc:MUST)` The original go-fed code added activities to
+  the outbox first, then delivered them. This means that 'bto' and 'bcc' are not
+  stripped when they are added to the outbox. Code was added to remove 'bto' and 'bcc'
+  when retrieving data from the database.

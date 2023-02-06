@@ -65,9 +65,8 @@ Add Activity tests to complete the ActivityPub spec requirements. See
 [IMPLEMENTATION.md](IMPLEMENTATION.md). Still to do:
 
 - Undo
-- Accept (S2S)
-- Reject (S2S)
 - Add (S2S)
+- Remove (S2S)
 - Delete (S2S)
 - Announce (S2S)
 - Like (S2S)
