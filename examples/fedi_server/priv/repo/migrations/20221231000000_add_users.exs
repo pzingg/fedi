@@ -12,8 +12,11 @@ defmodule FediServer.Repo.Migrations.AddUsers do
       add :nickname, :citext, null: false
       add :local?, :boolean, null: false, default: true
       add :email, :citext
-      add :public_key, :text
+      # :hashed_password will be null for remote users
+      add :hashed_password, :string
       add :keys, :text
+      add :shared_inbox, :string
+      add :on_follow, :string, null: false, default: "do_nothing"
       add :data, :map, null: false
 
       timestamps(type: :utc_datetime)

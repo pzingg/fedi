@@ -7,7 +7,9 @@ defmodule FediServer.Repo.Migrations.AddMailboxes do
       add :outgoing, :boolean, null: false, default: false
       add :type, :string, null: false
       add :actor, :string, null: false
+      add :object, :string, null: false
       add :local?, :boolean, null: false, default: false
+      add :visibility, :string, null: false, default: "direct"
       add :status, :string, null: false, default: "new"
 
       timestamps(type: :utc_datetime)
@@ -18,6 +20,7 @@ defmodule FediServer.Repo.Migrations.AddMailboxes do
     create index(:mailboxes, :outgoing)
     create index(:mailboxes, :type)
     create index(:mailboxes, :actor)
+    create index(:mailboxes, :object)
     create index(:mailboxes, :local?)
     create index(:mailboxes, :status)
   end

@@ -1,12 +1,7 @@
-defmodule FediServer.Repo.Migrations.AddUserAuthTables do
+defmodule FediServer.Repo.Migrations.AddUsersTokens do
   use Ecto.Migration
 
   def change do
-    alter table(:users) do
-      # Will be null for remote users
-      add :hashed_password, :string
-    end
-
     create table(:users_tokens, primary_key: false) do
       add :id, :binary_id, primary_key: true
       add :user_id, references(:users, type: :binary_id, on_delete: :delete_all), null: false
