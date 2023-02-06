@@ -290,7 +290,7 @@ defmodule Fedi.ActivityPub.Actor do
       # Servers MUST return a 201 Created HTTP code, and unless the activity
       # is transient, MUST include the new id in the Location header.
       location = URI.to_string(activity_id)
-      # status = if count == 0, do: :created, else: :accepted
+      # status = if count == 0, do: :created, else: :accept
       body = if count == 0, do: "", else: "Delivery queued for #{count} recipients"
 
       {:ok,
@@ -474,7 +474,7 @@ defmodule Fedi.ActivityPub.Actor do
   Ref: [AP Section 6.2.1](https://www.w3.org/TR/activitypub/#object-without-create)
   The server MUST accept a valid [ActivityStreams] object that isn't a
   subtype of Activity in the POST request to the outbox. The server then
-  MUST attach this object as the object of a Create Activity. For
+  MUST attach this object as the object of a 'Create' Activity. For
   non-transient objects, the server MUST attach an id to both the
   wrapping Create and its wrapped Object.
   """
@@ -489,8 +489,9 @@ defmodule Fedi.ActivityPub.Actor do
     with {:ok, activity} <- activity_result,
          # At this point, this should be a safe conversion. If this error is
          # triggered, then there is either a bug in the delegation of
-         # WrapInCreate, behavior is not lining up in the generated ExtendedBy
-         # code, or something else is incorrect with the type system.
+         # `wrap_in_create/4`, behavior is not lining up in the generated
+         # `is_or_extends?/2` code, or something else is incorrect with
+         # the type system.
          {:is_activity, true} <- {:is_activity, APUtils.is_or_extends?(activity, "Activity")},
          # Delegate generating new IDs for the activity and all new objects.
          {:ok, activity} <-

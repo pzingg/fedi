@@ -12,6 +12,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   alias Fedi.ActivityPub.SideEffectActor
   alias FediServerWeb.CommonCallbacks
   alias FediServer.Activities
+  alias FediServer.Accounts.User
 
   @impl true
   defdelegate authenticate_get_inbox(context, conn), to: CommonCallbacks
@@ -234,8 +235,11 @@ defmodule FediServerWeb.FederatingCallbacks do
   if a Follow activity is handled.
   """
   @impl true
-  def on_follow(_context) do
-    {:ok, :automatically_accept}
+  def on_follow(%{box_iri: inbox_iri} = _context) do
+    with {:ok, actor_iri} <- Activities.actor_for_inbox(inbox_iri),
+         {:ok, %User{on_follow: on_follow}} <- Activities.ensure_user(actor_iri, true) do
+      {:ok, on_follow}
+    end
   end
 
   @doc """

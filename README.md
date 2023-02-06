@@ -61,6 +61,29 @@ endpoints in the example application.
 
 ## TODO
 
+Add Activity tests to complete the ActivityPub spec requirements. See
+[IMPLEMENTATION.md](IMPLEMENTATION.md). Still to do:
+
+- Undo
+- Accept (S2S)
+- Reject (S2S)
+- Add (S2S)
+- Delete (S2S)
+- Announce (S2S)
+- Like (S2S)
+
+Add some Mastodon-ish features that are not in the AP spec if they are
+easy to implement:
+
+- Client functions to set 'to' and 'cc' properties based on 'attributedTo', 'inReplyTo',
+  mentions in the content, and visibility level
+- Timelines
+- Shares
+- Replies
+- Conversations
+- Parsing hashtags and mentions from content (using Markdown as the default
+  'mediaType' for content), and creating a 'hashtags' collection
+
 Top level documentation
 
 - Provide clear instructions for how to hook the library up to a Phoenix
@@ -69,8 +92,6 @@ Top level documentation
 Ontology generation tool
 
 - Document the `ontology.gen` mix task.
-- Output generated modules for ActivityStream types (currently these are
-  hand-coded). Refactor out the `Meta` modules for types to reduce complexity.
 
 Other enhancements and bug fixes
 

@@ -152,7 +152,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     with {:activity_object, %P.Object{values: [_ | _] = values}} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, %URI{} = actor_iri} <- ActorFacade.db_actor_for_inbox(context, inbox_iri) do
-      case is_me?(values, actor_iri, on_follow != :do_nothing) do
+      case APUtils.is_me?(values, actor_iri, on_follow != :do_nothing) do
         {:error, reason} ->
           {:error, reason}
 
@@ -174,32 +174,10 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     end
   end
 
-  def is_me?(actor_iters, actor_iri, enabled \\ true)
-
-  def is_me?(_actor_iters, _actor_iri, false), do: false
-
-  def is_me?(actor_iters, %URI{} = actor_iri, _) when is_list(actor_iters) do
-    actor_iri_str = URI.to_string(actor_iri)
-
-    Enum.reduce_while(actor_iters, false, fn prop, acc ->
-      case APUtils.to_id(prop) do
-        %URI{} = id ->
-          if URI.to_string(id) == actor_iri_str do
-            {:halt, true}
-          else
-            {:cont, acc}
-          end
-
-        _ ->
-          {:halt, {:error, Utils.err_id_required(iters: actor_iters)}}
-      end
-    end)
-  end
-
   def prepare_and_deliver_follow(
         %{box_iri: inbox_iri} = context,
         follow,
-        actor_iri,
+        %URI{path: actor_path} = actor_iri,
         on_follow,
         alias_
       ) do
@@ -251,7 +229,12 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
             # If automatically rejecting, do not update the
             # followers collection.
-            update_collection(context, "/followers", actor_iri, recipients)
+            coll_id = %URI{actor_iri | path: actor_path <> "/followers"}
+
+            case ActorFacade.db_update_collection(context, coll_id, %{add: recipients}) do
+              {:ok, _} -> :ok
+              {:error, reason} -> {:error, reason}
+            end
           else
             :ok
           end
@@ -274,122 +257,21 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     end
   end
 
-  def update_collection(context, collection, %URI{path: path} = actor_iri, recipients) do
-    coll_id = %URI{actor_iri | path: path <> collection}
-
-    Logger.error(
-      "S2S update collection #{coll_id} with #{inspect(Enum.map(recipients, fn iri -> URI.to_string(iri) end))}"
-    )
-
-    ActorFacade.db_update_collection(context, coll_id, %{add: recipients})
-  end
-
   @doc """
   Implements the federating Accept activity side effects.
   """
   @impl true
-  def accept(%{box_iri: inbox_iri} = context, activity)
+  def accept(context, activity)
       when is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _] = values}} <-
-           {:activity_object, Utils.get_object(activity)},
-         {:ok, actor_iri} <-
-           ActorFacade.db_actor_for_inbox(context, inbox_iri),
-         # Determine if we are in a follow on the 'object' property.
-         # TODO Handle Accept multiple Follow
-         {:ok, _follow, follow_id} <-
-           find_follow(context, values, actor_iri),
-         # If we received an Accept whose 'object' is a Follow with an
-         # Accept that we sent, add to the following collection.
-
-         # Verify our Follow request exists and the peer didn't
-         # fabricate it.
-         {:activity_actor, %P.Actor{values: [_ | _]} = actor_prop} <-
-           {:activity_actor, Utils.get_actor(activity)},
-         # This may be a duplicate check if we dereferenced the
-         # Follow above.
-         # TODO Separate this logic to avoid redundancy
-         {:ok, follow} <-
-           ActorFacade.db_get(context, follow_id),
-         # Ensure that we are one of the actors on the Follow.
-         {:ok, %URI{}} <-
-           follow_is_me?(follow, actor_iri),
-         # Build map of original Accept actors
-         {:ok, accept_actors} <-
-           APUtils.get_ids(actor_prop),
-         # Verify all actor(s) were on the original Follow.
-         {:follow_object, %{values: [_ | _]} = follow_prop} <-
-           {:follow_object, Utils.get_object(follow)},
-         {:ok, follow_actors} <-
-           APUtils.get_ids(follow_prop),
-         {:all_on_original, true} <-
-           {:all_on_original,
-            MapSet.subset?(MapSet.new(accept_actors), MapSet.new(follow_actors))},
+    with {:ok, %URI{path: actor_path} = actor_iri, accept_actors} <-
+           APUtils.validate_accept_or_reject(context, activity),
+         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
          {:ok, _} <-
-           update_collection(context, "/following", actor_iri, accept_actors) do
+           ActorFacade.db_update_collection(context, coll_id, %{
+             update: accept_actors,
+             state: :accept
+           }) do
       ActorFacade.handle_s2s_activity(context, activity)
-    else
-      {:error, reason} ->
-        {:error, reason}
-
-      {:activity_object, _} ->
-        {:error, Utils.err_object_required(activity: activity)}
-
-      {:activity_actor, _} ->
-        {:error, Utils.err_actor_required(activity: activity)}
-
-      {:follow_object, _} ->
-        {:error, "No object in original Follow activity"}
-
-      {:all_on_original, _} ->
-        {:error,
-         "Peer gave an Accept wrapping a Follow but was not an object in the original Follow"}
-    end
-  end
-
-  def find_follow(
-        %{box_iri: %URI{}} = context,
-        values,
-        %URI{} = actor_iri
-      ) do
-    Enum.reduce_while(values, {:error, "Not found"}, fn
-      # Attempt to dereference the IRI instead
-      %{iri: %URI{} = iri}, acc ->
-        with {:ok, m} <- ActorFacade.db_dereference(context, iri),
-             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
-          case follow_is_me?(as_type, actor_iri) do
-            {:error, reason} -> {:halt, {:error, reason}}
-            {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
-            _ -> {:cont, acc}
-          end
-        else
-          _ ->
-            {:halt, {:error, "Unable to dereference a valid follow activity"}}
-        end
-
-      %{member: as_type}, acc when is_struct(as_type) ->
-        case follow_is_me?(as_type, actor_iri) do
-          {:error, reason} -> {:halt, {:error, reason}}
-          {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
-          _ -> {:cont, acc}
-        end
-
-      _, _ ->
-        {:halt, {:error, "Invalid follow activity"}}
-    end)
-  end
-
-  def follow_is_me?(as_type, actor_iri) do
-    with true <- APUtils.is_or_extends?(as_type, "Follow"),
-         %URI{} = follow_id <- APUtils.get_id(as_type),
-         %{values: values} when is_list(values) <- Utils.get_actor(as_type) do
-      case is_me?(values, actor_iri) do
-        {:error, reason} -> {:error, reason}
-        true -> {:ok, follow_id}
-        _ -> {:ok, nil}
-      end
-    else
-      _ ->
-        {:error, "Not a follow type"}
     end
   end
 
@@ -398,7 +280,16 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   """
   @impl true
   def reject(context, activity) when is_struct(context) and is_struct(activity) do
-    ActorFacade.handle_s2s_activity(context, activity)
+    with {:ok, %URI{path: actor_path} = actor_iri, reject_actors} <-
+           APUtils.validate_accept_or_reject(context, activity),
+         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
+         {:ok, _} <-
+           ActorFacade.db_update_collection(context, coll_id, %{
+             update: reject_actors,
+             state: :reject
+           }) do
+      ActorFacade.handle_s2s_activity(context, activity)
+    end
   end
 
   @doc """

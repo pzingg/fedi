@@ -279,12 +279,10 @@ defmodule FediServerWeb.InboxControllerTest do
 
     assert response(conn, 200) =~ "OK"
 
-    ben_iri = Utils.to_uri("https://chatty.example/users/ben")
-
     assert {:ok, %{properties: %{"orderedItems" => followers}}} =
-             Utils.to_uri("https://example.com/users/alyssa/followers")
-             |> Activities.get_collection_unfiltered()
+             get_page("https://example.com/users/alyssa/followers")
 
+    ben_iri = Utils.to_uri("https://chatty.example/users/ben")
     assert APUtils.get_ids(followers) == {:ok, [ben_iri]}
   end
 
@@ -308,6 +306,57 @@ defmodule FediServerWeb.InboxControllerTest do
     {url, %{json: body}} = List.first(recipients)
     assert url == "https://chatty.example/users/ben/inbox"
     assert body["type"] == "Accept"
+  end
+
+  test "inbox accept accept SHOULD add actor to users following", %{conn: conn} do
+    %{alyssa: %{user: alyssa}, ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    follow = follow_ben_request(alyssa)
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Accept",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => follow
+    }
+
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    assert {:ok, %{properties: %{"orderedItems" => following}}} =
+             get_page("https://example.com/users/alyssa/following")
+
+    ben_iri = Utils.to_uri("https://chatty.example/users/ben")
+    assert APUtils.get_ids(following) == {:ok, [ben_iri]}
+  end
+
+  test "inbox accept reject MUST NOT add actor to users following", %{conn: conn} do
+    %{alyssa: %{user: alyssa}, ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    follow = follow_ben_request(alyssa)
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Reject",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => follow
+    }
+
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    assert {:ok,
+            %{
+              properties: %{
+                "orderedItems" => %Fedi.ActivityStreams.Property.OrderedItems{values: values}
+              }
+            }} = get_page("https://example.com/users/alyssa/following")
+
+    assert values == []
   end
 
   test "server inbox MAY respond to get (non-normative)", %{conn: conn} do
@@ -362,6 +411,35 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 401)
   end
 
+  defp follow_ben_request(alyssa) do
+    follow = %{
+      "type" => "Follow",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
+    }
+
+    activity =
+      %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "to" => "https://chatty.example/users/ben"
+      }
+      |> Map.merge(follow)
+
+    Phoenix.ConnTest.build_conn()
+    |> log_in_user(alyssa)
+    |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+    |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    recipients = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+    assert Enum.count(recipients) == 1
+    {url, %{json: body}} = List.first(recipients)
+    assert url == "https://chatty.example/users/ben/inbox"
+    assert body["type"] == "Follow"
+    assert body["id"]
+
+    Map.put(follow, "id", body["id"])
+  end
+
   defp count_inbox_items(coll_url \\ "https://example.com/users/alyssa/inbox") do
     case get_page(coll_url, nil) do
       {:ok,
@@ -376,6 +454,8 @@ defmodule FediServerWeb.InboxControllerTest do
         0
     end
   end
+
+  def get_page(coll_url, viewer_ap_id \\ nil)
 
   def get_page(coll_url, nil) do
     Utils.to_uri(coll_url) |> Activities.get_collection_unfiltered()

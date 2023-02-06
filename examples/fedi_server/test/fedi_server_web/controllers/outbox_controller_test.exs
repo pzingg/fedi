@@ -573,6 +573,56 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 401)
   end
 
+  test "outbox block twice is a no-op", %{conn: conn} do
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Block",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
+    }
+
+    %{alyssa: %{user: alyssa}, ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Do it again
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://chatty.example/users/ben/statuses/49e2d03d-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 401)
+  end
+
   test "outbox retrieval MUST respond unuathorized with public contents", %{
     conn: conn
   } do

@@ -10,7 +10,7 @@ defmodule FediServer.Activities.FollowingRelationship do
   schema "following_relationships" do
     field(:follower_id, :string)
     field(:following_id, :string)
-    field(:state, Ecto.Enum, values: [:pending, :accepted, :rejected])
+    field(:state, Ecto.Enum, values: [:pending, :accept, :reject])
 
     timestamps()
   end

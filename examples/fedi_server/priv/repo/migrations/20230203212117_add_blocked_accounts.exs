@@ -10,6 +10,6 @@ defmodule FediServer.Repo.Migrations.AddBlockedAccounts do
       timestamps(type: :utc_datetime)
     end
 
-    create_index(:blocked_accounts, [:user_id, :ap_id], unique: true)
+    create index(:blocked_accounts, [:user_id, :ap_id], unique: true)
   end
 end

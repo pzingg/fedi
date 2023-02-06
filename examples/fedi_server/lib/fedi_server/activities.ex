@@ -68,7 +68,7 @@ defmodule FediServer.Activities do
           |> join(:inner, [c], g in User, on: c.follower_id == g.id)
           |> where([c, u, g], g.ap_id == ^actor_id)
           |> where([c, u], u.ap_id == ^following_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
 
         :followers ->
           follower_id = URI.to_string(id)
@@ -78,7 +78,7 @@ defmodule FediServer.Activities do
           |> join(:inner, [c], g in User, on: c.following_id == g.id)
           |> where([c, u, g], g.ap_id == ^actor_id)
           |> where([c, u], u.ap_id == ^follower_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
 
         # Special collections
         _ ->
@@ -150,13 +150,13 @@ defmodule FediServer.Activities do
         :following ->
           FollowingRelationship
           |> where([c], c.follower_id == ^actor_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
           |> select([c], count(c.id))
 
         :followers ->
           FollowingRelationship
           |> where([c], c.following_id == ^actor_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
           |> select([c], count(c.id))
 
         # Special collections
@@ -236,7 +236,7 @@ defmodule FediServer.Activities do
           FollowingRelationship
           |> select([c], %{id: c.id, iri: c.following_id})
           |> where([c], c.follower_id == ^actor_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
           |> order_by([c], desc: c.id)
           |> limit(^page_size)
 
@@ -244,7 +244,7 @@ defmodule FediServer.Activities do
           FollowingRelationship
           |> select([c], %{id: c.id, iri: c.follower_id})
           |> where([c], c.following_id == ^actor_id)
-          |> where([c], c.state == ^:accepted)
+          |> where([c], c.state == ^:accept)
           |> order_by([c], desc: c.id)
           |> limit(^page_size)
 
@@ -275,7 +275,7 @@ defmodule FediServer.Activities do
   def get_following_ids(follower_id) when is_binary(follower_id) do
     FollowingRelationship
     |> where([c], c.follower_id == ^follower_id)
-    |> where([c], c.state == ^:accepted)
+    |> where([c], c.state == ^:accept)
     |> select([c], c.id)
     |> Repo.all()
   end
@@ -444,29 +444,49 @@ defmodule FediServer.Activities do
     with {:ok, %URI{} = actor_iri} <- actor_for_collection(coll_id),
          coll_name <- Path.basename(path),
          {:valid_type, type} when not is_nil(type) <- {:valid_type, collection_type(coll_name)} do
-      # TODO Handle deletes, etc.
-      new_items = Map.get(updates, :add, [])
-      items_to_be_removed = Map.get(updates, :remove, [])
+      to_remove = Map.get(updates, :remove, [])
 
-      Enum.reduce_while(new_items, [], fn item, acc ->
-        add_collection_item(type, actor_iri, item, acc)
-      end)
-      |> case do
+      case remove_collection_items(type, actor_iri, to_remove) do
         {:error, reason} ->
           {:error, reason}
 
         _ ->
-          case remove_collection_items(type, actor_iri, items_to_be_removed) do
+          to_add = Map.get(updates, :add, [])
+
+          case add_collection_items(type, actor_iri, to_add) do
             {:error, reason} ->
               {:error, reason}
 
             _ ->
-              get_collection(coll_id)
+              # For :following type only
+              to_update = Map.get(updates, :update, [])
+              state = Map.get(updates, :state, :accept)
+
+              case update_collection_items(type, actor_iri, to_update, state) do
+                {:error, reason} ->
+                  {:error, reason}
+
+                _ ->
+                  get_collection(coll_id)
+              end
           end
       end
     else
       {:error, reason} -> {:error, reason}
       {:valid_type, _} -> {:error, "Can't understand collection #{coll_id}"}
+    end
+  end
+
+  def add_collection_items(type, actor_iri, items) do
+    Enum.reduce_while(items, [], fn item, acc ->
+      add_collection_item(type, actor_iri, item, acc)
+    end)
+    |> case do
+      {:error, reason} ->
+        {:error, reason}
+
+      items ->
+        {:ok, items}
     end
   end
 
@@ -524,8 +544,6 @@ defmodule FediServer.Activities do
         %URI{} = following_id,
         acc
       ) do
-    Logger.error("#{actor_iri} following #{following_id}")
-
     case follow(actor_iri, following_id) do
       {:ok, %FollowingRelationship{}} -> {:cont, [following_id | acc]}
       {:error, reason} -> {:halt, {:error, reason}}
@@ -566,6 +584,37 @@ defmodule FediServer.Activities do
 
   def add_collection_item(type, _actor_id, _object_id, _acc) do
     {:halt, {:error, "Add item unimplemented for #{inspect(type)}"}}
+  end
+
+  def update_collection_items(type, actor_iri, items, state) do
+    Enum.reduce_while(items, [], fn item, acc ->
+      update_collection_item(type, actor_iri, item, state, acc)
+    end)
+    |> case do
+      {:error, reason} ->
+        {:error, reason}
+
+      items ->
+        {:ok, items}
+    end
+  end
+
+  def update_collection_item(
+        :following,
+        %URI{} = actor_iri,
+        %URI{} = following_id,
+        state,
+        acc
+      ) do
+    case update_following_relationship(actor_iri, following_id, state) do
+      :ok -> {:cont, [following_id | acc]}
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
+  end
+
+  def update_collection_item(type, _actor_id, _item, _state, _acc) do
+    Logger.error("Update collection not defined on #{type}")
+    {:halt, {:error, "Unimplemented"}}
   end
 
   def remove_collection_items(_type, _actor_id, []), do: :ok
@@ -1044,9 +1093,9 @@ defmodule FediServer.Activities do
 
   ### Implementation
 
-  def get_following_relationship(%URI{} = follower, %URI{} = following) do
-    follower_id = URI.to_string(follower)
-    following_id = URI.to_string(following)
+  def get_following_relationship(%URI{} = follower_iri, %URI{} = following_iri) do
+    follower_id = URI.to_string(follower_iri)
+    following_id = URI.to_string(following_iri)
 
     query =
       FollowingRelationship
@@ -1055,24 +1104,31 @@ defmodule FediServer.Activities do
     Repo.one(query)
   end
 
-  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :rejected) do
+  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :reject) do
     unfollow(follower_iri, following_iri)
   end
 
-  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :accepted) do
-    case get_following_relationship(follower_iri, following_iri) do
-      nil ->
+  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :accept) do
+    follower_id = URI.to_string(follower_iri)
+    following_id = URI.to_string(following_iri)
+
+    query =
+      FollowingRelationship
+      |> where([c], c.follower_id == ^follower_id and c.following_id == ^following_id)
+
+    now = DateTime.utc_now()
+
+    case Repo.update_all(query, set: [state: "accept", updated_at: now]) do
+      {0, _} ->
         {:error, "Not found"}
 
-      # TODO Announce?
-      following_relationship ->
-        following_relationship
-        |> FollowingRelationship.state_changeset(%{state: :accepted})
-        |> Repo.update()
+      {_, _} ->
+        Logger.error("#{follower_id} follows #{following_id} accept")
+        :ok
     end
   end
 
-  def follow(follower_id, following_id, state \\ :accepted)
+  def follow(follower_id, following_id, state \\ :accept)
 
   def follow(%URI{} = follower_iri, %URI{} = following_iri, state) do
     follow(URI.to_string(follower_iri), URI.to_string(following_iri), state)
@@ -1087,37 +1143,53 @@ defmodule FediServer.Activities do
     }
 
     # TODO Announce?
-    %FollowingRelationship{}
-    |> FollowingRelationship.changeset(params)
-    |> Repo.insert(on_conflict: :nothing, returning: true)
-    |> handle_insert_result(:following)
+    result =
+      %FollowingRelationship{}
+      |> FollowingRelationship.changeset(params)
+      |> Repo.insert(on_conflict: :nothing, returning: true)
+      |> handle_insert_result(:following)
+
+    case result do
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, data} ->
+        Logger.error("#{follower_id} now follows #{following_id} #{state}")
+        {:ok, data}
+    end
   end
 
   def unfollow(%URI{} = follower_iri, %URI{} = following_iri) do
-    # TODO Announce?
-    case get_following_relationship(follower_iri, following_iri) do
-      %FollowingRelationship{} = following_relationship ->
-        Repo.delete(following_relationship)
+    follower_id = URI.to_string(follower_iri)
+    following_id = URI.to_string(following_iri)
 
-      _ ->
-        {:ok, nil}
+    query =
+      FollowingRelationship
+      |> where([c], c.follower_id == ^follower_id and c.following_id == ^following_id)
+
+    case Repo.delete_all(query) do
+      {0, _} ->
+        {:error, "Not found"}
+
+      {_, _} ->
+        Logger.error("#{follower_id} no longer follows #{following_id}")
+
+        :ok
     end
   end
 
   def block(%User{} = actor, %URI{} = blocked_id) do
-    blocked_id = URI.to_string(blocked_id)
-    # May throw exception?
     FediServer.Accounts.BlockedAccount.build_block(actor, blocked_id)
     |> Repo.insert()
+    |> handle_insert_result(:blocked_account)
   end
 
   def unblock(%User{id: user_id} = _actor, %URI{} = blocked_id) do
     blocked_id = URI.to_string(blocked_id)
 
     query =
-      from(b in FediServer.Accounts.BlockedAccount,
-        where: b.user_id == ^user_id and b.ap_id == ^blocked_id
-      )
+      FediServer.Accounts.BlockedAccount
+      |> where([b], b.user_id == ^user_id and b.ap_id == ^blocked_id)
 
     case Repo.delete_all(query) do
       {0, _} -> {:error, "Not found"}
@@ -1128,12 +1200,9 @@ defmodule FediServer.Activities do
   def any_blocked?(%User{id: user_id} = _actor, actor_iris) do
     blocked_ids = Enum.map(actor_iris, fn %URI{} = id -> URI.to_string(id) end)
 
-    query =
-      from(b in FediServer.Accounts.BlockedAccount,
-        where: b.user_id == ^user_id and b.ap_id in ^blocked_ids
-      )
-
-    Repo.exists?(query)
+    FediServer.Accounts.BlockedAccount
+    |> where([b], b.user_id == ^user_id and b.ap_id in ^blocked_ids)
+    |> Repo.exists?()
   end
 
   @doc """

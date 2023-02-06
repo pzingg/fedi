@@ -19,6 +19,11 @@ defmodule FediServer.Accounts.User do
     field(:password, :string, virtual: true, redact: true)
     field(:hashed_password, :string, redact: true)
     field(:shared_inbox, :string)
+
+    field(:on_follow, Ecto.Enum,
+      values: [:do_nothing, :automatically_accept, :automatically_reject]
+    )
+
     field(:keys, :string)
     field(:data, :map)
 
@@ -29,6 +34,13 @@ defmodule FediServer.Accounts.User do
   Use the data from a Fediverse server to populate a User struct for a remote user.
   """
   def new_remote_user(data) when is_map(data) do
+    on_follow =
+      case data["manuallyApprovesFollowers"] do
+        nil -> :do_nothing
+        false -> :automatically_accept
+        _ -> :do_nothing
+      end
+
     %__MODULE__{
       ap_id: data["id"],
       inbox: data["inbox"],
@@ -37,6 +49,7 @@ defmodule FediServer.Accounts.User do
       local?: false,
       keys: get_in(data, ["publicKey", "publicKeyPem"]),
       shared_inbox: get_in(data, ["endpoints", "sharedInbox"]),
+      on_follow: on_follow,
       data: data
     }
   end
@@ -67,9 +80,10 @@ defmodule FediServer.Accounts.User do
       :password,
       :keys,
       :shared_inbox,
+      :on_follow,
       :data
     ])
-    |> validate_required([:ap_id, :inbox, :name, :nickname, :local?, :data])
+    |> validate_required([:ap_id, :inbox, :name, :nickname, :local?, :on_follow, :data])
     |> unique_constraint(:ap_id)
     |> unique_constraint(:nickname)
     |> unique_constraint(:email)

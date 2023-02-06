@@ -710,6 +710,143 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  def validate_accept_or_reject(%{box_iri: inbox_iri} = context, activity) do
+    with {:activity_object, %P.Object{values: [_ | _] = values}} <-
+           {:activity_object, Utils.get_object(activity)},
+         {:ok, actor_iri} <-
+           ActorFacade.db_actor_for_inbox(context, inbox_iri),
+         # Determine if we are in a follow on the 'object' property.
+         # TODO Handle Accept multiple Follow
+         {:ok, _follow, follow_id} <-
+           find_follow(context, values, actor_iri),
+         # Verify our Follow request exists and the peer didn't
+         # fabricate it.
+         {:activity_actor, %P.Actor{values: [_ | _]} = actor_prop} <-
+           {:activity_actor, Utils.get_actor(activity)},
+         # This may be a duplicate check if we dereferenced the
+         # Follow above.
+         {:ok, follow} <-
+           ActorFacade.db_get(context, follow_id),
+         # Ensure that we are one of the actors on the Follow.
+         {:ok, %URI{}} <-
+           follow_is_me?(follow, actor_iri),
+         # Build map of original Accept or Reject actors
+         {:ok, actors} <-
+           get_ids(actor_prop),
+         # Verify all actor(s) were on the original Follow.
+         {:follow_object, %{values: [_ | _]} = follow_prop} <-
+           {:follow_object, Utils.get_object(follow)},
+         {:ok, follow_actors} <-
+           get_ids(follow_prop),
+         {:all_on_original, true} <-
+           {:all_on_original, MapSet.subset?(MapSet.new(actors), MapSet.new(follow_actors))} do
+      {:ok, actor_iri, actors}
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        {:error, Utils.err_object_required(activity: activity)}
+
+      {:activity_actor, _} ->
+        {:error, Utils.err_actor_required(activity: activity)}
+
+      {:follow_object, _} ->
+        {:error, "No object in original Follow activity"}
+
+      {:all_on_original, _} ->
+        activity_name =
+          case activity do
+            %T.Accept{} ->
+              "an Accept"
+
+            _ ->
+              "a Reject"
+          end
+
+        {:error,
+         "Peer sent #{activity_name}/Follow, but was not an object in the original Follow"}
+    end
+  end
+
+  def find_follow(
+        %{box_iri: %URI{}} = context,
+        values,
+        %URI{} = actor_iri
+      ) do
+    Enum.reduce_while(values, {:error, "Not found"}, fn
+      # Attempt to dereference the IRI instead
+      %{iri: %URI{} = iri}, acc ->
+        with {:ok, m} <- ActorFacade.db_dereference(context, iri),
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
+          case follow_is_me?(as_type, actor_iri) do
+            {:error, reason} -> {:halt, {:error, reason}}
+            {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
+            _ -> {:cont, acc}
+          end
+        else
+          _ ->
+            {:halt, {:error, "Unable to dereference a valid follow activity"}}
+        end
+
+      %{member: as_type}, acc when is_struct(as_type) ->
+        case follow_is_me?(as_type, actor_iri) do
+          {:error, reason} -> {:halt, {:error, reason}}
+          {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
+          _ -> {:cont, acc}
+        end
+
+      _, _ ->
+        {:halt, {:error, "Invalid follow activity"}}
+    end)
+  end
+
+  def follow_is_me?(as_type, actor_iri) do
+    with {:follow_type, true} <-
+           {:follow_type, is_or_extends?(as_type, "Follow")},
+         {:activity_id, %URI{} = follow_id} <-
+           {:activity_id, get_id(as_type)},
+         {:activity_actor, %{values: values}} when is_list(values) <-
+           {:activity_actor, Utils.get_actor(as_type)} do
+      case is_me?(values, actor_iri) do
+        {:error, reason} -> {:error, reason}
+        true -> {:ok, follow_id}
+        _ -> {:ok, nil}
+      end
+    else
+      {:activity_id, _} ->
+        {:error, Utils.err_id_required(activity: as_type)}
+
+      {:activity_actor, _} ->
+        {:error, Utils.err_actor_required(activity: as_type)}
+
+      {:follow_type, _} ->
+        {:error, "#{Utils.alias_module(as_type.__struct__)} is not a Follow type"}
+    end
+  end
+
+  def is_me?(actor_iters, actor_iri, enabled \\ true)
+
+  def is_me?(_actor_iters, _actor_iri, false), do: false
+
+  def is_me?(actor_iters, %URI{} = actor_iri, _) when is_list(actor_iters) do
+    actor_iri_str = URI.to_string(actor_iri)
+
+    Enum.reduce_while(actor_iters, false, fn prop, acc ->
+      case to_id(prop) do
+        %URI{} = id ->
+          if URI.to_string(id) == actor_iri_str do
+            {:halt, true}
+          else
+            {:cont, acc}
+          end
+
+        _ ->
+          {:halt, {:error, Utils.err_id_required(iters: actor_iters)}}
+      end
+    end)
+  end
+
   @doc """
   Implements the logic of adding object ids to a target Collection or
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.

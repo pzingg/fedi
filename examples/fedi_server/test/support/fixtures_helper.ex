@@ -95,6 +95,7 @@ defmodule FediServer.FixturesHelper do
              password: "pass",
              local?: true,
              shared_inbox: shared_inbox_uri,
+             on_follow: :automatically_accept,
              data: %{}
            },
            {:ok, user} <-
@@ -117,6 +118,7 @@ defmodule FediServer.FixturesHelper do
              password: "pass",
              local?: true,
              shared_inbox: shared_inbox_uri,
+             on_follow: :automatically_reject,
              data: %{}
            },
            {:ok, user} <-

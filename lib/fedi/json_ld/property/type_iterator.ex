@@ -10,8 +10,9 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
   """
 
   @namespace :json_ld
-  @prop_name "JSONLDType"
-  @member_types [:any_uri, :string]
+  @range [:any_uri, :string]
+  @domain :any_object
+  @prop_name "type"
 
   @enforce_keys [:alias]
   defstruct [
@@ -28,8 +29,17 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
           xsd_string_member: String.t() | nil
         }
 
-  # deserialize creates an iterator from an element that
-  # has been unmarshalled from a text or binary format.
+  def prop_name, do: @prop_name
+  def range, do: @range
+  def domain, do: @domain
+  def functional?, do: false
+  def iterator_module, do: nil
+  def parent_module, do: Fedi.JSONLD.Property.Type
+
+  def new(alias_ \\ "") do
+    %__MODULE__{alias: alias_}
+  end
+
   def deserialize(_prop_name, _mapped_property?, i, alias_map) when is_map(alias_map) do
     case Fedi.Streams.Literal.AnyURI.deserialize(i) do
       {:ok, v} ->
@@ -46,33 +56,7 @@ defmodule Fedi.JSONLD.Property.TypeIterator do
     end
   end
 
-  # serialize converts this into an interface representation suitable for
-  # marshalling into a text or binary format. Applications should not
-  # need this function as most typical use cases serialize types
-  # instead of individual properties. It is exposed for alternatives to
-  # go-fed implementations to use.
   def serialize(%__MODULE__{} = prop) do
     Fedi.Streams.BaseProperty.serialize(prop)
-  end
-
-  # new creates a new id property.
-  def new() do
-    %__MODULE__{alias: ""}
-  end
-
-  # name returns the name of this property: "id".
-  def name(%__MODULE__{alias: alias_}) do
-    Fedi.Streams.BaseProperty.name(@prop_name, alias_)
-  end
-
-  # clear ensures no value of this property is set. Calling
-  # is_xsd_any_uri afterwards will return false.
-  def clear(%__MODULE__{} = prop) do
-    %__MODULE__{
-      prop
-      | unknown: %{},
-        xsd_any_uri_member: nil,
-        xsd_string_member: nil
-    }
   end
 end

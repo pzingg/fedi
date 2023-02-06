@@ -1,5 +1,6 @@
 defmodule FediServer.Accounts.BlockedAccount do
   use Ecto.Schema
+  import Ecto.Changeset
 
   require Logger
 
@@ -15,7 +16,14 @@ defmodule FediServer.Accounts.BlockedAccount do
     timestamps()
   end
 
+  def build_block(%User{} = user, %URI{} = blocked_id) do
+    build_block(user, URI.to_string(blocked_id))
+  end
+
   def build_block(%User{id: user_id}, blocked_id) when is_binary(blocked_id) do
-    %__MODULE__{ap_id: blocked_id, user_id: user_id}
+    %__MODULE__{user_id: user_id}
+    |> cast(%{ap_id: blocked_id}, [:user_id, :ap_id])
+    |> validate_required([:user_id, :ap_id])
+    |> unique_constraint([:user_id, :ap_id])
   end
 end
