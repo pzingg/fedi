@@ -37,6 +37,7 @@ defmodule FediServer.MixProject do
       {:phoenix_ecto, "~> 4.4"},
       {:ecto_sql, "~> 3.6"},
       {:ecto_ulid, "~> 0.3"},
+      {:arbor, "~> 1.1"},
       {:postgrex, ">= 0.0.0"},
       {:telemetry_metrics, "~> 0.6"},
       {:telemetry_poller, "~> 1.0"},

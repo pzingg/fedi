@@ -501,7 +501,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   """
   def add_to_outbox(context, %URI{} = outbox_iri, activity)
       when is_struct(activity) do
-    with {:activity_id, %URI{} = id} <- {:activity_id, Utils.get_json_ld_id(activity)},
+    with {:activity_id, %URI{} = _id} <- {:activity_id, Utils.get_json_ld_id(activity)},
          # Persist the activity
          {:ok, activity, _raw_json} <-
            ActorFacade.db_create(context, activity),
@@ -721,8 +721,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   The returned actor could be nil, if it wasn't an actor (ex: a Collection or
   OrderedCollection).
   """
-  def dereference_for_resolving_inboxes(context, transport, %URI{} = actor_id) do
-    with {:ok, m} when is_map(m) <- ActorFacade.db_dereference(context, transport, actor_id),
+  def dereference_for_resolving_inboxes(context, transport, %URI{} = actor_iri) do
+    with {:ok, m} when is_map(m) <- ActorFacade.db_dereference(context, transport, actor_iri),
          {:ok, %{properties: properties} = actor_or_collection} <-
            Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
       # Attempt to see if the 'actor' is really some sort of type that has
@@ -743,8 +743,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
                   {:cont, acc ++ ids}
 
                 _ ->
-                  Logger.error("deref #{actor_id} has #{prop_name} with no id")
-                  {:halt, {:error, "Actor #{actor_id} has #{prop_name} with no id"}}
+                  Logger.error("deref #{actor_iri} has #{prop_name} with no id")
+                  {:halt, {:error, "Actor #{actor_iri} has #{prop_name} with no id"}}
               end
 
             _ ->
@@ -762,11 +762,11 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       end
     else
       {:ok, _not_a_map} ->
-        Logger.error("deref #{actor_id} ERROR Not a map")
+        Logger.error("deref #{actor_iri} ERROR Not a map")
         {:error, "Not a map"}
 
       {:error, reason} ->
-        Logger.error("deref #{actor_id} ERROR #{reason}")
+        Logger.error("deref #{actor_iri} ERROR #{reason}")
         {:error, reason}
     end
   end
@@ -926,7 +926,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     end
   end
 
-  def set_object_attributed_to_and_id(context, %URI{} = actor_id, object) do
+  def set_object_attributed_to_and_id(context, %URI{} = actor_iri, object) do
     # FIXME This will happen later in SocialActivityHandler.create
     # but db_new_id requires an actor to build the id.
     # Perhaps take it out of the context instead?
@@ -934,7 +934,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       if Utils.get_iri(object, "attributedTo") do
         object
       else
-        Utils.set_iri(object, "attributedTo", actor_id)
+        Utils.set_iri(object, "attributedTo", actor_iri)
       end
 
     with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do

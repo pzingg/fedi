@@ -519,34 +519,6 @@ defmodule FediServer.Activities do
   end
 
   def add_collection_item(
-        {:object_action, type},
-        %URI{} = object_iri,
-        {%URI{} = actor_iri, %URI{} = activity_iri},
-        acc
-      ) do
-    Logger.error("#{actor_iri} #{type}d #{object_iri}")
-    object_id = URI.to_string(object_iri)
-    actor_id = URI.to_string(actor_iri)
-    activity_id = URI.to_string(activity_iri)
-
-    params = %{
-      type: type,
-      actor: actor_id,
-      activity: activity_id,
-      object: object_id,
-      local?: local?(activity_iri)
-    }
-
-    case repo_insert({:object_action, type}, params) do
-      {:ok, _} ->
-        {:cont, [activity_id | acc]}
-
-      {:error, reason} ->
-        {:halt, {:error, reason}}
-    end
-  end
-
-  def add_collection_item(
         :following,
         %URI{} = actor_iri,
         %URI{} = following_id,
@@ -587,6 +559,34 @@ defmodule FediServer.Activities do
 
       _ ->
         {:halt, {:error, "Object #{object_id} not found"}}
+    end
+  end
+
+  def add_collection_item(
+        {:object_action, type},
+        %URI{} = object_iri,
+        {%URI{} = actor_iri, %URI{} = activity_iri},
+        acc
+      ) do
+    Logger.error("#{actor_iri} #{type}d #{object_iri}")
+    object_id = URI.to_string(object_iri)
+    actor_id = URI.to_string(actor_iri)
+    activity_id = URI.to_string(activity_iri)
+
+    params = %{
+      type: type,
+      actor: actor_id,
+      activity: activity_id,
+      object: object_id,
+      local?: local?(activity_iri)
+    }
+
+    case repo_insert({:object_action, type}, params) do
+      {:ok, _} ->
+        {:cont, [actor_iri | acc]}
+
+      {:error, reason} ->
+        {:halt, {:error, reason}}
     end
   end
 
@@ -654,11 +654,44 @@ defmodule FediServer.Activities do
 
     cond do
       count_deleted == 0 ->
-        Logger.error("None of #{to_delete} items were removed from #{coll_id}")
+        Logger.error("None of #{to_delete} item(s) were removed from #{coll_id}")
         {:error, "Not found"}
 
       count_deleted < to_delete ->
-        Logger.error("Only #{count_deleted} of #{to_delete} items were removed from #{coll_id}")
+        Logger.error("Only #{count_deleted} of #{to_delete} item(s) were removed from #{coll_id}")
+        :ok
+
+      true ->
+        :ok
+    end
+  end
+
+  def remove_collection_items(
+        {:object_action, type},
+        %URI{} = object_iri,
+        actor_iris
+      ) do
+    object_id = URI.to_string(object_iri)
+    actor_ids = Enum.map(actor_iris, &URI.to_string(&1))
+    to_delete = Enum.count(actor_ids)
+
+    {count_deleted, _} =
+      ObjectAction
+      |> where([c], c.type == ^type)
+      |> where([c], c.object == ^object_id)
+      |> where([c], c.actor in ^actor_ids)
+      |> Repo.delete_all()
+
+    cond do
+      count_deleted == 0 ->
+        Logger.error("None of #{to_delete} item(s) were removed from #{object_id} #{type}s")
+        {:error, "Not found"}
+
+      count_deleted < to_delete ->
+        Logger.error(
+          "Only #{count_deleted} of #{to_delete} item(s) were removed from #{object_id} #{type}s"
+        )
+
         :ok
 
       true ->
@@ -1010,13 +1043,13 @@ defmodule FediServer.Activities do
   Used in social SideEffectActor post_inbox.
   """
   @impl true
-  def new_id(value) do
+  def new_id(as_type) do
     # endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
     with {:activity_actor, %URI{path: actor_path} = actor_iri} <-
-           {:activity_actor, Utils.get_actor_or_attributed_to_iri(value)},
+           {:activity_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
          {:local_actor, true} <- {:local_actor, local?(actor_iri)},
-         {:ok, _type_name, category} <- Utils.get_type_name_and_category(value) do
+         {:ok, _type_name, category} <- Utils.get_type_name_and_category(as_type) do
       ulid = Ecto.ULID.generate()
 
       case category do
@@ -1030,13 +1063,13 @@ defmodule FediServer.Activities do
 
       {:activity_actor, _} ->
         Logger.error(
-          "Couldn't get attributed_to in object #{Utils.alias_module(value.__struct__)}"
+          "Couldn't get attributed_to in object #{Utils.alias_module(as_type.__struct__)}"
         )
 
-        {:error, Utils.err_actor_required(object: value)}
+        {:error, Utils.err_actor_required(object: as_type)}
 
       {:local_actor, _} ->
-        Logger.error("Actor in object #{Utils.alias_module(value.__struct__)} is not ours")
+        Logger.error("Actor in object #{Utils.alias_module(as_type.__struct__)} is not ours")
         {:error, "Internal server error"}
     end
   end
@@ -1316,22 +1349,35 @@ defmodule FediServer.Activities do
         end
 
       {:ok, ap_id, type_name, category} ->
-        schema =
+        params =
           if category == :activities || category == :collections do
-            category
+            %{
+              schema: category,
+              ap_id: ap_id,
+              ulid: nil,
+              nickname: nil,
+              local?: local?(ap_id),
+              type: type_name
+            }
           else
-            :objects
+            in_reply_to =
+              case Utils.get_iri(as_type, "inReplyTo") do
+                %URI{} = iri -> URI.to_string(iri)
+                _ -> nil
+              end
+
+            %{
+              schema: :objects,
+              ap_id: ap_id,
+              ulid: nil,
+              nickname: nil,
+              in_reply_to: in_reply_to,
+              local?: local?(ap_id),
+              type: type_name
+            }
           end
 
-        {:ok,
-         %{
-           schema: schema,
-           ap_id: ap_id,
-           ulid: nil,
-           nickname: nil,
-           local?: local?(ap_id),
-           type: type_name
-         }}
+        {:ok, params}
     end
   end
 

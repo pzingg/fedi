@@ -1358,6 +1358,23 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  def update_object_collections(context, actor_iri, activity_id, object_ids, coll_name, op) do
+    Enum.reduce_while(object_ids, :ok, fn %URI{path: object_path} = object_id, acc ->
+      coll_id = %URI{object_id | path: Path.join(object_path, coll_name)}
+
+      updates =
+        case op do
+          :add -> %{add: [{actor_iri, activity_id}]}
+          :remove -> %{remove: [actor_iri]}
+        end
+
+      case ActorFacade.db_update_collection(context, coll_id, updates) do
+        {:error, reason} -> {:halt, {:error, reason}}
+        _ -> {:cont, acc}
+      end
+    end)
+  end
+
   @doc """
   Forms an ActivityPub id based on the HTTP request.
 

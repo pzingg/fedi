@@ -1,4 +1,5 @@
 %{
+  "arbor": {:hex, :arbor, "1.1.1", "ca6c5ada88e31dfdcea5bcd2ed90b423c0324f811afea9f6379550e5dbdea256", [:mix], [{:ecto_sql, ">= 3.0.0", [hex: :ecto_sql, repo: "hexpm", optional: false]}, {:postgrex, ">= 0.0.0", [hex: :postgrex, repo: "hexpm", optional: false]}], "hexpm", "a5c0e85cd8183529c4b40f3a43c79b0aaebbe03b5b5772579e0f14af64f314e1"},
   "bcrypt_elixir": {:hex, :bcrypt_elixir, "2.3.1", "5114d780459a04f2b4aeef52307de23de961b69e13a5cd98a911e39fda13f420", [:make, :mix], [{:comeonin, "~> 5.3", [hex: :comeonin, repo: "hexpm", optional: false]}, {:elixir_make, "~> 0.6", [hex: :elixir_make, repo: "hexpm", optional: false]}], "hexpm", "42182d5f46764def15bf9af83739e3bf4ad22661b1c34fc3e88558efced07279"},
   "castore": {:hex, :castore, "0.1.22", "4127549e411bedd012ca3a308dede574f43819fe9394254ca55ab4895abfa1a2", [:mix], [], "hexpm", "c17576df47eb5aa1ee40cc4134316a99f5cad3e215d5c77b8dd3cfef12a22cac"},
   "certifi": {:hex, :certifi, "2.9.0", "6f2a475689dd47f19fb74334859d460a2dc4e3252a3324bd2111b8f0429e7e21", [:rebar3], [], "hexpm", "266da46bdb06d6c6d35fde799bcb28d36d985d424ad7c08b5bb48f5b5cdd4641"},

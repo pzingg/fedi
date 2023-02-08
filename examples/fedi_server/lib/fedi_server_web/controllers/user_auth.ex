@@ -85,8 +85,7 @@ defmodule FediServerWeb.UserAuth do
     {user_token, conn} = ensure_user_token(conn)
 
     case user_token && Accounts.get_user_by_session_token(user_token) do
-      %User{ap_id: ap_id} = user ->
-        # Logger.error("current user now #{ap_id}")
+      %User{} = user ->
         assign(conn, :current_user, user)
 
       _ ->
@@ -111,10 +110,10 @@ defmodule FediServerWeb.UserAuth do
   @doc """
   Check that the :current_user is not nil and is the actor.
   """
-  def logged_in_actor?(conn, %URI{} = actor_id) do
+  def logged_in_actor?(conn, %URI{} = actor_iri) do
     case conn.assigns[:current_user] do
       %User{ap_id: ap_id} ->
-        ap_id == URI.to_string(actor_id)
+        ap_id == URI.to_string(actor_iri)
 
       _ ->
         Logger.error("No current user")

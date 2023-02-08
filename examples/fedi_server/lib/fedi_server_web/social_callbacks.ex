@@ -235,13 +235,12 @@ defmodule FediServerWeb.SocialCallbacks do
 
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
-         {:actor_id, %URI{} = actor_id} <- {:actor_id, APUtils.to_id(actor)},
+         {:actor_id, %URI{} = actor_iri} <- {:actor_id, APUtils.to_id(actor)},
          {:following_id, %URI{} = following_id} <- {:following_id, APUtils.to_id(object)},
-         {:ok, %User{}} <- Activities.ensure_user(actor_id, true),
+         {:ok, %User{}} <- Activities.ensure_user(actor_iri, true),
          # Insert remote following user if not in db
          {:ok, %User{}} <- Activities.ensure_user(following_id, false),
-         {:ok, _relationship} <- Activities.follow(actor_id, following_id, :pending) do
-      Logger.debug("Inserted new relationship")
+         {:ok, _relationship} <- Activities.follow(actor_iri, following_id, :pending) do
       {:ok, activity, true}
     else
       {:error, %Ecto.Changeset{} = changeset} ->
@@ -262,7 +261,7 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, "No id in actor"}
 
       {:following_id, _} ->
-        {:error, "No id in object"}
+        {:error, "No following id in object"}
     end
   end
 
@@ -270,9 +269,9 @@ defmodule FediServerWeb.SocialCallbacks do
   def block(_context, activity) when is_struct(activity) do
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
-         {:actor_id, %URI{} = actor_id} <- {:actor_id, APUtils.to_id(actor)},
+         {:actor_id, %URI{} = actor_iri} <- {:actor_id, APUtils.to_id(actor)},
          {:blocked_id, %URI{} = blocked_id} <- {:blocked_id, APUtils.to_id(object)},
-         {:ok, %User{} = user} <- Activities.ensure_user(actor_id, true),
+         {:ok, %User{} = user} <- Activities.ensure_user(actor_iri, true),
          {:ok, _blocked_account} <- Activities.block(user, blocked_id) do
       Logger.error("Blocked #{blocked_id}")
       {:ok, activity, false}
@@ -296,6 +295,173 @@ defmodule FediServerWeb.SocialCallbacks do
 
       {:blocked_id, _} ->
         {:error, "No id in object"}
+    end
+  end
+
+  @doc """
+  We'll support what Mastodon does:
+
+  * Undo/Accept
+  * Undo/Follow
+  * Undo/Block
+  * Undo/Like
+  * Undo/Announce
+  """
+  @impl true
+  def undo(context, activity) when is_struct(activity) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object_type(activity)},
+         {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_iri(activity, "actor")},
+         {:object_actor, %URI{} = object_actor} <-
+           {:object_actor, Utils.get_iri(object, "actor")},
+         {:same_actor, true} <- {:same_actor, actor_iri == object_actor} do
+      result =
+        case Utils.get_json_ld_type(object) do
+          "Accept" ->
+            undo_accept(context, actor_iri, object)
+
+          "Follow" ->
+            undo_follow(context, actor_iri, object)
+
+          "Block" ->
+            undo_block(context, actor_iri, object)
+
+          "Like" ->
+            undo_like(context, actor_iri, object)
+
+          "Announce" ->
+            undo_announce(context, actor_iri, object)
+
+          other ->
+            {:error,
+             %Error{
+               code: :undo_type_not_supported,
+               status: :unprocessable_entity,
+               message: "Undo #{other} is not supported"
+             }}
+        end
+
+      case result do
+        :ok -> {:ok, activity, true}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_actor, _} ->
+        Utils.err_actor_required(activity: activity)
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: activity)
+
+      {:object_actor, _} ->
+        {:error, Utils.err_actor_required(activity: activity)}
+
+      {:same_actor, _} ->
+        {:error,
+         %Error{
+           code: :object_actor_mismatch,
+           status: :unprocessable_entity,
+           message: "Object actor must be the same as Undo actor"
+         }}
+    end
+  end
+
+  def undo_accept(context, _actor_iri, accept) do
+    with {:ok, %URI{path: actor_path} = actor_iri, accept_actors} <-
+           APUtils.validate_accept_or_reject(context, accept),
+         coll_id <-
+           %URI{actor_iri | path: actor_path <> "/following"},
+         {:ok, _} <-
+           ActorFacade.db_update_collection(context, coll_id, %{
+             delete: accept_actors
+           }) do
+      :ok
+    end
+  end
+
+  def undo_follow(_context, actor_iri, follow) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(follow)},
+         {:following_id, %URI{} = following_id} <-
+           {:following_id, APUtils.to_id(object)},
+         {:ok, %User{}} <-
+           Activities.ensure_user(actor_iri, true) do
+      Activities.unfollow(actor_iri, following_id)
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: follow)
+
+      {:following_id, _} ->
+        {:error, "No following id in object"}
+    end
+  end
+
+  def undo_block(_context, actor_iri, block) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(block)},
+         {:blocked_id, %URI{} = blocked_id} <-
+           {:blocked_id, APUtils.to_id(object)},
+         {:ok, %User{} = user} <-
+           Activities.ensure_user(actor_iri, true) do
+      Activities.unblock(user, blocked_id)
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: block)
+
+      {:blocked_id, _} ->
+        {:error, "No id in object"}
+    end
+  end
+
+  def undo_like(context, %URI{path: actor_path} = actor_iri, like) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(like)},
+         {:ok, object_ids} <-
+           APUtils.get_ids(object),
+         coll_id <-
+           %URI{actor_iri | path: actor_path <> "/liked"},
+         {:ok, _oc} <-
+           ActorFacade.db_update_collection(context, coll_id, %{remove: object_ids}) do
+      :ok
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: like)
+    end
+  end
+
+  def undo_announce(context, actor_iri, announce) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(announce)},
+         {:ok, object_ids} <-
+           APUtils.get_ids(object),
+         {:ok, _oc} <-
+           APUtils.update_object_collections(
+             context,
+             actor_iri,
+             nil,
+             object_ids,
+             "shares",
+             :remove
+           ) do
+      :ok
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        Utils.err_object_required(activity: announce)
     end
   end
 end

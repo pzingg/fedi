@@ -4,6 +4,7 @@ defmodule Fedi.Streams.Utils do
   require Logger
 
   alias Fedi.Streams.Error
+  alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.W3IDSecurityV1.Property.{PublicKey, PublicKeyPem}
 
   # TODO ONTOLOGY
@@ -209,10 +210,10 @@ defmodule Fedi.Streams.Utils do
   end
 
   # prop like:
-  # %Fedi.ActivityStreams.Property.OrderedItemsIterator{
+  # %P.OrderedItemsIterator{
   #   alias: "",
   #   iri: nil,
-  #   member: %Fedi.ActivityStreams.Type.Note{
+  #   member: %T.Note{
   #     alias: "",
   #     properties: %{
   #       "id" => %Fedi.JSONLD.Property.Id{xsd_any_uri_member: %URI{...}},
@@ -431,8 +432,8 @@ defmodule Fedi.Streams.Utils do
   # On a type
   def get_actor_or_attributed_to_iri(activity) do
     case get_iri(activity, "actor") || get_iri(activity, "attributedTo") do
-      %URI{} = actor_id ->
-        actor_id
+      %URI{} = actor_iri ->
+        actor_iri
 
       _ ->
         case get_object(activity) do
@@ -634,7 +635,7 @@ defmodule Fedi.Streams.Utils do
 
   def get_actor(%{properties: properties}) when is_map(properties) do
     case Map.get(properties, "actor") do
-      %Fedi.ActivityStreams.Property.Actor{} = actor -> actor
+      %P.Actor{} = actor -> actor
       _ -> nil
     end
   end
@@ -650,26 +651,36 @@ defmodule Fedi.Streams.Utils do
     end
   end
 
+  def get_object_type(as_type) do
+    case get_object(as_type) do
+      %P.Object{values: [%{member: object_type} | _]} when is_struct(object_type) ->
+        object_type
+
+      _ ->
+        nil
+    end
+  end
+
   def get_object(%{properties: properties}) when is_map(properties) do
     case Map.get(properties, "object") do
-      %Fedi.ActivityStreams.Property.Object{} = object -> object
+      %P.Object{} = object -> object
       _ -> nil
     end
   end
 
   def get_target(%{properties: properties}) when is_map(properties) do
     case Map.get(properties, "target") do
-      %Fedi.ActivityStreams.Property.Target{} = target -> target
+      %P.Target{} = target -> target
       _ -> nil
     end
   end
 
   def new_ordered_items() do
-    %Fedi.ActivityStreams.Property.OrderedItems{alias: ""}
+    %P.OrderedItems{alias: ""}
   end
 
   def get_ordered_items(%{properties: properties}) when is_map(properties) do
-    with %Fedi.ActivityStreams.Property.OrderedItems{} = prop <-
+    with %P.OrderedItems{} = prop <-
            Map.get(properties, "orderedItems") do
       prop
     else
@@ -680,21 +691,21 @@ defmodule Fedi.Streams.Utils do
 
   def set_ordered_items(
         %{properties: properties} = ordered_collection_page,
-        %Fedi.ActivityStreams.Property.OrderedItems{} = prop
+        %P.OrderedItems{} = prop
       )
       when is_map(properties) do
     struct(ordered_collection_page, properties: Map.put(properties, "orderedItems", prop))
   end
 
   def prepend_to_ordered_items(
-        %Fedi.ActivityStreams.Property.OrderedItems{alias: alias_, values: values} = prop,
+        %P.OrderedItems{alias: alias_, values: values} = prop,
         value
       )
       when is_list(values) do
-    %Fedi.ActivityStreams.Property.OrderedItems{
+    %P.OrderedItems{
       prop
       | values: [
-          %Fedi.ActivityStreams.Property.OrderedItemsIterator{alias: alias_, member: value}
+          %P.OrderedItemsIterator{alias: alias_, member: value}
           | values
         ]
     }

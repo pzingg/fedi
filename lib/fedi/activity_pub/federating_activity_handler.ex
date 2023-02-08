@@ -339,7 +339,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %URI{} = actor_iri} <-
-           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)},
+           {:activity_actor, Utils.get_iri(activity, "actor")},
          {:activity_id, %URI{} = activity_id} <-
            {:activity_id, APUtils.get_id(activity)},
          {:ok, object_ids} <-
@@ -347,7 +347,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, object_ids} <-
            filter_owned_objects(context, object_ids),
          :ok <-
-           update_object_collections(context, actor_iri, activity_id, object_ids, "likes") do
+           APUtils.update_object_collections(context, actor_iri, activity_id, object_ids, "likes", :add) do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -366,7 +366,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
          {:activity_actor, %URI{} = actor_iri} <-
-           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)},
+           {:activity_actor, Utils.get_iri(activity, "actor")},
          {:activity_id, %URI{} = activity_id} <-
            {:activity_id, APUtils.get_id(activity)},
          {:ok, object_ids} <-
@@ -374,7 +374,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, object_ids} <-
            filter_owned_objects(context, object_ids),
          :ok <-
-           update_object_collections(context, actor_iri, activity_id, object_ids, "shares") do
+           APUtils.update_object_collections(context, actor_iri, activity_id, object_ids, "shares", :add) do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -398,16 +398,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
     end
   end
 
-  def update_object_collections(context, actor_iri, activity_id, object_ids, coll_name) do
-    Enum.reduce_while(object_ids, :ok, fn %URI{path: object_path} = object_id, acc ->
-      coll_id = %URI{object_id | path: Path.join(object_path, coll_name)}
 
-      case ActorFacade.db_update_collection(context, coll_id, %{add: [{actor_iri, activity_id}]}) do
-        {:error, reason} -> {:halt, {:error, reason}}
-        _ -> {:cont, acc}
-      end
-    end)
-  end
 
   @doc """
   Implements the federating Undo activity side effects.

@@ -105,7 +105,7 @@ defmodule FediServerWeb.FederatingCallbacks do
         activity
       ) do
     with {:activity_actor, %URI{} = actor_iri} <-
-           {:activity_actor, Utils.get_actor_or_attributed_to_iri(activity)} do
+           {:activity_actor, Utils.get_iri(activity, "actor")} do
       if URI.to_string(signer_id) == URI.to_string(actor_iri) do
         {:ok, conn, true}
       else
