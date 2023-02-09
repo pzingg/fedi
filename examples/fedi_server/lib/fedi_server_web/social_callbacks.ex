@@ -312,60 +312,52 @@ defmodule FediServerWeb.SocialCallbacks do
     with {:activity_object, object} <-
            {:activity_object, Utils.get_object_type(activity)},
          {:activity_actor, %URI{} = actor_iri} <-
-           {:activity_actor, Utils.get_iri(activity, "actor")},
-         {:object_actor, %URI{} = object_actor} <-
-           {:object_actor, Utils.get_iri(object, "actor")},
-         {:same_actor, true} <- {:same_actor, actor_iri == object_actor} do
-      result =
-        case Utils.get_json_ld_type(object) do
-          "Accept" ->
-            undo_accept(context, actor_iri, object)
+           {:activity_actor, Utils.get_iri(activity, "actor")} do
+      case Utils.get_json_ld_type(object) do
+        "Accept" ->
+          case undo_accept(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
 
-          "Follow" ->
-            undo_follow(context, actor_iri, object)
+        "Follow" ->
+          case undo_follow(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
 
-          "Block" ->
-            undo_block(context, actor_iri, object)
+        "Block" ->
+          case undo_block(context, actor_iri, object) do
+            :ok -> {:ok, activity, false}
+            {:error, reason} -> {:error, reason}
+          end
 
-          "Like" ->
-            undo_like(context, actor_iri, object)
+        "Like" ->
+          case undo_like(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
 
-          "Announce" ->
-            undo_announce(context, actor_iri, object)
+        "Announce" ->
+          case undo_announce(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
 
-          other ->
-            {:error,
-             %Error{
-               code: :undo_type_not_supported,
-               status: :unprocessable_entity,
-               message: "Undo #{other} is not supported"
-             }}
-        end
-
-      case result do
-        :ok -> {:ok, activity, true}
-        {:error, reason} -> {:error, reason}
+        other ->
+          {:error,
+           %Error{
+             code: :undo_type_not_supported,
+             status: :unprocessable_entity,
+             message: "Undo #{other} is not supported"
+           }}
       end
     else
-      {:error, reason} ->
-        {:error, reason}
-
       {:activity_actor, _} ->
         Utils.err_actor_required(activity: activity)
 
       {:activity_object, _} ->
         Utils.err_object_required(activity: activity)
-
-      {:object_actor, _} ->
-        {:error, Utils.err_actor_required(activity: activity)}
-
-      {:same_actor, _} ->
-        {:error,
-         %Error{
-           code: :object_actor_mismatch,
-           status: :unprocessable_entity,
-           message: "Object actor must be the same as Undo actor"
-         }}
     end
   end
 

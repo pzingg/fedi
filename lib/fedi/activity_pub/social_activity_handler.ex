@@ -307,17 +307,13 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def undo(context, activity)
       when is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _]}} <-
-           {:activity_object, Utils.get_object(activity)},
-         {:activity_actor, %P.Actor{values: [_ | _]} = actor} <-
-           {:activity_actor, Utils.get_actor(activity)},
-         :ok <- APUtils.object_actors_match_activity_actors?(context, actor) do
-      context = Map.put(context, :deliverable, true)
-      ActorFacade.handle_c2s_activity(context, activity)
-    else
-      {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
+    case APUtils.object_actors_match_activity_actors?(context, activity) do
+      :ok ->
+        context = Map.put(context, :deliverable, true)
+        ActorFacade.handle_c2s_activity(context, activity)
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

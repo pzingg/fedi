@@ -37,7 +37,7 @@ defmodule FediServer.Activities.Mailbox do
       :local?,
       :status
     ])
-    |> validate_required([:activity_id, :outgoing, :type, :actor, :object, :visibility, :local?])
+    |> validate_required([:activity_id, :outgoing, :type, :actor, :visibility, :local?])
     |> unique_constraint([:outgoing, :actor, :activity_id])
   end
 end

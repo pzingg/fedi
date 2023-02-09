@@ -153,23 +153,43 @@ defmodule Fedi.Streams.Utils do
     cond do
       Keyword.has_key?(data, :activity) ->
         %{__struct__: module} = Keyword.get(data, :activity)
-        " on activity #{alias_module(module)}"
+
+        case error_property(data) do
+          prop_name when is_binary(prop_name) ->
+            " in #{alias_module(module)} #{prop_name} property"
+
+          _ ->
+            " in activity #{alias_module(module)}"
+        end
 
       Keyword.has_key?(data, :value) ->
         %{__struct__: module} = Keyword.get(data, :value)
-        " on type #{alias_module(module)}"
+        " in type #{alias_module(module)}"
 
-      Keyword.has_key?(data, :iters) ->
-        case Keyword.get(data, :iters) do
-          [%{__struct__: module} | _] ->
-            " on property #{alias_module(module)}"
+      true ->
+        case error_property(data) do
+          prop_name when is_binary(prop_name) ->
+            " in property #{prop_name}"
 
           _ ->
             ""
         end
+    end
+  end
 
-      true ->
-        ""
+  def error_property(data) do
+    case Keyword.get(data, :property) do
+      prop_name when is_binary(prop_name) ->
+        prop_name
+
+      %{__struct__: prop_module} ->
+        alias_module(prop_module)
+
+      [%{__struct__: prop_module} | _] ->
+        alias_module(prop_module)
+
+      _ ->
+        nil
     end
   end
 
@@ -446,14 +466,48 @@ defmodule Fedi.Streams.Utils do
     end
   end
 
+  @doc """
+  Retrieve multiple IRIs for a named property in a type.
+  """
   # On a non-functional property
-  def get_iri(%{values: [%{iri: %URI{} = iri} | _]}), do: iri
+  def get_iris(%{values: values}, prop_name) do
+    Enum.map(values, &get_iri(&1, prop_name)) |> Enum.reject(&is_nil/1)
+  end
 
   # On a functional property
-  def get_iri(%{iri: %URI{} = iri}), do: iri
+  def get_iris(%{member: member}, prop_name) when is_struct(member) do
+    case get_iri(member, prop_name) do
+      %URI{} = iri -> [iri]
+      _ -> []
+    end
+  end
 
-  def get_iri(_), do: nil
+  # On a type
+  def get_iris(%{properties: properties}, prop_name) when is_map(properties) do
+    case Map.get(properties, prop_name) do
+      prop when is_struct(prop) -> get_iris(prop)
+      _ -> []
+    end
+  end
 
+  def get_iris(_, _prop_name), do: []
+
+  @doc """
+  Retrieve multiple IRIs from a property if it is set.
+  """
+  # On a non-functional property
+  def get_iris(%{values: values}) do
+    Enum.map(values, &get_iri(&1)) |> Enum.reject(&is_nil/1)
+  end
+
+  # On a functional property
+  def get_iris(%{iri: %URI{} = iri}), do: [iri]
+
+  def get_iris(_), do: []
+
+  @doc """
+  Retrieve the first IRI for a named property in a type.
+  """
   # On a non-functional property
   def get_iri(%{values: [iter | _]}, prop_name) do
     get_iri(iter, prop_name)
@@ -473,6 +527,18 @@ defmodule Fedi.Streams.Utils do
   end
 
   def get_iri(_, _prop_name), do: nil
+
+    @doc """
+  Retrieve the first IRI from a property if it is set.
+  """
+  # On a non-functional property
+  def get_iri(%{values: [%{iri: %URI{} = iri} | _]}), do: iri
+
+  # On a functional property
+  def get_iri(%{iri: %URI{} = iri}), do: iri
+
+  def get_iri(_), do: nil
+
 
   # On a non-functional property
   def set_iri(%{values: [iter | rest]} = prop, prop_name, iri_or_nil) do

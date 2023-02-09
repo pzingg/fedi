@@ -362,7 +362,7 @@ defmodule Mix.Tasks.Ontology.Gen do
           {name, disjoint_with}
         end
       end)
-      |> Enum.filter(fn i -> !is_nil(i) end)
+      |> Enum.reject(&is_nil/1)
       |> Enum.into(%{})
 
     eb_map =

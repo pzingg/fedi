@@ -903,8 +903,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
     Enum.reduce(iris, [], fn iri, acc ->
       # Dereferencing the IRI.
       with {:ok, m} <- ActorFacade.db_dereference(context, iri),
-           {:ok, type} <- Fedi.Streams.JSONResolver.resolve(m) do
-        [type | acc]
+           {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
+        [as_type | acc]
       else
         # Do not fail the entire process if the data is missing.
         # Do not fail the entire process if we cannot handle the type.

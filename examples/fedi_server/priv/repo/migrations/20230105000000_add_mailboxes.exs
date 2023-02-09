@@ -7,7 +7,7 @@ defmodule FediServer.Repo.Migrations.AddMailboxes do
       add :outgoing, :boolean, null: false, default: false
       add :type, :string, null: false
       add :actor, :string, null: false
-      add :object, :string, null: false
+      add :object, :string
       add :local?, :boolean, null: false, default: false
       add :visibility, :string, null: false, default: "direct"
       add :status, :string, null: false, default: "new"

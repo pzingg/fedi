@@ -49,7 +49,7 @@ defmodule Fedi.Client do
             addr
           end
         end)
-        |> Enum.filter(fn addr -> !is_nil(addr) end)
+        |> Enum.reject(&is_nil/1)
 
       case prop do
         [] -> Map.delete(m, prop)

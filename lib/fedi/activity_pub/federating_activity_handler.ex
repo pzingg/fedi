@@ -47,7 +47,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
       %{iri: %URI{} = iri}, acc ->
         with {:ok, m} <- ActorFacade.db_dereference(context, iri),
-             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
           case ActorFacade.db_create(context, as_type) do
             {:ok, created, _raw_json} ->
               {:cont, [created | acc]}
@@ -351,9 +351,9 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: activity)}
+      {:activity_id, _} -> {:error, Utils.err_id_required(activity: activity)}
     end
   end
 
@@ -378,9 +378,9 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: activity)}
+      {:activity_id, _} -> {:error, Utils.err_id_required(activity: activity)}
     end
   end
 

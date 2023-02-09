@@ -398,7 +398,7 @@ defmodule FediServer.Activities do
           Logger.error("For #{coll_name} don't know how to map #{inspect(item)}")
           nil
       end)
-      |> Enum.filter(fn iter -> !is_nil(iter) end)
+      |> Enum.reject(&is_nil/1)
 
     ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
 
@@ -492,8 +492,14 @@ defmodule FediServer.Activities do
   end
 
   def add_collection_item({:mailbox, outgoing}, %URI{} = actor_iri, activity, acc) do
-    with {:ok, params} <- parse_basic_params(activity),
-         {:ok, object_id} <- APUtils.get_object_id(activity) do
+    with {:ok, params} <- parse_basic_params(activity) do
+      # Some activities, like Undo/Follow, will have an object type, not an id
+      object_id =
+        case APUtils.get_object_id(activity) do
+          {:ok, object_id} -> URI.to_string(object_id)
+          _ -> nil
+        end
+
       visibility = APUtils.get_visibility(activity, actor_iri)
 
       params =
@@ -501,7 +507,7 @@ defmodule FediServer.Activities do
           outgoing: outgoing,
           activity_id: URI.to_string(params.ap_id),
           actor: URI.to_string(actor_iri),
-          object: URI.to_string(object_id),
+          object: object_id,
           visibility: visibility,
           local?: params.local?
         })

@@ -624,6 +624,94 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert response(conn, 401)
   end
 
+  test "outbox undo MAY be supported (non-normative)", %{conn: conn} do
+    # First, follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
+    }
+
+    %{alyssa: %{user: alyssa}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Then, undo follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Undo",
+      "to" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => %{
+        "type" => "Follow",
+        "actor" => "https://example.com/users/alyssa",
+        "object" => "https://chatty.example/users/ben"
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    refute get_posted_item("https://example.com/users/alyssa/following")
+  end
+
+  test "outbox undo MUST ensure activity and actor are same", %{conn: conn} do
+    # First, follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "to" => "https://www.w3.org/ns/activitystreams#Public",
+      "cc" => "https://example.com/users/alyssa/followers",
+      "actor" => "https://example.com/users/alyssa",
+      "object" => "https://chatty.example/users/ben"
+    }
+
+    %{alyssa: %{user: alyssa}, daria: %{user: daria}} = user_fixtures()
+
+    conn =
+      conn
+      |> log_in_user(alyssa)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/alyssa/outbox", Jason.encode!(activity))
+
+    assert response(conn, 201)
+
+    # Then, undo follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Undo",
+      "to" => "https://www.w3.org/ns/activitystreams#Public",
+      "cc" => "https://example.com/users/daria/followers",
+      "actor" => "https://example.com/users/daria",
+      "object" => %{
+        "type" => "Follow",
+        "actor" => "https://example.com/users/alyssa",
+        "object" => "https://chatty.example/users/ben"
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> log_in_user(daria)
+      |> Plug.Conn.put_req_header("content-type", "application/activity+json")
+      |> post("/users/daria/outbox", Jason.encode!(activity))
+
+    assert response(conn, 422)
+  end
+
   test "outbox retrieval MUST respond unuathorized with public contents", %{
     conn: conn
   } do

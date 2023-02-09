@@ -455,7 +455,6 @@ defmodule Fedi.ActivityPub.Actor do
       # servers and/or the client who sent this request.
       # If we are federating and the type is a deliverable one, then deliver
       # the activity to federating peers.
-
       if federated_protocol_enabled? && deliverable do
         ActorFacade.deliver(actor, outbox_iri, activity, top_level: true)
       else

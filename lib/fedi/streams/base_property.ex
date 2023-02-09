@@ -390,7 +390,7 @@ defmodule Fedi.Streams.BaseProperty do
                 nil
             end
           end)
-          |> Enum.filter(fn v -> !is_nil(v) end)
+          |> Enum.reject(&is_nil/1)
           |> Enum.split_with(fn {_, mapped_property?} -> mapped_property? end)
 
         mapped_values =

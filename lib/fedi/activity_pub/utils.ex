@@ -638,9 +638,9 @@ defmodule Fedi.ActivityPub.Utils do
   """
   def objects_match_activity_origin?(activity) do
     with {:activity_id, %URI{host: origin_host}} <- {:activity_id, get_id(activity)},
-         {:activity_object, %P.Object{values: [_ | _] = values} = object_prop} <-
+         {:activity_object, %P.Object{values: [_ | _] = object_iters} = object_prop} <-
            {:activity_object, Utils.get_object(activity)} do
-      Enum.reduce_while(values, {:ok, object_prop}, fn prop, acc ->
+      Enum.reduce_while(object_iters, {:ok, object_prop}, fn prop, acc ->
         case to_id(prop) do
           %URI{host: host} = object_id ->
             if host == origin_host do
@@ -650,64 +650,90 @@ defmodule Fedi.ActivityPub.Utils do
             end
 
           _ ->
-            {:halt, {:error, Utils.err_id_required(iters: values)}}
+            {:halt, {:error, Utils.err_id_required(activity: activity, property: "Object")}}
         end
       end)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_id, _} -> {:error, Utils.err_id_required(activity: activity)}
     end
   end
 
   @doc """
-  Returns :ok if the actors on types in
-  the 'object' property are all listed in the 'actor' property.
+  Returns :ok if the actors on types in the 'object' property are all
+  listed in the 'actor' property.
+
+  Ref. 6.10. The Undo activity is used to undo a previous activity.
+  See the Activity Vocabulary documentation on Inverse Activities and "Undo".
+  For example, Undo may be used to undo a previous Like, Follow, or Block.
+
+  The undo activity and the activity being undone MUST both have the same actor.
+  Side effects should be undone, to the extent possible.
+
+  For example, if undoing a Like, any counter that had been incremented previously
+  should be decremented appropriately.
   """
   def object_actors_match_activity_actors?(
         %{box_iri: %URI{}} = context,
         activity
       ) do
-    with {:activity_id, %URI{}} <- {:activity_id, get_id(activity)},
-         {:activity_object, %P.Object{values: [_ | _] = values}} <-
-           {:activity_object, Utils.get_object(activity)},
-         {:activity_actor, %P.Actor{values: _} = actor_prop} when is_list(values) <-
-           {:activity_actor, Utils.get_actor(activity)},
-         {:ok, actor_ids} <- get_ids(actor_prop),
-         actor_ids <- MapSet.new(actor_ids) do
-      Enum.reduce_while(values, :ok, fn prop, acc ->
-        with {:object_id, %URI{} = iri} <- {:object_id, to_id(prop)},
-             # Attempt to dereference the IRI, regardless whether it is a
-             # type or IRI
-             {:ok, m} <- ActorFacade.db_dereference(context, iri),
-             {:ok, actor_type} <- Fedi.Streams.JSONResolver.resolve(m),
-             {:object_actor, %{values: _} = object_actor_prop} when is_list(values) <-
-               {:object_actor, Utils.get_actor(actor_type)},
-             {:ok, object_actor_ids} <- get_ids(object_actor_prop),
-             object_actor_ids <- MapSet.new(object_actor_ids) do
-          if MapSet.subset?(actor_ids, object_actor_ids) do
-            {:cont, acc}
-          else
-            {:halt, {:error, "Activity does not have all actors from its object's actors"}}
-          end
-        else
+    with {:activity_actors, [_ | _] = activity_actor_ids} <-
+           {:activity_actors, Utils.get_iris(activity, "actor")},
+         activity_actor_ids <-
+           MapSet.new(activity_actor_ids),
+         {:activity_object, %P.Object{values: [_ | _] = object_iters}} <-
+           {:activity_object, Utils.get_object(activity)} do
+      Enum.reduce_while(object_iters, [], fn prop, acc ->
+        case get_object_actor_ids(context, prop) do
           {:error, reason} ->
-            {:error, reason}
+            {:halt, {:error, reason}}
 
-          {:object_id, _} ->
-            {:halt, {:error, Utils.err_id_required(activity: activity)}}
-
-          {:object_actor, _} ->
-            {:halt, {:error, Utils.err_actor_required(activity: activity)}}
+          ids when is_list(ids) ->
+            {:cont, acc ++ ids}
         end
       end)
+      |> case do
+        {:error, reason} ->
+          {:error, reason}
+
+        [_ | _] = object_actor_ids ->
+          object_actor_ids = MapSet.new(object_actor_ids)
+
+          if MapSet.subset?(activity_actor_ids, object_actor_ids) do
+            :ok
+          else
+            {:error,
+             %Error{
+               code: :unmatched_object_actors,
+               status: :unprocessable_entity,
+               message: "Activity does not have all actors from its object's actors"
+             }}
+          end
+
+        _ ->
+          {:error, Utils.err_actor_required(activity: activity, property: "Object")}
+      end
     else
-      {:error, reason} -> {:error, reason}
-      {:activity_id, _} -> Utils.err_id_required(activity: activity)
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
-      {:actor_ids, _} -> {:error, "No id in activity's actor"}
-      {_, {:error, reason}} -> {:error, reason}
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_actors, _} ->
+        {:error, Utils.err_actor_required(activity: activity)}
+
+      {:activity_object, _} ->
+        {:error, Utils.err_object_required(activity: activity)}
+    end
+  end
+
+  def get_object_actor_ids(_context, %{member: object_type}) when is_struct(object_type) do
+    Utils.get_iris(object_type, "actor")
+  end
+
+  def get_object_actor_ids(context, %{iri: %URI{} = object_iri}) do
+    with {:ok, m} <- ActorFacade.db_dereference(context, object_iri),
+         {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
+      Utils.get_iris(as_type, "actor")
     end
   end
 
@@ -779,7 +805,7 @@ defmodule Fedi.ActivityPub.Utils do
       # Attempt to dereference the IRI instead
       %{iri: %URI{} = iri}, acc ->
         with {:ok, m} <- ActorFacade.db_dereference(context, iri),
-             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve(m) do
+             {:ok, as_type} <- Fedi.Streams.JSONResolver.resolve_with_as_context(m) do
           case follow_is_me?(as_type, actor_iri) do
             {:error, reason} -> {:halt, {:error, reason}}
             {:ok, %URI{} = follow_id} -> {:halt, {:ok, as_type, follow_id}}
@@ -843,7 +869,7 @@ defmodule Fedi.ActivityPub.Utils do
           end
 
         _ ->
-          {:halt, {:error, Utils.err_id_required(iters: actor_iters)}}
+          {:halt, {:error, Utils.err_id_required(property: actor_iters)}}
       end
     end)
   end
@@ -1060,7 +1086,7 @@ defmodule Fedi.ActivityPub.Utils do
   """
   def get_inbox(values) when is_list(values) do
     Enum.map(values, &get_inbox(&1))
-    |> Enum.filter(fn i -> !is_nil(i) end)
+    |> Enum.reject(&is_nil/1)
   end
 
   def get_inbox(%{member: member}) when is_struct(member) do

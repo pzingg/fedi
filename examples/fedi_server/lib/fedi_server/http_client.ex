@@ -250,7 +250,7 @@ defmodule FediServer.HTTPClient do
         {:error, reason} -> reason
         _ -> nil
       end)
-      |> Enum.filter(fn item -> !is_nil(item) end)
+      |> Enum.reject(&is_nil/1)
 
     if Enum.empty?(errors) do
       {:ok, Enum.count(recipients)}

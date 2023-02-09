@@ -8,7 +8,7 @@ defmodule FediServer.Activities.Object do
     foreign_key: :in_reply_to_id
 
   import Ecto.Changeset
-  require Ecto.Query
+  import Ecto.Query, only: [order_by: 2, limit: 2]
   alias FediServer.Repo
 
   @timestamps_opts [type: :utc_datetime]
@@ -43,8 +43,8 @@ defmodule FediServer.Activities.Object do
   def conversation(%__MODULE__{} = object) do
     object
     |> __MODULE__.ancestors()
-    |> Ecto.Query.order_by(:ap_id)
-    |> Ecto.Query.limit(1)
+    |> order_by(:inserted_at)
+    |> limit(1)
     |> Repo.one()
   end
 
@@ -55,7 +55,7 @@ defmodule FediServer.Activities.Object do
   def replies(%__MODULE__{actor: actor} = object) do
     object
     |> __MODULE__.descendants()
-    |> Ecto.Query.order_by(:ap_id)
+    |> order_by(:inserted_at)
     |> Repo.all()
     |> Enum.split_with(fn %{actor: reply_actor} -> actor == reply_actor end)
   end
