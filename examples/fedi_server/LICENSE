@@ -195,7 +195,11 @@
    Mastodon application, Copyright © 2017-2022 Pleroma Authors
    <https://pleroma.social/>, Copyright © 2022 Akkoma Authors
    <https://akkoma.social/>, used under The GNU Affero General Public
-   License Version 3. See
+   License Version 3.
+
+   tlds-alpha-by-domain.txt Copyright © 2019-2020 IANA.org
+   <https://www.iana.org/help/licensing-terms> and
+   <https://data.iana.org/TLD/tlds-alpha-by-domain.txt>
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.

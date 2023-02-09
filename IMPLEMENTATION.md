@@ -4,7 +4,7 @@ Adapted from https://socialhub.activitypub.rocks/t/guide-for-new-activitypub-imp
 
 Numbered section references refer to the [ActivityPub specification](https://www.w3.org/TR/activitypub/).
 
-The goal is to write tests for as many of these 85 cases as is applicable.
+The goal is to write tests for as many of these 92 cases as is applicable.
 
 ## The tests
 
