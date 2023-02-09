@@ -1029,7 +1029,7 @@ defmodule Fedi.ActivityPub.Utils do
       {:ok, struct(activity, properties: activity_props)}
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 

@@ -115,8 +115,8 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: activity)}
     end
   end
 
@@ -169,7 +169,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -215,7 +215,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -235,7 +235,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -297,7 +297,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -339,7 +339,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 end

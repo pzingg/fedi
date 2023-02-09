@@ -26,7 +26,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -170,7 +170,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -306,8 +306,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_target, _} -> Utils.err_target_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_target, _} -> {:error, Utils.err_target_required(activity: activity)}
     end
   end
 
@@ -325,8 +325,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
-      {:activity_target, _} -> Utils.err_target_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
+      {:activity_target, _} -> {:error, Utils.err_target_required(activity: activity)}
     end
   end
 
@@ -347,7 +347,14 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, object_ids} <-
            filter_owned_objects(context, object_ids),
          :ok <-
-           APUtils.update_object_collections(context, actor_iri, activity_id, object_ids, "likes", :add) do
+           APUtils.update_object_collections(
+             context,
+             actor_iri,
+             activity_id,
+             object_ids,
+             "likes",
+             :add
+           ) do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -374,7 +381,14 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, object_ids} <-
            filter_owned_objects(context, object_ids),
          :ok <-
-           APUtils.update_object_collections(context, actor_iri, activity_id, object_ids, "shares", :add) do
+           APUtils.update_object_collections(
+             context,
+             actor_iri,
+             activity_id,
+             object_ids,
+             "shares",
+             :add
+           ) do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
@@ -397,8 +411,6 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       filtered_ids -> {:ok, Enum.reverse(filtered_ids)}
     end
   end
-
-
 
   @doc """
   Implements the federating Undo activity side effects.
@@ -423,7 +435,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       ActorFacade.handle_s2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}
-      {:activity_object, _} -> Utils.err_object_required(activity: activity)
+      {:activity_object, _} -> {:error, Utils.err_object_required(activity: activity)}
     end
   end
 end

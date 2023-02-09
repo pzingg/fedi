@@ -252,10 +252,10 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_actor, _} ->
-        Utils.err_actor_required(activity: activity)
+        {:error, Utils.err_actor_required(activity: activity)}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: activity)
+        {:error, Utils.err_object_required(activity: activity)}
 
       {:actor_id, _} ->
         {:error, "No id in actor"}
@@ -285,10 +285,10 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_actor, _} ->
-        Utils.err_actor_required(activity: activity)
+        {:error, Utils.err_actor_required(activity: activity)}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: activity)
+        {:error, Utils.err_object_required(activity: activity)}
 
       {:actor_id, _} ->
         {:error, "No id in actor"}
@@ -354,10 +354,10 @@ defmodule FediServerWeb.SocialCallbacks do
       end
     else
       {:activity_actor, _} ->
-        Utils.err_actor_required(activity: activity)
+        {:error, Utils.err_actor_required(activity: activity)}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: activity)
+        {:error, Utils.err_object_required(activity: activity)}
     end
   end
 
@@ -387,7 +387,7 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: follow)
+        {:error, Utils.err_object_required(activity: follow)}
 
       {:following_id, _} ->
         {:error, "No following id in object"}
@@ -407,7 +407,7 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: block)
+        {:error, Utils.err_object_required(activity: block)}
 
       {:blocked_id, _} ->
         {:error, "No id in object"}
@@ -429,7 +429,7 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: like)
+        {:error, Utils.err_object_required(activity: like)}
     end
   end
 
@@ -453,7 +453,7 @@ defmodule FediServerWeb.SocialCallbacks do
         {:error, reason}
 
       {:activity_object, _} ->
-        Utils.err_object_required(activity: announce)
+        {:error, Utils.err_object_required(activity: announce)}
     end
   end
 end

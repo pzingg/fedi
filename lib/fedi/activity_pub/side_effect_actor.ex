@@ -165,7 +165,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
       end
     else
       {:error, reason} -> {:error, reason}
-      {:activity_actor, _} -> Utils.err_actor_required(activity: activity)
+      {:activity_actor, _} -> {:error, Utils.err_actor_required(activity: activity)}
     end
   end
 

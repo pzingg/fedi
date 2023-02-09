@@ -528,7 +528,7 @@ defmodule Fedi.Streams.Utils do
 
   def get_iri(_, _prop_name), do: nil
 
-    @doc """
+  @doc """
   Retrieve the first IRI from a property if it is set.
   """
   # On a non-functional property
@@ -538,7 +538,6 @@ defmodule Fedi.Streams.Utils do
   def get_iri(%{iri: %URI{} = iri}), do: iri
 
   def get_iri(_), do: nil
-
 
   # On a non-functional property
   def set_iri(%{values: [iter | rest]} = prop, prop_name, iri_or_nil) do
