@@ -248,7 +248,7 @@ defmodule FediServerWeb.InboxDeliveryTest do
   test "inbox delivery MUST deliver with target for certain activities", %{conn: conn} do
     {users, _activities, [note | _]} = outbox_fixtures()
 
-    # Making up a "todo" collection as the target
+    # Using the "featured" collection as the target
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Add",
@@ -260,7 +260,7 @@ defmodule FediServerWeb.InboxDeliveryTest do
       },
       "target" => %{
         "type" => "OrderedCollection",
-        "id" => "https://example.com/users/alyssa/todo"
+        "id" => "https://example.com/users/alyssa/collections/featured"
       }
     }
 

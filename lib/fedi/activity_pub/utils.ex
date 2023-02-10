@@ -17,6 +17,7 @@ defmodule Fedi.ActivityPub.Utils do
   @public_json_ld "Public"
   @public_json_ld_as "as:Public"
   @public_addresses [@public_activity_streams, @public_json_ld, @public_json_ld_as]
+  @users_or_collections_regex ~r/^\/users\/([^\/]+)($|\/(.+))/
   @reserved_collection_names ["inbox", "outbox", "following", "followers", "likes", "shares"]
 
   @doc """
@@ -883,11 +884,11 @@ defmodule Fedi.ActivityPub.Utils do
       %URI{} = coll_id ->
         Logger.error("adding to #{coll_id}")
 
-        with :ok <- valid_collection_name?(coll_id),
-             {:ok, object_ids} <-
-               get_ids(object_prop),
+        with :ok <- valid_collection?(context, coll_id),
              {:owns?, {:ok, true}} <-
                {:owns?, ActorFacade.db_owns?(context, coll_id)},
+             {:ok, object_ids} <-
+               get_ids(object_prop),
              {:ok, _oc} <-
                ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
           :ok
@@ -923,7 +924,7 @@ defmodule Fedi.ActivityPub.Utils do
       %URI{} = coll_id ->
         Logger.error("removing from #{coll_id}")
 
-        with :ok <- valid_collection_name?(coll_id),
+        with :ok <- valid_collection?(context, coll_id),
              {:ok, object_ids} <-
                get_ids(object_prop),
              {:owns?, {:ok, true}} <-
@@ -954,14 +955,52 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
-  def valid_collection_name?(%URI{path: path} = _coll_id) do
-    coll_name = Path.basename(path)
-
+  def actor_collection_id(%URI{path: actor_path} = actor_iri, coll_name) do
     if Enum.member?(@reserved_collection_names, coll_name) do
-      reserved_names = Enum.join(@reserved_collection_names, ", ")
-      {:error, "Collection cannot be one of #{reserved_names}"}
+      %URI{actor_iri | path: Path.join(actor_path, coll_name)}
     else
+      %URI{actor_iri | path: Path.join([actor_path, "collections", coll_name])}
+    end
+  end
+
+  def valid_collection?(context, %URI{path: path} = coll_id) do
+    with [_match, _nickname, _, collections_suffix] <-
+           Regex.run(@users_or_collections_regex, path),
+         true <- String.starts_with?(collections_suffix, "collections/"),
+         coll_name <- Path.basename(collections_suffix),
+         {:reserved_name, false} <-
+           {:reserved_name, Enum.member?(@reserved_collection_names, coll_name)},
+         {:context_owner, true} <- {:context_owner, actor_owns_collection?(context, coll_id)} do
       :ok
+    else
+      {:reserved_name, _} ->
+        reserved_names = Enum.join(@reserved_collection_names, ", ")
+        {:error, "Collection name cannot be one of #{reserved_names}"}
+
+      {:context_owner, _} ->
+        {:error, "Collection is not owned by actor"}
+
+      _ ->
+        {:error, "Not a collection"}
+    end
+  end
+
+  def actor_owns_collection?(context, coll_id) do
+    case local_actor(context) do
+      {:ok, %URI{} = actor_iri} ->
+        actor_id = URI.to_string(actor_iri)
+        coll_id |> URI.to_string() |> String.starts_with?(actor_id)
+
+      _ ->
+        false
+    end
+  end
+
+  def local_actor(%{box_iri: %URI{path: box_path} = box_iri} = context) do
+    if String.ends_with?(box_path, "/inbox") do
+      ActorFacade.db_actor_for_inbox(context, box_iri)
+    else
+      ActorFacade.db_actor_for_outbox(context, box_iri)
     end
   end
 

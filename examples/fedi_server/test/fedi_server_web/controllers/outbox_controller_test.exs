@@ -43,32 +43,32 @@ defmodule FediServerWeb.OutboxControllerTest do
     assert json_body =~ "/users/alyssa/outbox?page=true"
   end
 
-  test "GET /users/alyssa/liked", %{conn: conn} do
+  test "GET /users/alyssa/collections/liked", %{conn: conn} do
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
     conn =
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/liked")
+      |> get("/users/alyssa/collections/liked")
 
     assert json_body = response(conn, 200)
     assert json_body =~ "\"OrderedCollection\""
-    assert json_body =~ "/users/alyssa/liked"
+    assert json_body =~ "/users/alyssa/collections/liked"
   end
 
-  test "GET /users/alyssa/liked?page=true", %{conn: conn} do
+  test "GET /users/alyssa/collections/liked?page=true", %{conn: conn} do
     %{alyssa: %{user: alyssa}} = user_fixtures()
 
     conn =
       conn
       |> log_in_user(alyssa)
       |> Plug.Conn.put_req_header("accept", "application/activity+json")
-      |> get("/users/alyssa/liked?page=true")
+      |> get("/users/alyssa/collections/liked?page=true")
 
     assert json_body = response(conn, 200)
     assert json_body =~ "\"OrderedCollectionPage\""
-    assert json_body =~ "/users/alyssa/liked?page=true"
+    assert json_body =~ "/users/alyssa/collections/liked?page=true"
   end
 
   test "outbox MUST accept activities", %{conn: conn} do
@@ -445,14 +445,14 @@ defmodule FediServerWeb.OutboxControllerTest do
   test "outbox add SHOULD add object to target", %{conn: conn} do
     {users, [_create | _], [note | _]} = outbox_fixtures()
 
-    # Making up a "todo" collection as the target
+    # Using the "featured" collection as the target
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Add",
       "to" => "https://example.com/users/alyssa/followers",
       "actor" => "https://example.com/users/alyssa",
       "object" => note.ap_id,
-      "target" => "https://example.com/users/alyssa/todo"
+      "target" => "https://example.com/users/alyssa/collections/featured"
     }
 
     %{alyssa: %{user: alyssa}} = users
@@ -463,22 +463,23 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> Plug.Conn.put_req_header("content-type", "application/activity+json")
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
-    # TODO Add a todo collection to our application
     assert response(conn, 201)
-    assert Utils.to_uri(note.ap_id) == get_posted_item("https://example.com/users/alyssa/todo")
+
+    assert Utils.to_uri(note.ap_id) ==
+             get_posted_item("https://example.com/users/alyssa/collections/featured")
   end
 
   test "outbox remove SHOULD remove object from target", %{conn: conn} do
     {users, [_create | _], [note | _]} = outbox_fixtures()
 
-    # Making up a "todo" collection as the target
+    # Using the "featured" collection as the target
     activity = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
       "type" => "Add",
       "to" => "https://example.com/users/alyssa/followers",
       "actor" => "https://example.com/users/alyssa",
       "object" => note.ap_id,
-      "target" => "https://example.com/users/alyssa/todo"
+      "target" => "https://example.com/users/alyssa/collections/featured"
     }
 
     %{alyssa: %{user: alyssa}} = users
@@ -496,7 +497,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       "to" => "https://example.com/users/alyssa/followers",
       "actor" => "https://example.com/users/alyssa",
       "object" => note.ap_id,
-      "target" => "https://example.com/users/alyssa/todo"
+      "target" => "https://example.com/users/alyssa/collections/featured"
     }
 
     conn =
@@ -506,7 +507,7 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
-    refute get_posted_item("https://example.com/users/alyssa/todo")
+    refute get_posted_item("https://example.com/users/alyssa/collections/featured")
   end
 
   test "outbox like SHOULD add object to liked", %{conn: conn} do
@@ -529,7 +530,10 @@ defmodule FediServerWeb.OutboxControllerTest do
       |> post("/users/alyssa/outbox", Jason.encode!(activity))
 
     assert response(conn, 201)
-    assert %URI{} = object_id = get_posted_item("https://example.com/users/alyssa/liked")
+
+    assert %URI{} =
+             object_id = get_posted_item("https://example.com/users/alyssa/collections/liked")
+
     assert URI.to_string(object_id) == note.ap_id
   end
 

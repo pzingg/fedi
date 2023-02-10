@@ -441,6 +441,50 @@ defmodule FediServerWeb.InboxControllerTest do
     assert values == []
   end
 
+  test "inbox accept add SHOULD add to collection (success)", %{conn: conn} do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Add",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => note.ap_id
+      },
+      "target" => "https://example.com/users/alyssa/collections/featured"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+  end
+
+  test "inbox accept add SHOULD add to collection (failure target not owned)", %{conn: conn} do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Add",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => note.ap_id
+      },
+      "target" => "https://chatty.example/users/ben/collections/featured"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 403)
+  end
+
   test "inbox accept like SHOULD indicate like performed", %{conn: conn} do
     {users, _activities, [note | _]} = outbox_fixtures()
 

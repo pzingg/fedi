@@ -44,7 +44,7 @@ defmodule FediServerWeb.Router do
     post("/users/:nickname/inbox", InboxController, :post_inbox)
     get("/users/:nickname/outbox", OutboxController, :get_outbox)
     post("/users/:nickname/outbox", OutboxController, :post_outbox)
-    get("/users/:nickname/liked", OutboxController, :liked)
+    get("/users/:nickname/collections/liked", OutboxController, :liked)
     get("/users/:nickname/following", FollowingController, :following)
     get("/users/:nickname/followers", FollowingController, :followers)
     get("/users/:nickname/activities/:ulid", ActivitiesController, :activity)

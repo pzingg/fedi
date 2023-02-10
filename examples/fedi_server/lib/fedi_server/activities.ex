@@ -29,9 +29,10 @@ defmodule FediServer.Activities do
 
   @objects_regex ~r/^\/users\/([^\/]+)\/(objects|activities)\/([A-Z0-9]+)$/
   @users_or_collections_regex ~r/^\/users\/([^\/]+)($|\/(.+))/
+  @reserved_collection_names ["inbox", "outbox", "following", "followers", "likes", "shares"]
 
   @doc """
-  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
+  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/collections/liked", etc.)
   contains the specified 'id'.
 
   Called from `SideEffectActor.post_inbox/3`.
@@ -91,7 +92,7 @@ defmodule FediServer.Activities do
   end
 
   @doc """
-  Returns the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  Returns the ordered collection page ("/inbox", "/outbox", "/collections/liked", etc.)
   at the specified IRI.
 
   `opts` can include the following keywords:
@@ -175,10 +176,10 @@ defmodule FediServer.Activities do
     {:error, "Can't understand collection #{coll_name}"}
   end
 
-  def build_summary(query, %URI{path: actor_path} = actor_iri, coll_name, _opts) do
+  def build_summary(query, %URI{} = actor_iri, coll_name, _opts) do
     type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollection")
 
-    coll_id = %URI{actor_iri | path: Path.join(actor_path, coll_name)}
+    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
     id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
 
     first_id = %URI{coll_id | query: "page=true"}
@@ -376,7 +377,7 @@ defmodule FediServer.Activities do
     {:error, "Can't understand collection #{coll_name}"}
   end
 
-  def build_page(query, %URI{path: actor_path} = actor_iri, coll_name, _opts) do
+  def build_page(query, %URI{} = actor_iri, coll_name, _opts) do
     result = Repo.all(query)
 
     ordered_item_iters =
@@ -404,7 +405,7 @@ defmodule FediServer.Activities do
 
     type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollectionPage")
 
-    coll_id = %URI{actor_iri | path: Path.join(actor_path, coll_name)}
+    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
     part_of_prop = %P.PartOf{alias: "", iri: coll_id}
 
     page_id = %URI{coll_id | query: "page=true"}
@@ -433,7 +434,7 @@ defmodule FediServer.Activities do
   end
 
   @doc """
-  Updates the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  Updates the ordered collection page ("/inbox", "/outbox", "/collections/liked", etc.)
   the specified IRI, with new items specified in the
   :add member of the the `updates` map prepended.
 
@@ -1399,8 +1400,18 @@ defmodule FediServer.Activities do
 
       _ ->
         case Regex.run(@users_or_collections_regex, path) do
-          [_match, nickname, _, collection_suffix] ->
-            {:ok, :actors, nickname, collection_suffix}
+          [_match, nickname, _, collections_suffix] ->
+            cond do
+              Enum.member?(@reserved_collection_names, collections_suffix) ->
+                {:ok, :actors, nickname, collections_suffix}
+
+              String.starts_with?(collections_suffix, "collections/") ->
+                coll_name = Path.basename(collections_suffix)
+                {:ok, :actors, nickname, coll_name}
+
+              true ->
+                {:error, "Invalid collection name"}
+            end
 
           [_match, nickname, _] ->
             {:ok, :actors, nickname, nil}

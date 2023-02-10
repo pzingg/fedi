@@ -292,7 +292,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, %URI{path: actor_path} = actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, outbox_iri),
          {:ok, object_ids} <- APUtils.get_ids(object),
-         coll_id <- %URI{actor_iri | path: actor_path <> "/liked"},
+         coll_id <- %URI{actor_iri | path: actor_path <> "/collections/liked"},
          {:ok, _oc} <- ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
       ActorFacade.handle_c2s_activity(context, activity)
     else

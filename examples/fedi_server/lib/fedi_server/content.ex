@@ -66,7 +66,7 @@ defmodule FediServer.Content do
 
         note =
           note
-          |> Map.update("cc", [mentioned], fn cc -> cc ++ mentioned end)
+          |> Map.update("cc", mentioned, fn cc -> cc ++ mentioned end)
           |> Fedi.Client.set_visibility(actor_iri, visibility)
 
         {:ok,

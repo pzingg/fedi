@@ -420,7 +420,7 @@ defmodule FediServerWeb.SocialCallbacks do
          {:ok, object_ids} <-
            APUtils.get_ids(object),
          coll_id <-
-           %URI{actor_iri | path: actor_path <> "/liked"},
+           %URI{actor_iri | path: actor_path <> "/collections/liked"},
          {:ok, _oc} <-
            ActorFacade.db_update_collection(context, coll_id, %{remove: object_ids}) do
       :ok

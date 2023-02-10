@@ -172,27 +172,27 @@ defmodule FediServer.Accounts.User do
   """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
     %{
-      "id" => ap_id,
       "type" => Keyword.get(opts, :actor_type, "Person"),
+      "id" => ap_id,
+      "url" => ap_id,
+      "name" => name,
+      "preferredUsername" => nickname,
+      "summary" => Keyword.get(opts, :bio, name),
+      "discoverable" => Keyword.get(opts, :discoverable?, true),
+      "manuallyApprovesFollowers" => Keyword.get(opts, :locked?, false),
       "inbox" => "#{ap_id}/inbox",
       "outbox" => "#{ap_id}/outbox",
       "following" => "#{ap_id}/following",
       "followers" => "#{ap_id}/followers",
-      "preferredUsername" => nickname,
-      "url" => ap_id,
-      "name" => name,
-      "summary" => Keyword.get(opts, :bio, name),
-      "manuallyApprovesFollowers" => Keyword.get(opts, :locked?, false),
+      "featured" => "#{ap_id}/collections/featured",
+      "endpoints" => %{
+        "sharedInbox" => shared_inbox_uri() |> URI.to_string()
+      },
       "publicKey" => %{
         "id" => "#{ap_id}#main-key",
         "owner" => ap_id,
         "publicKeyPem" => public_key
-      },
-      "endpoints" => %{
-        "sharedInbox" => shared_inbox_uri() |> URI.to_string()
-      },
-      "discoverable" => Keyword.get(opts, :discoverable?, true)
-      # "featured" => "#{ap_id}/collections/featured",
+      }
       # "icon" => icon,
       # "attachment" => fields,
       # "tag" => emoji_tags,

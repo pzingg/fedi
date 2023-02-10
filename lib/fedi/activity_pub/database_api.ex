@@ -4,14 +4,14 @@ defmodule Fedi.ActivityPub.DatabaseApi do
   """
 
   @doc """
-  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/liked", etc.)
+  Returns true if the OrderedCollection at ("/inbox", "/outbox", "/collections/liked", etc.)
   contains the specified 'id'.
   """
   @callback collection_contains?(inbox :: struct(), coll_id :: URI.t()) ::
               {:ok, boolean()} | {:error, term()}
 
   @doc """
-  Returns the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  Returns the ordered collection page ("/inbox", "/outbox", "/collections/liked", etc.)
   at the specified IRI.
 
   `opts` can include the following keywords:
@@ -30,7 +30,7 @@ defmodule Fedi.ActivityPub.DatabaseApi do
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
-  Updates the ordered collection page ("/inbox", "/outbox", "/liked", etc.)
+  Updates the ordered collection page ("/inbox", "/outbox", "/collections/liked", etc.)
   the specified IRI, with new items specified in the
   :add member of the the `updates` map prepended.
 

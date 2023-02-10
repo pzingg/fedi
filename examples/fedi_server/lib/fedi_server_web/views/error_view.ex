@@ -11,6 +11,10 @@ defmodule FediServerWeb.ErrorView do
     "Object was deleted"
   end
 
+  def render("422.html", _assigns) do
+    "Activity validation error"
+  end
+
   def render("500.html", _assigns) do
     "Internal server error"
   end
