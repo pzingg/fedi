@@ -3,37 +3,52 @@ defmodule Fedi.Client do
   Convenience functions for setting up ActivityPub payloads.
   """
 
+  require Logger
+
   alias Fedi.ActivityPub.Utils, as: APUtils
 
   @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
 
-  def set_visibility(m, :public) do
-    m
-    |> Map.put("to", [@public_activity_streams | Map.get(m, "to", []) |> List.wrap()] |> unwrap())
-  end
+  def set_visibility(m, actor_iri, visibility) do
+    to = Map.get(m, "to", []) |> List.wrap() |> Enum.reject(&APUtils.public?(&1))
+    cc = Map.get(m, "cc", []) |> List.wrap() |> Enum.reject(&APUtils.public?(&1))
 
-  def set_visibility(m, :unlisted) do
-    m
-    |> remove_public("to")
-    |> Map.put("cc", [@public_activity_streams | Map.get(m, "cc", []) |> List.wrap()] |> unwrap())
-    |> Map.drop(["audience"])
-  end
+    {to, cc} =
+      case visibility do
+        :public ->
+          {[@public_activity_streams | to], ["#{actor_iri}/followers" | cc]}
 
-  def set_visibility(m, :followers_only) do
-    m
-    |> Map.put("to", get_actor(m) <> "/followers")
-    |> Map.drop(["cc", "audience"])
-  end
+        :unlisted ->
+          {to, [@public_activity_streams | ["#{actor_iri}/followers" | cc]]}
 
-  def set_visibility(m, :direct) do
-    m
-    |> Map.drop(["cc", "audience"])
+        :followers_only ->
+          {to, ["#{actor_iri}/followers" | cc]}
+
+        :direct ->
+          {to, cc}
+      end
+
+    to =
+      if Enum.empty?(to) do
+        [actor_iri]
+      else
+        MapSet.new(to) |> MapSet.to_list()
+      end
+
+    cc = Enum.reject(cc, &Enum.member?(to, &1)) |> MapSet.new() |> MapSet.to_list()
+    m = Map.put(m, "to", unwrap(to))
+
+    case unwrap(cc) do
+      nil -> Map.delete(m, "cc")
+      c -> Map.put(m, "cc", c)
+    end
   end
 
   def get_actor(m) do
     (Map.get(m, "actor") || Map.fetch!(m, "attributedTo")) |> unwrap()
   end
 
+  def unwrap([]), do: nil
   def unwrap([item]), do: item
   def unwrap(l), do: l
 

@@ -11,6 +11,8 @@ defmodule FediServer.Content do
 
   require Logger
 
+  alias Fedi.Streams.Utils
+
   @invalid_url ~r/(\.\.+)|(^(\d+\.){1,2}\d+$)/
 
   @match_url ~r{^(?:\W*)?(?<url>(?:https?:\/\/)?[\w.-]+(?:\.[\w\.-]+)+[\w\-\._~%:\/?#[\]@!\$&'\(\)\*\+,;=.]+$)}u
@@ -33,26 +35,73 @@ defmodule FediServer.Content do
   @tlds Path.join(:code.priv_dir(:fedi_server), "tlds-alpha-by-domain.txt")
         |> File.read!()
         |> String.split("\n", trim: true)
-        |> Enum.concat(["onion"])
+        |> Enum.concat(["example", "onion"])
         |> MapSet.new()
 
   @default_opts %{
     validate_tld: true
   }
 
-  @doc """
-  Parse the given string, identifying items to link.
-
-  Parses the string, replacing the matching urls with an html link.
-
-  ## Examples
-
-      iex> Linkify.Parser.parse("Check out google.com")
-      ~s{Check out <a href="http://google.com">google.com</a>}
-  """
-
   @types [:url, :hashtag, :mention, :email]
 
+  def build_note(note, actor_iri, visibility) when is_map(note) do
+    content = note["content"]
+
+    case parse_markdown(content) do
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, content, %{hashtags: hashtags, mentions: mentions} = _links} ->
+        {mentions, mentioned} =
+          Enum.map(mentions, fn %{name: name, href: href} ->
+            {%{"type" => "Mention", "name" => name, "href" => href}, href}
+          end)
+          |> Enum.unzip()
+
+        # TODO @context should have "as:Hashtag"
+        hashtags =
+          Enum.map(hashtags, fn %{name: name, href: href} ->
+            %{"type" => "Hashtag", "name" => name, "href" => href}
+          end)
+
+        note =
+          note
+          |> Map.update("cc", [mentioned], fn cc -> cc ++ mentioned end)
+          |> Fedi.Client.set_visibility(actor_iri, visibility)
+
+        {:ok,
+         note
+         |> Map.merge(%{
+           "content" => content,
+           "mediaType" => "text/markdown",
+           "tag" => mentions ++ hashtags
+         })}
+    end
+  end
+
+  @doc """
+  Parses a Markdown-formatted string, optionally converting to
+  HTML.
+
+  Options:
+
+  - `:html` - if true, return HTML, otherwise return Markdown
+  - `:compact_output` - if true, do not add newlines to the HTML output
+
+  Returns a three-element :ok tuple. The second element is
+  the markdown text, modified to insert ActivityPub-friendly
+  links. The third element is a map with these items:
+
+  - `:markdown_urls` - hyperlinks from the originally encoded markdown.
+  - `:urls` - additional hyperlinks heuristically discovered.
+  - `:hashtags` - hashtags
+  - `:mentions` - Fediverse addresses, like `@user@instance.social`
+
+  Each item is a list of maps, where the maps have `:href` and `:name`
+  items.
+  """
+  # TODO Supply functions to map hashtag and mention names to URLs,
+  # using Webfinger for mentions, and a URL prefix for hashags.
   def parse_markdown(markdown_content, opts \\ []) do
     input = String.trim(markdown_content)
 
@@ -61,7 +110,7 @@ defmodule FediServer.Content do
         {:error_reason}
 
       {:ok, ast, _} ->
-        # Collect links that markdown will put in
+        # Collect links that Markdown itself will parse
         {_ast, markdown_urls} =
           Earmark.Transform.map_ast_with(ast, [], fn
             {"a", attributes, [name | _], _} = node, acc ->
@@ -85,7 +134,12 @@ defmodule FediServer.Content do
 
         markdown_hrefs = Enum.map(markdown_urls, fn %{href: href} -> href end)
 
+        {to_html?, opts} = Keyword.pop(opts, :html)
+
+        endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
+
         user_acc = %{
+          endpoint_uri: endpoint_uri,
           markdown_hrefs: markdown_hrefs,
           markdown_urls: markdown_urls,
           urls: [],
@@ -102,8 +156,6 @@ defmodule FediServer.Content do
 
         {text, link_map} = parse({input, user_acc}, parser_opts)
 
-        {to_html?, opts} = Keyword.pop(opts, :html)
-
         if to_html? do
           earmark_opts = Keyword.put(opts, :smartypants, false)
 
@@ -117,6 +169,16 @@ defmodule FediServer.Content do
     end
   end
 
+  @doc """
+  Parse the given string, identifying items to link.
+
+  Parses the string, replacing the matching urls with an html link.
+
+  ## Examples
+
+      iex> FediServer.Content.parse("Check out google.com")
+      ~s{Check out <a href="http://google.com">google.com</a>}
+  """
   def parse(input, opts \\ %{})
   def parse(input, opts) when is_binary(input), do: {input, %{}} |> parse(opts) |> elem(0)
 
@@ -539,7 +601,7 @@ defmodule FediServer.Content do
 
   def url_handler(url, buffer, opts, %{markdown_hrefs: markdown_hrefs} = user_acc) do
     if Enum.member?(markdown_hrefs, url) do
-      Logger.error("ignoring markdown url #{url}")
+      Logger.debug("ignoring markdown url #{url}")
       {buffer, user_acc}
     else
       out = "[#{url}](#{url})"
@@ -561,23 +623,47 @@ defmodule FediServer.Content do
     {out, user_acc}
   end
 
-  def mention_handler(mention, buffer, opts, user_acc) do
+  def mention_handler(
+        mention,
+        buffer,
+        opts,
+        %{endpoint_uri: %URI{host: host} = endpoint_uri} = user_acc
+      ) do
     url =
       case mention |> String.replace_leading("@", "") |> String.split("@") do
-        [local | _] -> "https://chatty.example/users/#{local}"
+        [nickname] ->
+          Utils.base_uri(endpoint_uri, "/users/#{nickname}") |> URI.to_string()
+
+        [nickname | domain] ->
+          if domain == host do
+            Utils.base_uri(endpoint_uri, "/users/#{nickname}") |> URI.to_string()
+          else
+            case FediServerWeb.WebFinger.finger(mention) do
+              {:ok, %{"ap_id" => ap_id}} -> ap_id
+              _ -> nil
+            end
+          end
       end
 
-    out = "[#{mention}](#{url})"
+    if is_nil(url) do
+      {buffer, user_acc}
+    else
+      out = "[#{mention}](#{url})"
+      item = %{href: url, name: mention}
+      user_acc = Map.update(user_acc, :mentions, [item], fn acc -> [item | acc] end)
 
-    item = %{href: url, name: mention}
-    user_acc = Map.update(user_acc, :mentions, [item], fn acc -> [item | acc] end)
-
-    {out, user_acc}
+      {out, user_acc}
+    end
   end
 
-  def hashtag_handler(hashtag, buffer, opts, user_acc) do
+  def hashtag_handler(
+        hashtag,
+        buffer,
+        opts,
+        %{endpoint_uri: %URI{path: path} = endpoint_uri} = user_acc
+      ) do
     tag = hashtag |> String.replace_leading("#", "")
-    url = "https://chatty.example/tags/#{tag}"
+    url = Utils.base_uri(endpoint_uri, "/hashtags/#{tag}") |> URI.to_string()
 
     out = "[#{hashtag}](#{url})"
     item = %{href: url, name: hashtag}

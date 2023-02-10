@@ -7,13 +7,15 @@ defmodule FediServerWeb.MockRequestHelper do
 
   alias Fedi.Streams.Utils
 
-  @webfinger_prefix "https://example.com/.well-known/webfinger?resource=acct:"
+  @webfinger_regex ~r/^.+\/.well-known\/webfinger\?resource=acct:/
 
-  @remote_fingers %{
-    "https://chatty.example/users/ben" => "ben@chatty.example",
-    "https://chatty.example/users/emilia" => "emilia@chatty.example",
-    "https://other.example/users/charlie" => "charlie@other.example"
-  }
+  @remote_fingers [
+    {"https://chatty.example/users/ben", "ben@chatty.example"},
+    {"https://chatty.example/users/emilia", "emilia@chatty.example"},
+    {"https://other.example/users/charlie", "charlie@other.example"},
+    {"https://mastodon.cloud/users/pzingg", "pzingg@mastodon.cloud"},
+    {"https://mastodon.social/users/judell", "judell@mastodon.social"}
+  ]
   @remote_actors %{
     "https://chatty.example/users/ben" => "ben.json",
     "https://chatty.example/users/emilia" => "emilia.json",
@@ -36,23 +38,19 @@ defmodule FediServerWeb.MockRequestHelper do
     _ = Agent.start_link(fn -> %{} end, name: followers_module)
 
     Tesla.Mock.mock_global(fn
-      # When we're getting info from ben's server
-      %{
-        method: :get,
-        url: "https://chatty.example/.well-known/host-meta"
-      } ->
-        xml = FediServerWeb.WebFinger.host_meta()
-        %Tesla.Env{status: 200, body: xml, headers: [{"content-type", "application/xrd+xml"}]}
-
       # When we lookup ben and charlie
       %{
         method: :get,
         url: url
       } ->
         cond do
-          String.starts_with?(url, @webfinger_prefix) ->
-            user = String.replace_leading(url, @webfinger_prefix, "")
-            mock_webfinger(user)
+          String.contains?(url, "/.well-known/host-meta") ->
+            xml = FediServerWeb.WebFinger.host_meta()
+            %Tesla.Env{status: 200, body: xml, headers: [{"content-type", "application/xrd+xml"}]}
+
+          Regex.run(@webfinger_regex, url, return: :index) |> is_list() ->
+            account = String.replace(url, @webfinger_regex, "")
+            mock_webfinger(account)
 
           String.contains?(url, "/outbox") ->
             mock_outbox(url)
@@ -115,20 +113,23 @@ defmodule FediServerWeb.MockRequestHelper do
   end
 
   defp mock_webfinger(actor_id) do
-    case Map.get(@remote_fingers, actor_id) do
+    case Enum.find(@remote_fingers, fn {url, acct} -> url == actor_id || acct == actor_id end) do
       nil ->
-        Logger.error("Unmocked actor #{actor_id}")
-        %Tesla.Env{status: 404, body: "Not found"}
+        %Tesla.Env{
+          status: 404,
+          body: "Account #{actor_id} not found",
+          headers: [{"content-type", "application/json"}]
+        }
 
-      acct ->
+      {url, acct} ->
         webfinger = %{
           "subject" => "acct:#{acct}",
-          "aliases" => [actor_id],
+          "aliases" => [url],
           "links" => [
             %{
               "rel" => "self",
               "type" => "application/activity+json",
-              "href" => actor_id
+              "href" => url
             }
           ]
         }

@@ -10,15 +10,19 @@ defmodule FediServer.ContentTest do
   At least that's what @judell@mastodon.social says.
   """
 
+  setup do
+    FediServerWeb.MockRequestHelper.setup_mocks(__MODULE__)
+  end
+
   test "parses links from markdown" do
     expected_markdown =
       """
-      [@pzingg@mastodon.cloud](https://chatty.example/users/pzingg)
+      [@pzingg@mastodon.cloud](https://mastodon.cloud/users/pzingg)
       # First post
-      I read on [wikipedia.org](wikipedia.org) that [#hashtags](https://chatty.example/tags/hashtags) are
-      important to finding things in the [#fediverse](https://chatty.example/tags/fediverse).
+      I read on [wikipedia.org](wikipedia.org) that [#hashtags](https://example.com/hashtags/hashtags) are
+      important to finding things in the [#fediverse](https://example.com/hashtags/fediverse).
 
-      At least that's what [@judell@mastodon.social](https://chatty.example/users/judell) says.
+      At least that's what [@judell@mastodon.social](https://mastodon.social/users/judell) says.
       """
       |> String.trim()
 
@@ -29,25 +33,25 @@ defmodule FediServer.ContentTest do
 
     assert MapSet.new(links[:hashtags]) ==
              MapSet.new([
-               %{href: "https://chatty.example/tags/hashtags", name: "#hashtags"},
-               %{href: "https://chatty.example/tags/fediverse", name: "#fediverse"}
+               %{href: "https://example.com/hashtags/hashtags", name: "#hashtags"},
+               %{href: "https://example.com/hashtags/fediverse", name: "#fediverse"}
              ])
 
     assert MapSet.new(links[:mentions]) ==
              MapSet.new([
-               %{href: "https://chatty.example/users/pzingg", name: "@pzingg@mastodon.cloud"},
-               %{href: "https://chatty.example/users/judell", name: "@judell@mastodon.social"}
+               %{href: "https://mastodon.cloud/users/pzingg", name: "@pzingg@mastodon.cloud"},
+               %{href: "https://mastodon.social/users/judell", name: "@judell@mastodon.social"}
              ])
   end
 
   test "formats markdown as html with links" do
     expected_html =
       [
-        "<p><a href=\"https://chatty.example/users/pzingg\">@pzingg@mastodon.cloud</a></p><h1>First post</h1>",
+        "<p><a href=\"https://mastodon.cloud/users/pzingg\">@pzingg@mastodon.cloud</a></p><h1>First post</h1>",
         "<p>I read on <a href=\"wikipedia.org\">wikipedia.org</a> that",
-        " <a href=\"https://chatty.example/tags/hashtags\">#hashtags</a> are",
-        " important to finding things in the <a href=\"https://chatty.example/tags/fediverse\">#fediverse</a>.</p>",
-        "<p>At least that&#39;s what <a href=\"https://chatty.example/users/judell\">@judell@mastodon.social</a> says.</p>"
+        " <a href=\"https://example.com/hashtags/hashtags\">#hashtags</a> are",
+        " important to finding things in the <a href=\"https://example.com/hashtags/fediverse\">#fediverse</a>.</p>",
+        "<p>At least that&#39;s what <a href=\"https://mastodon.social/users/judell\">@judell@mastodon.social</a> says.</p>"
       ]
       |> Enum.join("")
 
@@ -142,5 +146,48 @@ defmodule FediServer.ContentTest do
              FediServer.Content.parse_markdown(input, html: true, compact_output: true)
 
     assert html == expected_html
+  end
+
+  test "builds a note" do
+    note = %{
+      "type" => "Note",
+      "content" => @input
+    }
+
+    assert {:ok, note} =
+             FediServer.Content.build_note(note, "https://mastodon.cloud/users/pzingg", :unlisted)
+
+    assert note["to"] == "https://mastodon.cloud/users/pzingg"
+
+    assert MapSet.new(note["cc"]) ==
+             MapSet.new([
+               "https://www.w3.org/ns/activitystreams#Public",
+               "https://mastodon.cloud/users/pzingg/followers",
+               "https://mastodon.social/users/judell"
+             ])
+
+    assert Map.get(note, "tag", []) |> MapSet.new() ==
+             MapSet.new([
+               %{
+                 "href" => "https://mastodon.social/users/judell",
+                 "name" => "@judell@mastodon.social",
+                 "type" => "Mention"
+               },
+               %{
+                 "href" => "https://mastodon.cloud/users/pzingg",
+                 "name" => "@pzingg@mastodon.cloud",
+                 "type" => "Mention"
+               },
+               %{
+                 "href" => "https://example.com/hashtags/fediverse",
+                 "name" => "#fediverse",
+                 "type" => "Hashtag"
+               },
+               %{
+                 "href" => "https://example.com/hashtags/hashtags",
+                 "name" => "#hashtags",
+                 "type" => "Hashtag"
+               }
+             ])
   end
 end

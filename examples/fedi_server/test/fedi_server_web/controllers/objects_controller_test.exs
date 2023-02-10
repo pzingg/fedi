@@ -4,6 +4,25 @@ defmodule FediServerWeb.ObjectsControllerTest do
   alias Fedi.Streams.Utils
   alias FediServer.Activities
 
+  setup do
+    FediServerWeb.MockRequestHelper.setup_mocks(__MODULE__)
+  end
+
+  test "server object retrieval MAY dereference id", %{conn: conn} do
+    {_users, _activities, [note | _]} = outbox_fixtures()
+    %URI{path: path} = Utils.to_uri(note.ap_id)
+
+    conn =
+      conn
+      |> Plug.Conn.put_req_header("accept", "text/html")
+      |> get(path)
+
+    assert body = response(conn, 200)
+
+    assert body =~
+             "<p>\nSay, did you finish reading that <strong>book</strong> I lent you and <a href=\"https://other.example/users/charlie\">@charlie@other.example</a>?</p>"
+  end
+
   test "server object retrieval MUST respond with ld+json", %{conn: conn} do
     {_users, _activities, [note | _]} = outbox_fixtures()
     %URI{path: path} = Utils.to_uri(note.ap_id)

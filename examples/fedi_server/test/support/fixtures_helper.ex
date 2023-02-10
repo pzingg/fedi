@@ -166,17 +166,18 @@ defmodule FediServer.FixturesHelper do
     note1_id = "01GPQ4DCJTTY4BXYB3ZS989WCC"
     note1_ap_id = "https://example.com/users/alyssa/objects/#{note1_id}"
 
-    note1_data = %{
-      "@context" => "https://www.w3.org/ns/activitystreams",
-      "attributedTo" => actor_alyssa,
-      "content" => "Say, did you finish reading that book I lent you?",
-      "id" => note1_ap_id,
-      "to" => [
-        "https://www.w3.org/ns/activitystreams#Public",
-        "https://chatty.example/users/ben"
-      ],
-      "type" => "Note"
-    }
+    {:ok, note1_data} =
+      %{
+        "@context" => "https://www.w3.org/ns/activitystreams",
+        "type" => "Note",
+        "id" => note1_ap_id,
+        "to" => "https://chatty.example/users/ben",
+        "content" =>
+          "Say, did you finish reading that **book** I lent you and @charlie@other.example?",
+        "mediaType" => "text/markdown",
+        "attributedTo" => actor_alyssa
+      }
+      |> FediServer.Content.build_note(actor_alyssa, :public)
 
     note1_recipient_params = Activities.canonical_recipients(note1_data["to"])
 
@@ -221,6 +222,7 @@ defmodule FediServer.FixturesHelper do
       "@context" => "https://www.w3.org/ns/activitystreams",
       "attributedTo" => actor_alyssa,
       "content" => "That was a great read!",
+      "mediaType" => "text/markdown",
       "id" => note2_ap_id,
       "to" => [
         "https://www.w3.org/ns/activitystreams#Public",
@@ -273,6 +275,7 @@ defmodule FediServer.FixturesHelper do
       "@context" => "https://www.w3.org/ns/activitystreams",
       "attributedTo" => actor_daria,
       "content" => "My favorite read of the year.",
+      "mediaType" => "text/markdown",
       "id" => note3_ap_id,
       "to" => "https://example.com/users/daria/followers",
       "type" => "Note"

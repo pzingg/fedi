@@ -10,6 +10,17 @@ defmodule FediServerWeb.Router do
     plug(:set_actor)
   end
 
+  # Note: no live view stuff, no flash
+  pipeline :browser do
+    plug(:accepts, ["json", "html"])
+    plug(:fetch_session)
+    plug(:put_root_layout, {FediServerWeb.LayoutView, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
+    plug(:fetch_current_user)
+    plug(:set_actor)
+  end
+
   # Note: make sure to configure all these types in config.exs!
   pipeline :xrd do
     plug(:accepts, ["xml", "xrd+xml"])
@@ -37,6 +48,11 @@ defmodule FediServerWeb.Router do
     get("/users/:nickname/following", FollowingController, :following)
     get("/users/:nickname/followers", FollowingController, :followers)
     get("/users/:nickname/activities/:ulid", ActivitiesController, :activity)
+  end
+
+  scope "/", FediServerWeb do
+    pipe_through(:browser)
+
     get("/users/:nickname/objects/:ulid", ObjectsController, :object)
   end
 

@@ -6,6 +6,8 @@ defmodule FediServerWeb.ObjectsController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
 
+  action_fallback(FediServerWeb.FallbackController)
+
   @doc """
   Ref: [AP Section 6.4](https://www.w3.org/TR/activitypub/#delete-activity-outbox)
   If the deleted object is requested the server SHOULD respond with either
@@ -22,22 +24,56 @@ defmodule FediServerWeb.ObjectsController do
           []
       end
 
-    with {:fetch, %{data: data}} when is_map(data) <-
-           {:fetch, FediServer.Activities.repo_get(:objects, ulid, opts)},
-         status <- check_for_tombstone(data),
-         {:ok, body} <- Jason.encode(data) do
-      APUtils.send_json_resp(conn, status, body)
-    else
-      {:fetch, nil} ->
-        APUtils.send_json_resp(conn, :not_found)
+    format = get_format(conn)
 
-      {:fetch, other} ->
-        Logger.error("No json data in #{inspect(other)}")
-        APUtils.send_json_resp(conn, :internal_server_error)
+    case FediServer.Activities.repo_get(:objects, ulid, opts) do
+      %{data: data} when is_map(data) ->
+        status = check_for_tombstone(data)
 
-      {:error, reason} ->
-        Logger.error("Encoding error #{inspect(reason)}")
-        APUtils.send_json_resp(conn, :internal_server_error)
+        cond do
+          format in ["html"] ->
+            if status == :gone do
+              conn |> put_status(:gone) |> halt()
+            else
+              content = data["content"]
+
+              case FediServer.Content.parse_markdown(content, html: true) do
+                {:ok, html, _} ->
+                  render(conn, "show.html", html_content: html)
+
+                error ->
+                  Logger.error("parse_markdown ERROR #{inspect(error)}")
+                  conn |> put_status(:internal_server_error) |> halt()
+              end
+            end
+
+          true ->
+            case Jason.encode(data) do
+              {:ok, body} ->
+                APUtils.send_json_resp(conn, status, body)
+
+              {:error, reason} ->
+                Logger.error("Encoding error #{inspect(reason)}")
+                APUtils.send_json_resp(conn, :internal_server_error)
+            end
+        end
+
+      error_or_nil ->
+        cond do
+          format in ["html"] ->
+            if error_or_nil do
+              conn |> put_status(:internal_server_error) |> halt()
+            else
+              conn |> put_status(:not_found) |> halt()
+            end
+
+          true ->
+            if error_or_nil do
+              APUtils.send_json_resp(conn, :internal_server_error)
+            else
+              APUtils.send_json_resp(conn, :not_found)
+            end
+        end
     end
   end
 
