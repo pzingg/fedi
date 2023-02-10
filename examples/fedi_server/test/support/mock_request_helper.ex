@@ -6,6 +6,8 @@ defmodule FediServerWeb.MockRequestHelper do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.Utils, as: APUtils
+  alias FediServer.Activities
 
   @webfinger_regex ~r/^.+\/.well-known\/webfinger\?resource=acct:/
 
@@ -204,5 +206,23 @@ defmodule FediServerWeb.MockRequestHelper do
             %Tesla.Env{status: 404, body: "Not found"}
         end
     end
+  end
+
+  def get_page(coll_id, viewer_ap_id \\ nil)
+
+  def get_page(coll_id, nil) when is_binary(coll_id) do
+    Utils.to_uri(coll_id) |> Activities.get_collection_unfiltered()
+  end
+
+  def get_page(coll_id, viewer_ap_id) when is_binary(coll_id) and is_binary(viewer_ap_id) do
+    viewer_ap_id =
+      if Activities.local?(Utils.to_uri(viewer_ap_id)) do
+        viewer_ap_id
+      else
+        nil
+      end
+
+    opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
+    Utils.to_uri(coll_id) |> Activities.get_collection(opts)
   end
 end

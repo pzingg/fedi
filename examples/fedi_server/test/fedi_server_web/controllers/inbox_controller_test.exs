@@ -9,9 +9,10 @@ defmodule FediServerWeb.InboxControllerTest do
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
+  alias FediServerWeb.MockRequestHelper
 
   setup do
-    FediServerWeb.MockRequestHelper.setup_mocks(__MODULE__)
+    MockRequestHelper.setup_mocks(__MODULE__)
   end
 
   test "inbox accept MUST deduplicate", %{conn: conn} do
@@ -366,7 +367,7 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200) =~ "OK"
 
     assert {:ok, %{properties: %{"orderedItems" => followers}}} =
-             get_page("https://example.com/users/alyssa/followers")
+             MockRequestHelper.get_page("https://example.com/users/alyssa/followers")
 
     ben_iri = Utils.to_uri("https://chatty.example/users/ben")
     assert APUtils.get_ids(followers) == {:ok, [ben_iri]}
@@ -412,7 +413,7 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200) =~ "OK"
 
     assert {:ok, %{properties: %{"orderedItems" => following}}} =
-             get_page("https://example.com/users/alyssa/following")
+             MockRequestHelper.get_page("https://example.com/users/alyssa/following")
 
     ben_iri = Utils.to_uri("https://chatty.example/users/ben")
     assert APUtils.get_ids(following) == {:ok, [ben_iri]}
@@ -436,7 +437,7 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200) =~ "OK"
 
     assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
-             get_page("https://example.com/users/alyssa/following")
+             MockRequestHelper.get_page("https://example.com/users/alyssa/following")
 
     assert values == []
   end
@@ -450,10 +451,7 @@ defmodule FediServerWeb.InboxControllerTest do
       "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
       "to" => "https://example.com/users/alyssa",
       "actor" => "https://chatty.example/users/ben",
-      "object" => %{
-        "type" => "Note",
-        "id" => note.ap_id
-      },
+      "object" => note.ap_id,
       "target" => "https://example.com/users/alyssa/collections/featured"
     }
 
@@ -461,6 +459,12 @@ defmodule FediServerWeb.InboxControllerTest do
     conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
 
     assert response(conn, 200) =~ "OK"
+
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
+             MockRequestHelper.get_page("https://example.com/users/alyssa/collections/featured")
+
+    assert [%P.OrderedItemsIterator{alias: "", iri: %URI{} = object_iri}] = values
+    assert URI.to_string(object_iri) == note.ap_id
   end
 
   test "inbox accept add SHOULD add to collection (failure target not owned)", %{conn: conn} do
@@ -472,17 +476,71 @@ defmodule FediServerWeb.InboxControllerTest do
       "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
       "to" => "https://example.com/users/alyssa",
       "actor" => "https://chatty.example/users/ben",
-      "object" => %{
-        "type" => "Note",
-        "id" => note.ap_id
-      },
+      "object" => note.ap_id,
       "target" => "https://chatty.example/users/ben/collections/featured"
     }
 
     %{ben: %{user: ben, keys: keys_pem}} = users
     conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
 
-    assert response(conn, 403)
+    assert response(conn, 422)
+  end
+
+  test "inbox accept remove SHOULD remove from collection (success)", %{conn: conn} do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Add",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => note.ap_id,
+      "target" => "https://example.com/users/alyssa/collections/featured"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    _conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Remove",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d4",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => note.ap_id,
+      "target" => "https://example.com/users/alyssa/collections/featured"
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: []}}}} =
+             MockRequestHelper.get_page("https://example.com/users/alyssa/collections/featured")
+  end
+
+  test "inbox accept remove SHOULD remove from collection (failure target not owned)", %{
+    conn: conn
+  } do
+    {users, _activities, [note | _]} = outbox_fixtures()
+
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Remove",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d4",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => note.ap_id,
+      "target" => "https://chatty.example/users/ben/collections/featured"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = users
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 422)
   end
 
   test "inbox accept like SHOULD indicate like performed", %{conn: conn} do
@@ -504,7 +562,7 @@ defmodule FediServerWeb.InboxControllerTest do
 
     # Now check likes collection
     assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
-             get_page(note.ap_id <> "/likes")
+             MockRequestHelper.get_page(note.ap_id <> "/likes")
 
     assert [%P.OrderedItemsIterator{alias: "", member: person}] = values
     assert APUtils.get_id(person) |> URI.to_string() == "https://chatty.example/users/ben"
@@ -529,10 +587,95 @@ defmodule FediServerWeb.InboxControllerTest do
 
     # Now check shares collection
     assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{values: values}}}} =
-             get_page(note.ap_id <> "/shares")
+             MockRequestHelper.get_page(note.ap_id <> "/shares")
 
     assert [%P.OrderedItemsIterator{alias: "", member: person}] = values
     assert APUtils.get_id(person) |> URI.to_string() == "https://chatty.example/users/ben"
+  end
+
+  test "inbox accept MAY undo federated (non-normative)", %{conn: conn} do
+    # First, follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Follow",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => "https://example.com/users/alyssa"
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    # Then, undo follow
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Undo",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d5",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Follow",
+        "actor" => "https://chatty.example/users/ben",
+        "object" => "https://example.com/users/alyssa"
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200) =~ "OK"
+
+    assert {:ok, %{properties: %{"orderedItems" => %P.OrderedItems{alias: "", values: []}}}} =
+             MockRequestHelper.get_page("https://example.com/users/alyssa/followers")
+  end
+
+  test "inbox accept SHOULD validate content", %{conn: conn} do
+    # TODO Mock that the "deadbeef" object is not fetchable
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Create",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d3",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "type" => "Note",
+        "id" => "https://chatty.example/users/ben/statuses/deadbeef-b53a-4c4c-a95c-94a6abf45a19",
+        "to" => "https://example.com/users/alyssa",
+        "attributedTo" => "https://chatty.example/users/ben",
+        "content" => "Say, did you finish reading that book I lent you?"
+      }
+    }
+
+    %{ben: %{user: ben, keys: keys_pem}} = user_fixtures()
+    conn = sign_and_send(conn, "/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 200)
+
+    # Changed the type and attributedTo!
+    activity = %{
+      "@context" => "https://www.w3.org/ns/activitystreams",
+      "type" => "Update",
+      "id" => "https://chatty.example/users/ben/activities/a29a6843-9feb-4c74-a7f7-081b9c9201d5",
+      "to" => "https://example.com/users/alyssa",
+      "actor" => "https://chatty.example/users/ben",
+      "object" => %{
+        "id" => "https://chatty.example/users/ben/statuses/deadbeef-b53a-4c4c-a95c-94a6abf45a19",
+        "type" => "Article",
+        "attributedTo" => "https://example.com/users/daria",
+        "to" => "https://example.com/users/alyssa",
+        "content" => "I take it all back."
+      }
+    }
+
+    conn =
+      Phoenix.ConnTest.build_conn()
+      |> sign_and_send("/users/alyssa/inbox", Jason.encode!(activity), ben, keys_pem)
+
+    assert response(conn, 422)
   end
 
   test "server inbox MAY respond to get (non-normative)", %{conn: conn} do
@@ -618,7 +761,7 @@ defmodule FediServerWeb.InboxControllerTest do
 
   defp count_inbox_items(coll_id \\ "https://example.com/users/alyssa/inbox")
        when is_binary(coll_id) do
-    case get_page(coll_id, nil) do
+    case MockRequestHelper.get_page(coll_id, nil) do
       {:ok,
        %{
          properties: %{
@@ -630,23 +773,5 @@ defmodule FediServerWeb.InboxControllerTest do
       _ ->
         0
     end
-  end
-
-  def get_page(coll_id, viewer_ap_id \\ nil)
-
-  def get_page(coll_id, nil) when is_binary(coll_id) do
-    Utils.to_uri(coll_id) |> Activities.get_collection_unfiltered()
-  end
-
-  def get_page(coll_id, viewer_ap_id) when is_binary(coll_id) and is_binary(viewer_ap_id) do
-    viewer_ap_id =
-      if Activities.local?(Utils.to_uri(viewer_ap_id)) do
-        viewer_ap_id
-      else
-        nil
-      end
-
-    opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
-    Utils.to_uri(coll_id) |> Activities.get_collection(opts)
   end
 end

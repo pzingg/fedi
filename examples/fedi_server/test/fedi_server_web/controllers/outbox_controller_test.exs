@@ -10,9 +10,10 @@ defmodule FediServerWeb.OutboxControllerTest do
   alias Fedi.ActivityStreams.Type, as: T
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
+  alias FediServerWeb.MockRequestHelper
 
   setup do
-    FediServerWeb.MockRequestHelper.setup_mocks(__MODULE__)
+    MockRequestHelper.setup_mocks(__MODULE__)
   end
 
   test "GET /users/alyssa/outbox", %{conn: conn} do
@@ -882,7 +883,7 @@ defmodule FediServerWeb.OutboxControllerTest do
   end
 
   defp get_posted_item(coll_url \\ "https://example.com/users/alyssa/outbox", filtered_for \\ nil) do
-    case get_page(coll_url, filtered_for) do
+    case MockRequestHelper.get_page(coll_url, filtered_for) do
       {:ok,
        %{
          properties: %{
@@ -898,21 +899,5 @@ defmodule FediServerWeb.OutboxControllerTest do
       _ ->
         nil
     end
-  end
-
-  def get_page(coll_url, nil) do
-    Utils.to_uri(coll_url) |> Activities.get_collection_unfiltered()
-  end
-
-  def get_page(coll_url, viewer_ap_id) when is_binary(viewer_ap_id) do
-    viewer_ap_id =
-      if Activities.local?(Utils.to_uri(viewer_ap_id)) do
-        viewer_ap_id
-      else
-        nil
-      end
-
-    opts = APUtils.collection_opts(%{"page" => "true"}, viewer_ap_id)
-    Utils.to_uri(coll_url) |> Activities.get_collection(opts)
   end
 end

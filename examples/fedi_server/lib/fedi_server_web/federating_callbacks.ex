@@ -5,10 +5,13 @@ defmodule FediServerWeb.FederatingCallbacks do
 
   @behaviour Fedi.ActivityPub.CommonApi
   @behaviour Fedi.ActivityPub.FederatingApi
+  @behaviour Fedi.ActivityPub.FederatingActivityApi
 
   require Logger
 
+  alias Fedi.Streams.Error
   alias Fedi.Streams.Utils
+  alias Fedi.ActivityPub.Utils, as: APUtils
   alias Fedi.ActivityPub.SideEffectActor
   alias FediServerWeb.CommonCallbacks
   alias FediServer.Activities
@@ -268,5 +271,93 @@ defmodule FediServerWeb.FederatingCallbacks do
   @impl true
   def default_callback(_context, _activity) do
     :pass
+  end
+
+  ### Activity handlers
+
+  @doc """
+  Undo for the Federated Protocol. We'll support these for now:
+
+  * Undo/Follow
+  * Undo/Announce
+  """
+  @impl true
+  def undo(context, activity) when is_struct(activity) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object_type(activity)},
+         {:activity_actor, %URI{} = actor_iri} <-
+           {:activity_actor, Utils.get_iri(activity, "actor")} do
+      case Utils.get_json_ld_type(object) do
+        "Follow" ->
+          case undo_follow(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
+
+        "Announce" ->
+          case undo_announce(context, actor_iri, object) do
+            :ok -> {:ok, activity, true}
+            {:error, reason} -> {:error, reason}
+          end
+
+        other ->
+          {:error,
+           %Error{
+             code: :undo_type_not_supported,
+             status: :unprocessable_entity,
+             message: "Undo #{other} is not supported"
+           }}
+      end
+    else
+      {:activity_actor, _} ->
+        {:error, Utils.err_actor_required(activity: activity)}
+
+      {:activity_object, _} ->
+        {:error, Utils.err_object_required(activity: activity)}
+    end
+  end
+
+  def undo_follow(_context, actor_iri, follow) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(follow)},
+         {:following_id, %URI{} = following_id} <-
+           {:following_id, APUtils.to_id(object)},
+         {:ok, %User{}} <-
+           Activities.ensure_user(actor_iri, true) do
+      Activities.unfollow(actor_iri, following_id)
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        {:error, Utils.err_object_required(activity: follow)}
+
+      {:following_id, _} ->
+        {:error, "No following id in object"}
+    end
+  end
+
+  def undo_announce(context, actor_iri, announce) do
+    with {:activity_object, object} <-
+           {:activity_object, Utils.get_object(announce)},
+         {:ok, object_ids} <-
+           APUtils.get_ids(object),
+         {:ok, _oc} <-
+           APUtils.update_object_collections(
+             context,
+             actor_iri,
+             nil,
+             object_ids,
+             "shares",
+             :remove
+           ) do
+      :ok
+    else
+      {:error, reason} ->
+        {:error, reason}
+
+      {:activity_object, _} ->
+        {:error, Utils.err_object_required(activity: announce)}
+    end
   end
 end

@@ -897,13 +897,13 @@ defmodule Fedi.ActivityPub.Utils do
             {:error, reason}
 
           {:owns?, {:ok, _}} ->
-            Logger.error("Local collection #{coll_id} not found")
+            Logger.error("#{coll_id} is not maintained by this instance")
 
             {:error,
              %Error{
                code: :unknown_collection,
                status: :unprocessable_entity,
-               message: "Local collection #{coll_id} not found"
+               message: "#{coll_id} is not maintained by this instance"
              }}
 
           {:owns?, {:error, reason}} ->
@@ -937,13 +937,13 @@ defmodule Fedi.ActivityPub.Utils do
             {:error, reason}
 
           {:owns?, {:ok, _}} ->
-            Logger.error("Local collection #{coll_id} not found")
+            Logger.error("Collection #{coll_id} is not owned by this instance")
 
             {:error,
              %Error{
                code: :unknown_collection,
                status: :unprocessable_entity,
-               message: "Local collection #{coll_id} not found"
+               message: "Collection #{coll_id} is not owned by this instance"
              }}
 
           {:owns?, {:error, reason}} ->
@@ -963,14 +963,13 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
-  def valid_collection?(context, %URI{path: path} = coll_id) do
+  def valid_collection?(_context, %URI{path: path} = coll_id) do
     with [_match, _nickname, _, collections_suffix] <-
            Regex.run(@users_or_collections_regex, path),
          true <- String.starts_with?(collections_suffix, "collections/"),
          coll_name <- Path.basename(collections_suffix),
          {:reserved_name, false} <-
-           {:reserved_name, Enum.member?(@reserved_collection_names, coll_name)},
-         {:context_owner, true} <- {:context_owner, actor_owns_collection?(context, coll_id)} do
+           {:reserved_name, Enum.member?(@reserved_collection_names, coll_name)} do
       :ok
     else
       {:reserved_name, _} ->
@@ -978,10 +977,10 @@ defmodule Fedi.ActivityPub.Utils do
         {:error, "Collection name cannot be one of #{reserved_names}"}
 
       {:context_owner, _} ->
-        {:error, "Collection is not owned by actor"}
+        {:error, "Collection #{coll_id} is not owned by actor"}
 
       _ ->
-        {:error, "Not a collection"}
+        {:error, "Not found"}
     end
   end
 

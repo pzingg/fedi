@@ -299,7 +299,7 @@ defmodule FediServerWeb.SocialCallbacks do
   end
 
   @doc """
-  We'll support what Mastodon does:
+  Undo for the Social API. We'll support what Mastodon does:
 
   * Undo/Accept
   * Undo/Follow

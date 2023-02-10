@@ -19,12 +19,15 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   alias Fedi.ActivityPub.ActorFacade
 
   @optional_callbacks [
+    accept: 2,
+    reject: 2,
     create: 2,
     update: 2,
     delete: 2,
     follow: 2,
     add: 2,
     remove: 2,
+    announce: 2,
     like: 2,
     undo: 2,
     block: 2
