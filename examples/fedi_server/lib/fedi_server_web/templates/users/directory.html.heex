@@ -1,0 +1,10 @@
+<h1>User Directory</h1>
+<%= if @count == 0 do %>
+<p>No Users</p>
+<% end %>
+<%= if @count == 1 do %>
+<p>1 User</p>
+<% end %>
+<%= if @count > 1 do %>
+<p><%= @count %> Users</p>
+<% end %>

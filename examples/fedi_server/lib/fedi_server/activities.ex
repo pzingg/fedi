@@ -115,7 +115,7 @@ defmodule FediServer.Activities do
       if Keyword.get(opts, :page, false) do
         ordered_collection_page(actor_iri, coll_name, opts)
       else
-        ordered_collection_summary(actor_iri, coll_name, opts)
+        ordered_collection_summary(actor_iri, coll_name)
       end
     end
   end
@@ -127,7 +127,59 @@ defmodule FediServer.Activities do
     end
   end
 
-  def ordered_collection_summary(actor_iri, coll_name, opts) do
+  def get_timeline(:home, opts) do
+    actor_id = Keyword.get(opts, :visible_to)
+    page_size = Keyword.get(opts, :page_size, 30)
+
+    if is_nil(actor_id) do
+      {:error, "Unauthorized"}
+    else
+      following = get_following_ids(actor_id)
+
+      query =
+        Object
+        |> distinct(true)
+        |> select([o], %{id: o.id, data: o.data})
+        |> where([o], o.type == "Note" and (o.local? == true or o.actor in ^following))
+        |> filter_collection(opts, 1)
+        |> limit(^page_size)
+        |> order_by([o], desc: o.id)
+
+      coll_id = Utils.to_uri("#{actor_id}/timeline")
+
+      case build_page(query, coll_id, opts) do
+        {:ok, page} -> Fedi.Streams.Serializer.serialize(page)
+        {:error, reason} -> {:error, reason}
+      end
+    end
+  end
+
+  def get_timeline(:local, opts) do
+    page_size = Keyword.get(opts, :page_size, 30)
+
+    query =
+      Object
+      |> distinct(true)
+      |> select([o], %{id: o.id, data: o.data})
+      |> where([o], o.type == "Note" and o.local? == true)
+      |> filter_collection(opts, 1)
+      |> limit(^page_size)
+      |> order_by([o], desc: o.id)
+
+    endpoint_iri = Fedi.Application.endpoint_url() |> Utils.to_uri()
+    coll_id = Utils.base_uri(endpoint_iri, "/timeline")
+
+    case build_page(query, coll_id, opts) do
+      {:ok, page} -> Fedi.Streams.Serializer.serialize(page)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def get_timeline(:federated, _opts) do
+    {:error, "Unimplemented"}
+  end
+
+  def ordered_collection_summary(actor_iri, coll_name) do
     actor_id = URI.to_string(actor_iri)
 
     query =
@@ -169,37 +221,7 @@ defmodule FediServer.Activities do
           nil
       end
 
-    build_summary(query, actor_iri, coll_name, opts)
-  end
-
-  def build_summary(nil, _, coll_name, _) do
-    {:error, "Can't understand collection #{coll_name}"}
-  end
-
-  def build_summary(query, %URI{} = actor_iri, coll_name, _opts) do
-    type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollection")
-
-    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
-    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
-
-    first_id = %URI{coll_id | query: "page=true"}
-    first_prop = %P.First{alias: "", iri: first_id}
-
-    total_items = Repo.one(query) || 0
-
-    total_items_prop = %P.TotalItems{
-      alias: "",
-      xsd_non_neg_integer_member: total_items
-    }
-
-    properties = %{
-      "type" => type_prop,
-      "id" => id_prop,
-      "first" => first_prop,
-      "totalItems" => total_items_prop
-    }
-
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
+    build_summary(query, actor_iri, coll_name)
   end
 
   def ordered_collection_page(actor_iri, coll_name, opts) do
@@ -269,6 +291,103 @@ defmodule FediServer.Activities do
     build_page(query, actor_iri, coll_name, opts)
   end
 
+  def build_summary(nil, _, coll_name) do
+    {:error, "Can't understand collection #{coll_name}"}
+  end
+
+  def build_summary(query, %URI{} = actor_iri, coll_name) do
+    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
+    build_summary(query, coll_id)
+  end
+
+  def build_summary(query, coll_id) do
+    type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollection")
+    id_prop = Fedi.JSONLD.Property.Id.new_id(coll_id)
+
+    first_id = %URI{coll_id | query: "page=true"}
+    first_prop = %P.First{alias: "", iri: first_id}
+
+    total_items = Repo.one(query) || 0
+
+    total_items_prop = %P.TotalItems{
+      alias: "",
+      xsd_non_neg_integer_member: total_items
+    }
+
+    properties = %{
+      "type" => type_prop,
+      "id" => id_prop,
+      "first" => first_prop,
+      "totalItems" => total_items_prop
+    }
+
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
+  end
+
+  def build_page(nil, _, coll_name, _) do
+    {:error, "Can't understand collection #{coll_name}"}
+  end
+
+  def build_page(query, %URI{} = actor_iri, coll_name, opts) do
+    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
+    build_page(query, coll_id, opts)
+  end
+
+  def build_page(query, coll_id, _opts) do
+    result = Repo.all(query)
+
+    ordered_item_iters =
+      Enum.map(result, fn
+        %{iri: iri} when is_binary(iri) ->
+          %P.OrderedItemsIterator{alias: "", iri: Utils.to_uri(iri)}
+
+        %{data: data} when is_map(data) ->
+          case resolve_with_stripped_recipients(data) do
+            {:ok, object} ->
+              %P.OrderedItemsIterator{alias: "", member: object}
+
+            _ ->
+              Logger.error("For #{coll_id} could not resolve #{inspect(data)}")
+              nil
+          end
+
+        item ->
+          Logger.error("For #{coll_id} don't know how to map #{inspect(item)}")
+          nil
+      end)
+      |> Enum.reject(&is_nil/1)
+
+    ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
+
+    type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollectionPage")
+
+    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
+
+    page_id = %URI{coll_id | query: "page=true"}
+    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
+
+    properties = %{
+      "type" => type_prop,
+      "id" => id_prop,
+      "partOf" => part_of_prop,
+      "orderedItems" => ordered_items_prop
+    }
+
+    # TODO handle Keyword.get(opts, :min_id)
+    properties =
+      case List.last(result) do
+        %{id: last_id} ->
+          next_id = %URI{coll_id | query: "max_id=#{last_id}&page=true"}
+          next_prop = %P.Next{alias: "", iri: next_id}
+          Map.put(properties, "next", next_prop)
+
+        _ ->
+          properties
+      end
+
+    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
+  end
+
   def follower?(%URI{} = actor, %URI{} = follower_iri) do
     collection_contains?(actor, "followers", follower_iri)
   end
@@ -277,7 +396,7 @@ defmodule FediServer.Activities do
     FollowingRelationship
     |> where([c], c.follower_id == ^follower_id)
     |> where([c], c.state == ^:accept)
-    |> select([c], c.id)
+    |> select([c], c.following_id)
     |> Repo.all()
   end
 
@@ -371,66 +490,6 @@ defmodule FediServer.Activities do
       "shares" -> {:object_action, "share"}
       other -> {:user_collection, other}
     end
-  end
-
-  def build_page(nil, _, coll_name, _) do
-    {:error, "Can't understand collection #{coll_name}"}
-  end
-
-  def build_page(query, %URI{} = actor_iri, coll_name, _opts) do
-    result = Repo.all(query)
-
-    ordered_item_iters =
-      Enum.map(result, fn
-        %{iri: iri} when is_binary(iri) ->
-          %P.OrderedItemsIterator{alias: "", iri: Utils.to_uri(iri)}
-
-        %{data: data} when is_map(data) ->
-          case resolve_with_stripped_recipients(data) do
-            {:ok, object} ->
-              %P.OrderedItemsIterator{alias: "", member: object}
-
-            _ ->
-              Logger.error("For #{coll_name} could not resolve #{inspect(data)}")
-              nil
-          end
-
-        item ->
-          Logger.error("For #{coll_name} don't know how to map #{inspect(item)}")
-          nil
-      end)
-      |> Enum.reject(&is_nil/1)
-
-    ordered_items_prop = %P.OrderedItems{alias: "", values: ordered_item_iters}
-
-    type_prop = Fedi.JSONLD.Property.Type.new_type("OrderedCollectionPage")
-
-    coll_id = APUtils.actor_collection_id(actor_iri, coll_name)
-    part_of_prop = %P.PartOf{alias: "", iri: coll_id}
-
-    page_id = %URI{coll_id | query: "page=true"}
-    id_prop = Fedi.JSONLD.Property.Id.new_id(page_id)
-
-    properties = %{
-      "type" => type_prop,
-      "id" => id_prop,
-      "partOf" => part_of_prop,
-      "orderedItems" => ordered_items_prop
-    }
-
-    # TODO handle Keyword.get(opts, :min_id)
-    properties =
-      case List.last(result) do
-        %{id: last_id} ->
-          next_id = %URI{coll_id | query: "max_id=#{last_id}&page=true"}
-          next_prop = %P.Next{alias: "", iri: next_id}
-          Map.put(properties, "next", next_prop)
-
-        _ ->
-          properties
-      end
-
-    {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
   @doc """
@@ -1591,6 +1650,10 @@ defmodule FediServer.Activities do
   end
 
   def filter_visibility(_, _), do: nil
+
+  def get_local_users() do
+    User |> where([u], u.local? == true) |> order_by([u], u.id) |> Repo.all()
+  end
 
   def repo_get_by_ap_id(:actors, %URI{} = ap_id) do
     Repo.get_by(User, ap_id: URI.to_string(ap_id))

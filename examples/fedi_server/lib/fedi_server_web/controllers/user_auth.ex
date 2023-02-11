@@ -135,6 +135,7 @@ defmodule FediServerWeb.UserAuth do
 
       conn
       |> send_resp(401, "Authentication required")
+      |> halt()
     end
   end
 end

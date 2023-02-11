@@ -3,20 +3,13 @@ defmodule FediServerWeb.Router do
 
   import FediServerWeb.UserAuth
 
+  pipeline :authenticated do
+    plug(:require_authenticated_user)
+  end
+
   pipeline :api do
     plug(:accepts, ["json"])
     plug(:fetch_session)
-    plug(:fetch_current_user)
-    plug(:set_actor)
-  end
-
-  # Note: no live view stuff, no flash
-  pipeline :browser do
-    plug(:accepts, ["json", "html"])
-    plug(:fetch_session)
-    plug(:put_root_layout, {FediServerWeb.LayoutView, :root})
-    plug(:protect_from_forgery)
-    plug(:put_secure_browser_headers)
     plug(:fetch_current_user)
     plug(:set_actor)
   end
@@ -34,12 +27,29 @@ defmodule FediServerWeb.Router do
     plug(:accepts, ["json", "jrd+json", "xml", "xrd+xml"])
   end
 
+  pipeline :accepts_html do
+    plug(:accepts, ["html"])
+  end
+
+  pipeline :accepts_any do
+    plug(:accepts, ["json", "html"])
+  end
+
+  # Note: no live view stuff, no flash
+  pipeline :browser do
+    plug(:fetch_session)
+    plug(:put_root_layout, {FediServerWeb.LayoutView, :root})
+    plug(:protect_from_forgery)
+    plug(:put_secure_browser_headers)
+    plug(:fetch_current_user)
+    plug(:set_actor)
+  end
+
   scope "/", FediServerWeb do
     pipe_through(:api)
 
     get("/inbox", InboxController, :get_shared_inbox)
     post("/inbox", InboxController, :post_shared_inbox)
-    get("/users/:nickname", UsersController, :profile)
     get("/users/:nickname/inbox", InboxController, :get_inbox)
     post("/users/:nickname/inbox", InboxController, :post_inbox)
     get("/users/:nickname/outbox", OutboxController, :get_outbox)
@@ -51,9 +61,26 @@ defmodule FediServerWeb.Router do
   end
 
   scope "/", FediServerWeb do
-    pipe_through(:browser)
+    pipe_through([:accepts_any, :browser])
 
+    get("/users/:nickname", UsersController, :show)
     get("/users/:nickname/objects/:ulid", ObjectsController, :object)
+  end
+
+  scope "/web", FediServerWeb do
+    pipe_through([:accepts_html, :browser])
+
+    get("/directory", UsersController, :index)
+    get("/accounts/:nickname", UsersController, :show)
+    get("/statuses/:ulid", ObjectsController, :status)
+    get("/timelines/local", TimelinesController, :local)
+    get("/timelines/federated", TimelinesController, :federated)
+  end
+
+  scope "/web", FediServerWeb do
+    pipe_through([:accepts_html, :browser, :authenticated])
+
+    get("/timelines/home", TimelinesController, :home)
   end
 
   scope "/.well-known", FediServerWeb do

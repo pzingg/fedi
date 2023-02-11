@@ -59,29 +59,44 @@ signatures for activities arriving at local inboxes.
 There is also support for 'webfinger', 'host-meta' and 'nodeinfo'
 endpoints in the example application.
 
+The application supports these collections:
+
+- `:object/likes`
+- `:object/shares`
+- `:account/inbox`
+- `:account/outbox`
+- `:account/following`
+- `:account/followers`
+- `:account/collections/liked`
+- `:account/collections/featured`
+
+as well as ad-hoc account collections.
+
+The example application also has some rudimentary "web" support
+a la Mastodon. It supports only `Note` objects posted in Markdown
+format, but is able to parse out hyperlinks, mentions and hashtags,
+and can display Note content as HTML with links for these.
+
+There are also basic stubs for the Mastodon timelines "Home", "Local" and
+"Federated".
+
+The routes for these "web" urls are:
+
+- `/web/timelines/home`
+- `/web/timelines/local`
+- `/web/timelines/federated`
+- `/web/directory`
+- `/web/accounts/:account_id`
+- `/web/statuses/:object_id`
+
 ## TODO
 
-Add Activity tests to complete the ActivityPub spec requirements. See
-[IMPLEMENTATION.md](IMPLEMENTATION.md). Still to do:
-
-- Undo
-- Add (S2S)
-- Remove (S2S)
-- Delete (S2S)
-- Announce (S2S)
-- Like (S2S)
-
-Add some Mastodon-ish features that are not in the AP spec if they are
+Add more Mastodon-ish features that are not in the AP spec if they are
 easy to implement:
 
-- Client functions to set 'to' and 'cc' properties based on 'attributedTo', 'inReplyTo',
-  mentions in the content, and visibility level
-- Timelines
-- Shares
-- Replies
-- Conversations
-- Parsing hashtags and mentions from content (using Markdown as the default
-  'mediaType' for content), and creating a 'hashtags' collection
+- shares
+- replies
+- conversations
 
 Top level documentation
 

@@ -1,6 +1,8 @@
 defmodule FediServer.ActivitiesTest do
   use FediServer.DataCase
 
+  import FediServer.FixturesHelper
+
   alias Fedi.Streams.Utils
   alias FediServer.Activities
   alias FediServer.Activities.Activity
@@ -20,7 +22,7 @@ defmodule FediServer.ActivitiesTest do
 
   describe "Conversations" do
     test "adds Notes in reply to other notes" do
-      {_users, _activities, [in_reply_to | _]} = FediServer.FixturesHelper.outbox_fixtures()
+      {_users, _activities, [in_reply_to | _]} = outbox_fixtures()
 
       fixture_ap_ids =
         Object
