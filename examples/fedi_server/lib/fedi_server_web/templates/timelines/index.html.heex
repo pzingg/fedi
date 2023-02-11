@@ -1,18 +1,20 @@
 <h1><%= @title %></h1>
 <%= if @count == 0 do %>
-<p>No Posts</p>
+<p>No Activities</p>
 <% end %>
 <%= if @count == 1 do %>
-<p>1 Post</p>
+<p>1 Activity</p>
 <% end %>
 <%= if @count > 1 do %>
-<p><%= @count %> Posts</p>
+<p><%= @count %> Activities</p>
 <% end %>
-<%= for status <- @timeline do %>
-<div>
-  <p><%= status["attributedTo"] %></p>
-  <p><%= status["content"] %></p>
+<%= for activity <- @timeline do %>
+<!-- activity -->
+<div class="activity">
+  <p><%= description(activity) %></p>
+  <p><%= object(activity) %></p>
 </div>
+<!-- end activity -->
 <% end %>
 <%= if @previous do %>
 <p><a href={@previous}>Previous 30</a></p>

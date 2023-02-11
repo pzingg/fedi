@@ -137,13 +137,14 @@ defmodule FediServer.Activities do
       following = get_following_ids(actor_id)
 
       query =
-        Object
+        Activity
         |> distinct(true)
-        |> select([o], %{id: o.id, data: o.data})
-        |> where([o], o.type == "Note" and (o.local? == true or o.actor in ^following))
-        |> filter_collection(opts, 1)
+        |> join(:left, [a], o in Object, on: o.ap_id == a.object)
+        |> select([a], %{id: a.id, data: a.data})
+        |> filter_collection(opts, 2)
+        |> where([a], a.local? == true or a.actor in ^following)
         |> limit(^page_size)
-        |> order_by([o], desc: o.id)
+        |> order_by([a], desc: a.id)
 
       coll_id = Utils.to_uri("#{actor_id}/timeline")
 
@@ -158,13 +159,14 @@ defmodule FediServer.Activities do
     page_size = Keyword.get(opts, :page_size, 30)
 
     query =
-      Object
+      Activity
       |> distinct(true)
-      |> select([o], %{id: o.id, data: o.data})
-      |> where([o], o.type == "Note" and o.local? == true)
-      |> filter_collection(opts, 1)
+      |> join(:left, [a], o in Object, on: o.ap_id == a.object)
+      |> select([a], %{id: a.id, data: a.data})
+      |> filter_collection(opts, 2)
+      |> where([a], a.local? == true)
       |> limit(^page_size)
-      |> order_by([o], desc: o.id)
+      |> order_by([a], desc: a.id)
 
     endpoint_iri = Fedi.Application.endpoint_url() |> Utils.to_uri()
     coll_id = Utils.base_uri(endpoint_iri, "/timeline")
@@ -1017,6 +1019,7 @@ defmodule FediServer.Activities do
   def build_params(as_type) do
     with {:activity_actor, %URI{} = actor_iri} <-
            {:activity_actor, Utils.get_actor_or_attributed_to_iri(as_type)},
+         maybe_object_id <- APUtils.get_object_id(as_type),
          {:ok, params} <-
            parse_basic_params(as_type),
          {:ok, json_data} <-
@@ -1024,13 +1027,20 @@ defmodule FediServer.Activities do
          {:ok, recipients} <- APUtils.get_recipients(as_type, empty_ok: true),
          recipient_params <- canonical_recipients(recipients),
          actor_id <- URI.to_string(actor_iri),
-         object_id <- URI.to_string(params.ap_id) do
+         ap_id <- URI.to_string(params.ap_id) do
+      object_id =
+        case maybe_object_id do
+          {:ok, object_id} -> URI.to_string(object_id)
+          _ -> nil
+        end
+
       {:ok,
        params
        |> Map.merge(recipient_params)
        |> Map.merge(%{
-         ap_id: object_id,
+         ap_id: ap_id,
          actor: actor_id,
+         object: object_id,
          data: json_data
        })}
     else

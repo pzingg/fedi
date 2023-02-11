@@ -7,6 +7,7 @@ defmodule FediServer.Repo.Migrations.AddActivities do
       add :ap_id, :string, null: false
       add :type, :string, null: false
       add :actor, :string, null: false
+      add :object, :string
       add :local?, :boolean, null: false, default: true
       add :data, :map, null: false
 
@@ -16,6 +17,7 @@ defmodule FediServer.Repo.Migrations.AddActivities do
     create index(:activities, :ap_id, unique: true)
     create index(:activities, :type)
     create index(:activities, :actor)
+    create index(:activities, :object)
     create index(:activities, :local?)
   end
 end

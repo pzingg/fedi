@@ -19,7 +19,7 @@ defmodule FediServerWeb.TimelinesControllerTest do
       |> log_in_user(alyssa)
       |> get("/web/timelines/home")
 
-    assert response(conn, 200) =~ "2 Posts"
+    assert response(conn, 200) =~ "4 Activities"
   end
 
   test "does not fetch home timeline if unauthenticated", %{conn: conn} do
@@ -42,7 +42,7 @@ defmodule FediServerWeb.TimelinesControllerTest do
       |> log_in_user(alyssa)
       |> get("/web/timelines/local")
 
-    assert response(conn, 200) =~ "2 Posts"
+    assert response(conn, 200) =~ "4 Activities"
   end
 
   test "gets local timeline (public)", %{conn: conn} do
@@ -52,7 +52,7 @@ defmodule FediServerWeb.TimelinesControllerTest do
       conn
       |> get("/web/timelines/local")
 
-    assert response(conn, 200) =~ "1 Post"
+    assert response(conn, 200) =~ "3 Activities"
   end
 
   test "gets federated timeline (alyssa)", %{conn: conn} do
@@ -65,7 +65,7 @@ defmodule FediServerWeb.TimelinesControllerTest do
       |> log_in_user(alyssa)
       |> get("/web/timelines/local")
 
-    assert response(conn, 200) =~ "2 Posts"
+    assert response(conn, 200) =~ "4 Activities"
   end
 
   test "gets federated timeline (public)", %{conn: conn} do
@@ -75,6 +75,6 @@ defmodule FediServerWeb.TimelinesControllerTest do
       conn
       |> get("/web/timelines/local")
 
-    assert response(conn, 200) =~ "1 Post"
+    assert response(conn, 200) =~ "3 Activities"
   end
 end

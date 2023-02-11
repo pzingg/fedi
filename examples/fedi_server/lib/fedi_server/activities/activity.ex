@@ -8,6 +8,7 @@ defmodule FediServer.Activities.Activity do
     field(:ap_id, :string)
     field(:type, :string)
     field(:actor, :string)
+    field(:object, :string)
     field(:local?, :boolean)
     field(:public?, :boolean)
     field(:data, :map)
@@ -29,7 +30,7 @@ defmodule FediServer.Activities.Activity do
 
   def changeset(%__MODULE__{} = activity, attrs \\ %{}) do
     activity
-    |> cast(attrs, [:ap_id, :type, :actor, :local?, :public?, :data])
+    |> cast(attrs, [:ap_id, :type, :actor, :object, :local?, :public?, :data])
     |> cast_assoc(:direct_recipients)
     |> cast_assoc(:following_recipients)
     |> validate_required([:ap_id, :type, :actor, :public?, :data])
