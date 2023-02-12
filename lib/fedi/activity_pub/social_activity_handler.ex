@@ -287,13 +287,14 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
   @impl true
   def like(%{box_iri: outbox_iri} = context, activity)
       when is_struct(activity) do
-    with {:activity_object, %P.Object{values: [_ | _]} = object} <-
+    with {:activity_object, %P.Object{values: [_ | _]} = object_prop} <-
            {:activity_object, Utils.get_object(activity)},
          {:ok, %URI{path: actor_path} = actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, outbox_iri),
-         {:ok, object_ids} <- APUtils.get_ids(object),
+         {:ok, object_ids} <- APUtils.get_ids(object_prop),
          coll_id <- %URI{actor_iri | path: actor_path <> "/collections/liked"},
-         {:ok, _oc} <- ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
+         {:ok, _oc} <-
+           ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
       ActorFacade.handle_c2s_activity(context, activity)
     else
       {:error, reason} -> {:error, reason}

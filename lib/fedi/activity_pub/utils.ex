@@ -915,6 +915,22 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
+  def get_object_ids_and_types(%{values: values} = object_prop) do
+    Enum.reduce_while(values, [], fn iter, acc ->
+      case to_id(iter) do
+        %URI{} = id ->
+          {:cont, [{id, Utils.get_json_ld_type(iter)} | acc]}
+
+        _ ->
+          {:halt, {:error, Utils.err_id_required(property: object_prop)}}
+      end
+    end)
+    |> case do
+      {:error, reason} -> {:error, reason}
+      ids_and_types -> {:ok, ids_and_types}
+    end
+  end
+
   @doc """
   Implements the logic of removing object ids to a target Collection or
   OrderedCollection. This logic is shared by both the C2S and S2S protocols.

@@ -269,7 +269,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, _} <-
            ActorFacade.db_update_collection(context, coll_id, %{
              update: accept_actors,
-             state: :accept
+             action: :accept
            }) do
       ActorFacade.handle_s2s_activity(context, activity)
     end
@@ -286,7 +286,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
          {:ok, _} <-
            ActorFacade.db_update_collection(context, coll_id, %{
              update: reject_actors,
-             state: :reject
+             action: :reject
            }) do
       ActorFacade.handle_s2s_activity(context, activity)
     end

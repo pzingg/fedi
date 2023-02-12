@@ -236,7 +236,7 @@ defmodule FediServerWeb.SocialCallbacks do
     with {:activity_actor, actor} <- {:activity_actor, Utils.get_actor(activity)},
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
          {:actor_id, %URI{} = actor_iri} <- {:actor_id, APUtils.to_id(actor)},
-         {:following_id, %URI{} = following_id} <- {:following_id, APUtils.to_id(object)},
+         {:relation, %URI{} = following_id} <- {:relation, APUtils.to_id(object)},
          {:ok, %User{}} <- Activities.ensure_user(actor_iri, true),
          # Insert remote following user if not in db
          {:ok, %User{}} <- Activities.ensure_user(following_id, false),
@@ -260,7 +260,7 @@ defmodule FediServerWeb.SocialCallbacks do
       {:actor_id, _} ->
         {:error, "No id in actor"}
 
-      {:following_id, _} ->
+      {:relation, _} ->
         {:error, "No following id in object"}
     end
   end
@@ -377,8 +377,8 @@ defmodule FediServerWeb.SocialCallbacks do
   def undo_follow(_context, actor_iri, follow) do
     with {:activity_object, object} <-
            {:activity_object, Utils.get_object(follow)},
-         {:following_id, %URI{} = following_id} <-
-           {:following_id, APUtils.to_id(object)},
+         {:relation, %URI{} = following_id} <-
+           {:relation, APUtils.to_id(object)},
          {:ok, %User{}} <-
            Activities.ensure_user(actor_iri, true) do
       Activities.unfollow(actor_iri, following_id)
@@ -389,7 +389,7 @@ defmodule FediServerWeb.SocialCallbacks do
       {:activity_object, _} ->
         {:error, Utils.err_object_required(activity: follow)}
 
-      {:following_id, _} ->
+      {:relation, _} ->
         {:error, "No following id in object"}
     end
   end

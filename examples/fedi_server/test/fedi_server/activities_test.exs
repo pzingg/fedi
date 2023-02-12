@@ -5,7 +5,6 @@ defmodule FediServer.ActivitiesTest do
 
   alias Fedi.Streams.Utils
   alias FediServer.Activities
-  alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
 
   describe "Fixtures" do

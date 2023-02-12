@@ -59,16 +59,41 @@ signatures for activities arriving at local inboxes.
 There is also support for 'webfinger', 'host-meta' and 'nodeinfo'
 endpoints in the example application.
 
+Status URLS
+
+- `id` - "https://mastodon.cloud/users/pzingg/statuses/109365863602876549"
+- `url` - "https://mastodon.cloud/@pzingg/109365863602876549"
+
+The application supports these singleton items:
+
+- `/@:nickname`
+- `/@:nickname/:object_id`
+- `/users/:nickname` (JSON only)
+- `/users/:nickname/statuses/:object_id`
+
 The application supports these collections:
 
-- `:object/likes`
-- `:object/shares`
-- `:account/inbox`
-- `:account/outbox`
-- `:account/following`
-- `:account/followers`
-- `:account/collections/liked`
-- `:account/collections/featured`
+- `/@:nickname/:object_id/likes`
+- `/@:nickname/:object_id/shares`
+- `/@:nickname/featured`
+- `/@:nickname/followers`
+- `/@:nickname/following`
+- `/@:nickname/liked`
+- `/@:nickname/media` (HTML only - media)
+- `/@:nickname/with_replies` (HTML only - posts and replies)
+- `/@:nickname` (HTML only - posts)
+- `/inbox`
+- `/users/:nickname/collections/featured`
+- `/users/:nickname/collections/liked`
+- `/users/:nickname/followers`
+- `/users/:nickname/following`
+- `/users/:nickname/inbox`
+- `/users/:nickname/media` (media)
+- `/users/:nickname/outbox`
+- `/users/:nickname/statuses/:object_id/likes`
+- `/users/:nickname/statuses/:object_id/shares`
+- `/users/:nickname/with_replies` (posts and replies)
+- `/users/:nickname` (JSON gives user profile. HTML redirects to `/@:nickname` - posts)
 
 as well as ad-hoc account collections.
 
@@ -82,32 +107,185 @@ There are also basic stubs for the Mastodon timelines "Home", "Local" and
 
 The routes for these "web" urls are:
 
+- `/web/accounts/:nickname`
+- `/web/bookmarks`
+- `/web/directory`
+- `/web/favorites`
+- `/web/statuses/:object_id`
+- `/web/timelines/direct`
+- `/web/timelines/federated`
 - `/web/timelines/home`
 - `/web/timelines/local`
-- `/web/timelines/federated`
-- `/web/directory`
-- `/web/accounts/:account_id`
-- `/web/statuses/:object_id`
+
+## Mastodon-equivalent activities
+
+Add more Mastodon-ish features that are not in the AP spec if they are
+easy to implement.
+
+### Post
+
+```
+%{
+  "type" => "Create",
+  "to" => "as:Public",
+  "cc" => [
+    "https://example.com/users/me/followers",
+    "https://other.example/users/mentioned"
+  ],
+  "actor" => "https://example.com/users/me",
+  "object" => %{
+    "type" => "Note",
+    "id" => "https://example.com/users/original/objects/OBJECTID",
+    "content" => "**My Markdown post** mentioning @mentioned@other.example",
+    "attributedTo" => "https://example.com/users/me",
+    "tag" => [
+      %{
+        "type" => "Mention",
+        "href" => "https://other.example/users/mentioned",
+        "name" => "@mentioned@other.example"
+      }
+    ]
+  }
+}
+```
+
+### Direct message
+
+Must not have any "as:Public" or follower audience.
+
+```
+%{
+  "type" => "Create",
+  "to" => "https://example.com/users/someone",
+  "actor" => "https://example.com/users/me",
+  "object" => %{
+    "type" => "Note",
+    "id" => "https://example.com/users/original/objects/OBJECTID",
+    "content" => "**My Markdown message**",
+    "attributedTo" => "https://example.com/users/me"
+  }
+}
+```
+
+### Reply
+
+```
+%{
+  "type" => "Create",
+  "to" => [
+    "https://example.com/users/original",
+    "https://example.com/users/me/followers"
+  ],
+  "cc" =>  [
+    "as:Public",
+    "https://other.example/users/mentioned"
+  ],
+  "actor" => "https://example.com/users/me",
+  "object" => %{
+    "type" => "Note",
+    "content" => "@original@example.com **My Markdown reply**",
+    "attributedTo" => "https://example.com/users/me",
+    "inReplyTo" => "https://example.com/users/original/objects/OBJECTID",
+    "tag" => [
+      %{
+        "type" => "Mention",
+        "href" => "https://example.com/users/original",
+        "name" => "@original@example.com"
+      }
+    ]
+  }
+}
+```
+
+### Boost
+
+```
+%{
+  "type" => "Announce",
+  "to" => "as:Public",
+  "cc" => [
+    "https://example.com/users/me/followers",
+    "https://other.example/users/mentioned"
+  ],
+  "actor" => "https://example.com/users/me",
+  "object" => "https://example.com/users/original/objects/OBJECTID"
+}
+```
+
+### Favorite
+
+Favorites can be shared or not?
+
+```
+%{
+  "type" => "Add",
+  "to" => "https://example.com/users/me",
+  "actor" => "https://example.com/users/me",
+  "object" => "https://example.com/users/original/objects/OBJECTID",
+  "target" => "https://example.com/users/me/favorites"
+}
+```
+
+### Bookmark
+
+Bookmarks can be shared or not?
+
+```
+%{
+  "type" => "Add",
+  "to" => "https://example.com/users/me",
+  "actor" => "https://example.com/users/me",
+  "object" => "https://example.com/users/original/objects/OBJECTID",
+  "target" => "https://example.com/users/me/bookmarks"
+}
+```
 
 ## TODO
 
-Add more Mastodon-ish features that are not in the AP spec if they are
-easy to implement:
+### Support additional Mastodon features:
 
-- shares
-- replies
-- conversations
+Muting hides the user from your view:
 
-Top level documentation
+- You won’t see the user in your home feed
+- You won’t see other people boosting the user
+- You won’t see other people mentioning the user
+- You won’t see the user in public timelines
+- Can have an expiration time
+
+Blocking hides a user from your view:
+
+- You won’t see the user in your home feed
+- You won’t see other people boosting the user
+- You won’t see other people mentioning the user
+- You won’t see the user in public timelines
+- You won’t see notifications from that user
+
+Additionally, on the blocked user’s side:
+
+- The user is forced to unfollow you
+- The user cannot follow you
+- The user won’t see other people’s boosts of you
+- The user won’t see you in public timelines
+- If you and the blocked user are on the same server, the blocked user
+  will not be able to view your posts on your profile while logged in.
+
+If you block an entire server:
+
+- You will not see posts from that server on the public timelines
+- You won’t see other people’s boosts of that server in your home feed
+- You won’t see notifications from that server
+- You will lose any followers that you might have had on that server
+
+### Top level documentation
 
 - Provide clear instructions for how to hook the library up to a Phoenix
   application.
 
-Ontology generation tool
+### Ontology generation tool
 
 - Document the `ontology.gen` mix task.
 
-Other enhancements and bug fixes
+### Other enhancements and bug fixes
 
 - Limit the ranges and domains of properties and types according to
   the .jsonld ontology.

@@ -9,7 +9,6 @@ defmodule FediServerWeb.OutboxControllerTest do
   alias Fedi.ActivityStreams.Property, as: P
   alias Fedi.ActivityStreams.Type, as: T
   alias Fedi.ActivityPub.Utils, as: APUtils
-  alias FediServer.Activities
   alias FediServerWeb.MockRequestHelper
 
   setup do

@@ -17,13 +17,11 @@ defmodule FediServer.Activities do
   alias Fedi.ActivityStreams.Type, as: T
 
   alias FediServer.Accounts.User
-  alias FediServer.Accounts.BlockedAccount
   alias FediServer.Activities.Activity
   alias FediServer.Activities.Object
   alias FediServer.Activities.Mailbox
-  alias FediServer.Activities.FollowingRelationship
-  alias FediServer.Activities.ObjectAction
-  alias FediServer.Activities.UserCollection
+  alias FediServer.Activities.UserObject
+  alias FediServer.Activities.UserUser
   alias FediServer.HTTPClient
   alias FediServer.Repo
 
@@ -62,24 +60,24 @@ defmodule FediServer.Activities do
         :following ->
           following_id = URI.to_string(id)
 
-          FollowingRelationship
-          |> join(:inner, [c], u in User, on: c.following_id == u.id)
-          |> join(:inner, [c], g in User, on: c.follower_id == g.id)
+          UserUser
+          |> join(:inner, [c], u in User, on: c.relation == u.id)
+          |> join(:inner, [c], g in User, on: c.actor == g.id)
+          |> where([c], c.type == :follow)
           |> where([c, u, g], g.ap_id == ^actor_id)
           |> where([c, u], u.ap_id == ^following_id)
-          |> where([c], c.state == ^:accept)
 
         :followers ->
           follower_id = URI.to_string(id)
 
-          FollowingRelationship
-          |> join(:inner, [c], u in User, on: c.follower_id == u.id)
-          |> join(:inner, [c], g in User, on: c.following_id == g.id)
+          UserUser
+          |> join(:inner, [c], u in User, on: c.actor == u.id)
+          |> join(:inner, [c], g in User, on: c.relation == g.id)
+          |> where([c], c.type == :follow)
           |> where([c, u, g], g.ap_id == ^actor_id)
           |> where([c, u], u.ap_id == ^follower_id)
-          |> where([c], c.state == ^:accept)
 
-        # Special collections, ObjectActions
+        # UserObjects
         _ ->
           nil
       end
@@ -193,29 +191,36 @@ defmodule FediServer.Activities do
           |> where([c], c.outgoing == ^outgoing)
           |> select([c, o], count(o.id))
 
-        {:object_action, type} ->
-          ObjectAction
+        {:user_object, type} ->
+          UserObject
           |> where([o], o.object == ^actor_id)
           |> where([o], o.type == ^type)
           |> select([o], count(o.id))
 
+        :follow_request ->
+          UserUser
+          |> where([c], c.type == :follow_request)
+          |> where([c], c.actor == ^actor_id)
+          |> select([c], count(c.id))
+
         :following ->
-          FollowingRelationship
-          |> where([c], c.follower_id == ^actor_id)
-          |> where([c], c.state == ^:accept)
+          UserUser
+          |> where([c], c.type == :follow)
+          |> where([c], c.actor == ^actor_id)
           |> select([c], count(c.id))
 
         :followers ->
-          FollowingRelationship
-          |> where([c], c.following_id == ^actor_id)
-          |> where([c], c.state == ^:accept)
+          UserUser
+          |> where([c], c.type == :follow)
+          |> where([c], c.relation == ^actor_id)
           |> select([c], count(c.id))
 
-        # Special collections
-        {:user_collection, name} ->
-          coll_id = Path.join(actor_id, name)
+        # Custom UserObjects
+        {:custom_user_object, name} ->
+          coll_id = "#{actor_id}/collections/#{name}"
 
-          UserCollection
+          UserObject
+          |> where([c], c.type == :custom)
           |> where([c], c.collection_id == ^coll_id)
           |> select([c], count(c.id))
 
@@ -243,12 +248,12 @@ defmodule FediServer.Activities do
           |> limit(^page_size)
           |> order_by([a], desc: a.id)
 
-        {:object_action, type} ->
+        {:user_object, type} ->
           # `actor_id` is really the `object_id`
           object_id = actor_id
 
           User
-          |> join(:inner, [u], c in ObjectAction, on: c.actor == u.ap_id)
+          |> join(:inner, [u], c in UserObject, on: c.actor == u.ap_id)
           |> select([u], %{id: u.id, data: u.data})
           # TODO should visibility be filtered by the visibilty of `c.object`?
           # |> filter_collection(opts, 2)
@@ -257,29 +262,38 @@ defmodule FediServer.Activities do
           |> order_by([u, c], desc: c.activity)
           |> limit(^page_size)
 
+        :follow_request ->
+          UserUser
+          |> select([c], %{id: c.id, iri: c.relation})
+          |> where([c], c.type == :follow_request)
+          |> where([c], c.actor == ^actor_id)
+          |> order_by([c], desc: c.id)
+          |> limit(^page_size)
+
         :following ->
-          FollowingRelationship
-          |> select([c], %{id: c.id, iri: c.following_id})
-          |> where([c], c.follower_id == ^actor_id)
-          |> where([c], c.state == ^:accept)
+          UserUser
+          |> select([c], %{id: c.id, iri: c.relation})
+          |> where([c], c.type == :follow)
+          |> where([c], c.actor == ^actor_id)
           |> order_by([c], desc: c.id)
           |> limit(^page_size)
 
         :followers ->
-          FollowingRelationship
-          |> select([c], %{id: c.id, iri: c.follower_id})
-          |> where([c], c.following_id == ^actor_id)
-          |> where([c], c.state == ^:accept)
+          UserUser
+          |> select([c], %{id: c.id, iri: c.actor})
+          |> where([c], c.type == :follow)
+          |> where([c], c.relation == ^actor_id)
           |> order_by([c], desc: c.id)
           |> limit(^page_size)
 
-        # Special collections
-        {:user_collection, name} ->
-          coll_id = Path.join(actor_id, name)
+        # Custom UserObjects
+        {:custom_user_object, name} ->
+          coll_id = "#{actor_id}/collections/#{name}"
 
           Object
           |> distinct(true)
-          |> join(:inner, [o], c in UserCollection, on: c.object == o.ap_id)
+          |> join(:inner, [o], c in UserObject, on: c.object == o.ap_id)
+          |> where([_o, c], c.type == :custom)
           |> where([_o, c], c.collection_id == ^coll_id)
           |> select([o], %{id: o.id, iri: o.ap_id})
           |> filter_collection(opts, 2)
@@ -395,10 +409,10 @@ defmodule FediServer.Activities do
   end
 
   def get_following_ids(follower_id) when is_binary(follower_id) do
-    FollowingRelationship
-    |> where([c], c.follower_id == ^follower_id)
-    |> where([c], c.state == ^:accept)
-    |> select([c], c.following_id)
+    UserUser
+    |> where([c], c.type == :follow)
+    |> where([c], c.actor == ^follower_id)
+    |> select([c], c.relation)
     |> Repo.all()
   end
 
@@ -439,11 +453,11 @@ defmodule FediServer.Activities do
       query
       |> join(:left, [o], dr in assoc(o, :direct_recipients))
       |> join(:left, [o, _dr], fr in assoc(o, :following_recipients))
-      |> join(:left, [_o, _dr, _fr], fg in FollowingRelationship, on: fg.follower_id == ^ap_id)
+      |> join(:left, [_o, _dr, _fr], fg in UserUser, on: fg.actor == ^ap_id)
       |> filter_collection_public(1)
       |> or_where([_o, dr], dr.address == ^ap_id)
       |> or_where([_o, _dr, fr], fr.address == ^ap_id)
-      |> or_where([_o, _dr, fr, fg], fr.address == fg.following_id)
+      |> or_where([_o, _dr, fr, fg], fr.address == fg.relation)
     else
       query
     end
@@ -454,11 +468,11 @@ defmodule FediServer.Activities do
       query
       |> join(:left, [o, _c], dr in assoc(o, :direct_recipients))
       |> join(:left, [o, _c, _dr], fr in assoc(o, :following_recipients))
-      |> join(:left, [_o, _c, _dr, _fr], fg in FollowingRelationship, on: fg.follower_id == ^ap_id)
+      |> join(:left, [_o, _c, _dr, _fr], fg in UserUser, on: fg.actor == ^ap_id)
       |> filter_collection_public(2)
       |> or_where([_o, _c, dr], dr.address == ^ap_id)
       |> or_where([_o, _c, _dr, fr], fr.address == ^ap_id)
-      |> or_where([_o, _c, _dr, fr, fg], fr.address == fg.following_id)
+      |> or_where([_o, _c, _dr, fr, fg], fr.address == fg.relation)
     else
       query
     end
@@ -488,9 +502,11 @@ defmodule FediServer.Activities do
       "outbox" -> {:mailbox, true}
       "following" -> :following
       "followers" -> :followers
-      "likes" -> {:object_action, "like"}
-      "shares" -> {:object_action, "share"}
-      other -> {:user_collection, other}
+      "likes" -> {:user_object, "like"}
+      "shares" -> {:user_object, "share"}
+      "favourites" -> {:user_object, "favourite"}
+      "bookmarks" -> {:user_object, "bookmark"}
+      custom -> {:custom_user_object, custom}
     end
   end
 
@@ -523,9 +539,9 @@ defmodule FediServer.Activities do
             _ ->
               # For :following type only
               to_update = Map.get(updates, :update, [])
-              state = Map.get(updates, :state, :accept)
+              action = Map.get(updates, :action)
 
-              case update_collection_items(type, actor_iri, to_update, state) do
+              case update_collection_items(type, actor_iri, to_update, action) do
                 {:error, reason} ->
                   {:error, reason}
 
@@ -593,7 +609,7 @@ defmodule FediServer.Activities do
         acc
       ) do
     case follow(actor_iri, following_id) do
-      {:ok, %FollowingRelationship{}} -> {:cont, [following_id | acc]}
+      {:ok, %UserUser{}} -> {:cont, [following_id | acc]}
       {:error, reason} -> {:halt, {:error, reason}}
     end
   end
@@ -602,26 +618,35 @@ defmodule FediServer.Activities do
     Logger.error("#{actor_iri} followers #{follower_id}")
 
     case follow(follower_id, actor_iri) do
-      {:ok, %FollowingRelationship{}} -> {:cont, [follower_id | acc]}
+      {:ok, %UserUser{}} -> {:cont, [follower_id | acc]}
       {:error, reason} -> {:halt, {:error, reason}}
     end
   end
 
-  def add_collection_item({:user_collection, name}, %URI{} = actor_iri, %URI{} = object_id, acc) do
-    case repo_get_by_ap_id(:objects, object_id) do
-      %Object{type: type} ->
+  def add_collection_item(
+        {:custom_user_object, name},
+        %URI{} = actor_iri,
+        %URI{} = object_iri,
+        acc
+      ) do
+    object_id = URI.to_string(object_iri)
+
+    case repo_get_by_ap_id(:objects, object_iri) do
+      %Object{type: type, local?: local?} ->
         actor_id = URI.to_string(actor_iri)
-        coll_id = Path.join(actor_id, name)
+        coll_id = "#{actor_id}/collections/#{name}"
 
         params = %{
           collection_id: coll_id,
-          type: type,
+          type: :custom,
           actor: actor_id,
-          object: URI.to_string(object_id)
+          object: object_id,
+          object_type: type,
+          local?: local?
         }
 
         case repo_insert(:collections, params) do
-          {:ok, %UserCollection{}} -> {:cont, [object_id | acc]}
+          {:ok, %UserObject{}} -> {:cont, [object_id | acc]}
           {:error, changeset} -> {:halt, {:error, changeset}}
         end
 
@@ -631,7 +656,7 @@ defmodule FediServer.Activities do
   end
 
   def add_collection_item(
-        {:object_action, type},
+        {:user_object, type},
         %URI{} = object_iri,
         {%URI{} = actor_iri, %URI{} = activity_iri},
         acc
@@ -639,9 +664,11 @@ defmodule FediServer.Activities do
     Logger.error("#{actor_iri} #{type}d #{object_iri}")
     object_id = URI.to_string(object_iri)
     actor_id = URI.to_string(actor_iri)
+    coll_id = "#{actor_id}/#{type}s"
     activity_id = URI.to_string(activity_iri)
 
     params = %{
+      collection_id: coll_id,
       type: type,
       actor: actor_id,
       activity: activity_id,
@@ -649,7 +676,7 @@ defmodule FediServer.Activities do
       local?: local?(activity_iri)
     }
 
-    case repo_insert({:object_action, type}, params) do
+    case repo_insert({:user_object, type}, params) do
       {:ok, _} ->
         {:cont, [actor_iri | acc]}
 
@@ -666,17 +693,18 @@ defmodule FediServer.Activities do
             {:halt, {:error, "Add item unimplemented for #{inspect(type)}"}}
 
           _ ->
-            {:halt, {:error, "Add item: object #{inspect(object_id)} is not a URI"}}
+            {:halt,
+             {:error, "Add item #{inspect(type)}: object #{inspect(object_id)} is not a URI"}}
         end
 
       _ ->
-        {:halt, {:error, "Add item: actor #{inspect(actor_iri)} is not a URI"}}
+        {:halt, {:error, "Add item #{inspect(type)}: actor #{inspect(actor_iri)} is not a URI"}}
     end
   end
 
-  def update_collection_items(type, actor_iri, items, state) do
+  def update_collection_items(type, actor_iri, items, action \\ nil) do
     Enum.reduce_while(items, [], fn item, acc ->
-      update_collection_item(type, actor_iri, item, state, acc)
+      update_collection_item(type, actor_iri, item, action, acc)
     end)
     |> case do
       {:error, reason} ->
@@ -691,31 +719,32 @@ defmodule FediServer.Activities do
         :following,
         %URI{} = actor_iri,
         %URI{} = following_id,
-        state,
+        action,
         acc
       ) do
-    case update_following_relationship(actor_iri, following_id, state) do
+    case update_user_user(:follow, actor_iri, following_id, action) do
       :ok -> {:cont, [following_id | acc]}
       {:error, reason} -> {:halt, {:error, reason}}
     end
   end
 
-  def update_collection_item(type, _actor_id, _item, _state, _acc) do
+  def update_collection_item(type, _actor_id, _item, _action, _acc) do
     Logger.error("Update collection not defined on #{type}")
     {:halt, {:error, "Unimplemented"}}
   end
 
   def remove_collection_items(_type, _actor_id, []), do: :ok
 
-  def remove_collection_items({:user_collection, name}, %URI{} = actor_iri, object_ids) do
+  def remove_collection_items({:custom_user_object, name}, %URI{} = actor_iri, object_ids) do
     # TODO dereference to get object_type?
     actor_id = URI.to_string(actor_iri)
-    coll_id = Path.join(actor_id, name)
+    coll_id = "#{actor_id}/collections/#{name}"
     object_ids = Enum.map(object_ids, &URI.to_string(&1))
     to_delete = Enum.count(object_ids)
 
     {count_deleted, _} =
-      UserCollection
+      UserObject
+      |> where([c], c.type == :custom)
       |> where([c], c.collection_id == ^coll_id)
       |> where([c], c.object in ^object_ids)
       |> Repo.delete_all()
@@ -735,7 +764,7 @@ defmodule FediServer.Activities do
   end
 
   def remove_collection_items(
-        {:object_action, type},
+        {:user_object, type},
         %URI{} = object_iri,
         actor_iris
       ) do
@@ -744,7 +773,7 @@ defmodule FediServer.Activities do
     to_delete = Enum.count(actor_ids)
 
     {count_deleted, _} =
-      ObjectAction
+      UserObject
       |> where([c], c.type == ^type)
       |> where([c], c.object == ^object_id)
       |> where([c], c.actor in ^actor_ids)
@@ -1231,32 +1260,35 @@ defmodule FediServer.Activities do
 
   ### Implementation
 
-  def get_following_relationship(%URI{} = follower_iri, %URI{} = following_iri) do
+  def get_user_user(%URI{} = follower_iri, %URI{} = following_iri) do
     follower_id = URI.to_string(follower_iri)
     following_id = URI.to_string(following_iri)
 
     query =
-      FollowingRelationship
-      |> where([c], c.follower_id == ^follower_id and c.following_id == ^following_id)
+      UserUser
+      |> where([c], c.actor == ^follower_id and c.relation == ^following_id)
 
     Repo.one(query)
   end
 
-  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :reject) do
+  def update_user_user(:follow, %URI{} = follower_iri, %URI{} = following_iri, :reject) do
     unfollow(follower_iri, following_iri)
   end
 
-  def update_following_relationship(%URI{} = follower_iri, %URI{} = following_iri, :accept) do
+  def update_user_user(:follow, %URI{} = follower_iri, %URI{} = following_iri, :accept) do
     follower_id = URI.to_string(follower_iri)
     following_id = URI.to_string(following_iri)
+    follow_types = [:follow, :follow_request]
 
     query =
-      FollowingRelationship
-      |> where([c], c.follower_id == ^follower_id and c.following_id == ^following_id)
+      UserUser
+      |> where([c], c.type in ^follow_types)
+      |> where([c], c.actor == ^follower_id)
+      |> where([c], c.relation == ^following_id)
 
     now = DateTime.utc_now()
 
-    case Repo.update_all(query, set: [state: "accept", updated_at: now]) do
+    case Repo.update_all(query, set: [type: :follow, updated_at: now]) do
       {0, _} ->
         {:error, "Not found"}
 
@@ -1266,33 +1298,35 @@ defmodule FediServer.Activities do
     end
   end
 
-  def follow(follower_id, following_id, state \\ :accept)
+  def follow(follower_id, following_id, accepted? \\ true)
 
-  def follow(%URI{} = follower_iri, %URI{} = following_iri, state) do
-    follow(URI.to_string(follower_iri), URI.to_string(following_iri), state)
+  def follow(%URI{} = follower_iri, %URI{} = following_iri, accepted?) do
+    follow(URI.to_string(follower_iri), URI.to_string(following_iri), accepted?)
   end
 
-  def follow(follower_id, following_id, state)
+  def follow(follower_id, following_id, accepted?)
       when is_binary(follower_id) and is_binary(following_id) do
+    type = if accepted?, do: :follow, else: :follow_request
+
     params = %{
-      follower_id: follower_id,
-      following_id: following_id,
-      state: state
+      type: type,
+      actor: follower_id,
+      relation: following_id
     }
 
     # TODO Announce?
     result =
-      %FollowingRelationship{}
-      |> FollowingRelationship.changeset(params)
+      %UserUser{}
+      |> UserUser.changeset(params)
       |> Repo.insert(on_conflict: :nothing, returning: true)
-      |> handle_insert_result(:following)
+      |> handle_insert_result(type)
 
     case result do
       {:error, reason} ->
         {:error, reason}
 
       {:ok, data} ->
-        Logger.error("#{follower_id} now follows #{following_id} #{state}")
+        Logger.error("#{follower_id} now follows #{following_id} #{accepted?}")
         {:ok, data}
     end
   end
@@ -1302,8 +1336,10 @@ defmodule FediServer.Activities do
     following_id = URI.to_string(following_iri)
 
     query =
-      FollowingRelationship
-      |> where([c], c.follower_id == ^follower_id and c.following_id == ^following_id)
+      UserUser
+      |> where([c], c.type == :follow)
+      |> where([c], c.actor == ^follower_id)
+      |> where([c], c.relation == ^following_id)
 
     case Repo.delete_all(query) do
       {0, _} ->
@@ -1316,18 +1352,40 @@ defmodule FediServer.Activities do
     end
   end
 
-  def block(%User{} = actor, %URI{} = blocked_id) do
-    BlockedAccount.build_block(actor, blocked_id)
-    |> Repo.insert()
-    |> handle_insert_result(:blocked_account)
+  def block(%User{ap_id: actor_id}, %URI{} = blocked_iri) do
+    blocked_id = URI.to_string(blocked_iri)
+
+    params = %{
+      type: :block,
+      actor: actor_id,
+      relation: blocked_id
+    }
+
+    # TODO Announce?
+    result =
+      %UserUser{}
+      |> UserUser.changeset(params)
+      |> Repo.insert(on_conflict: :nothing, returning: true)
+      |> handle_insert_result(:block)
+
+    case result do
+      {:error, reason} ->
+        {:error, reason}
+
+      {:ok, data} ->
+        Logger.error("#{actor_id} now blocks #{blocked_id}")
+        {:ok, data}
+    end
   end
 
-  def unblock(%User{id: user_id} = _actor, %URI{} = blocked_id) do
-    blocked_id = URI.to_string(blocked_id)
+  def unblock(%User{ap_id: actor_id}, %URI{} = blocked_iri) do
+    blocked_id = URI.to_string(blocked_iri)
 
     query =
-      BlockedAccount
-      |> where([b], b.user_id == ^user_id and b.ap_id == ^blocked_id)
+      UserUser
+      |> where([c], c.type == :block)
+      |> where([c], c.actor == ^actor_id)
+      |> where([c], c.relation == ^blocked_id)
 
     case Repo.delete_all(query) do
       {0, _} -> {:error, "Not found"}
@@ -1335,11 +1393,15 @@ defmodule FediServer.Activities do
     end
   end
 
-  def any_blocked?(%User{id: user_id} = _actor, actor_iris) do
+  def any_blocked?(%User{ap_id: actor_id}, actor_iris) do
     blocked_ids = Enum.map(actor_iris, fn %URI{} = id -> URI.to_string(id) end)
 
-    BlockedAccount
-    |> where([b], b.user_id == ^user_id and b.ap_id in ^blocked_ids)
+    UserUser
+
+    UserUser
+    |> where([c], c.type == :block)
+    |> where([c], c.actor == ^actor_id)
+    |> where([c], c.relation in ^blocked_ids)
     |> Repo.exists?()
   end
 
@@ -1550,7 +1612,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_exists?(:collections, ulid) do
-    query = UserCollection |> where([c], c.id == ^ulid)
+    query = UserObject |> where([c], c.id == ^ulid)
     Repo.exists?(query)
   end
 
@@ -1577,7 +1639,6 @@ defmodule FediServer.Activities do
     Repo.exists?(query)
   end
 
-  # Mock: we allow any old collection
   def repo_ap_id_exists?(:collections, %URI{} = ap_id) do
     local?(ap_id)
   end
@@ -1601,8 +1662,8 @@ defmodule FediServer.Activities do
   end
 
   def repo_get(:collections, ulid, opts) do
-    case Repo.get(UserCollection, ulid) do
-      %UserCollection{object: object_id} ->
+    case Repo.get(UserObject, ulid) do
+      %UserObject{object: object_id} ->
         repo_get_by_ap_id(:objects, object_id)
         |> maybe_filter_object(opts)
 
@@ -1645,9 +1706,10 @@ defmodule FediServer.Activities do
       object
     else
       query =
-        FollowingRelationship
-        |> where([r], r.follower_id == ^viewer)
-        |> where([r], r.following_id in ^following_recipients)
+        UserUser
+        |> where([c], c.type == :follow)
+        |> where([c], c.actor == ^viewer)
+        |> where([c], c.relation in ^following_recipients)
 
       if Repo.exists?(query) do
         # Logger.error("visible: follower")
@@ -1688,7 +1750,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_get_by_ap_id(:collections, %URI{} = ap_id) do
-    query = UserCollection |> where([u], u.collection_id == ^ap_id)
+    query = UserObject |> where([u], u.collection_id == ^ap_id)
     Repo.all(query)
   end
 
@@ -1738,10 +1800,10 @@ defmodule FediServer.Activities do
     |> handle_insert_result(:objects)
   end
 
-  def repo_insert({:object_action, type}, params) do
-    Logger.debug("Inserting #{type}: #{params.object}")
+  def repo_insert({:user_object, type}, params) do
+    Logger.error("Inserting UserObject #{type}: #{params}")
 
-    ObjectAction.changeset(%ObjectAction{}, Map.put(params, :type, type))
+    UserObject.changeset(%UserObject{}, Map.put(params, :type, type))
     |> Repo.insert(on_conflict: :nothing, returning: true)
     |> handle_insert_result(:objects)
   end
@@ -1750,7 +1812,7 @@ defmodule FediServer.Activities do
     Logger.debug("Inserting collection: #{params.object}")
 
     # TODO get type of item from params
-    UserCollection.changeset(%UserCollection{}, params)
+    UserObject.changeset(%UserObject{}, params)
     |> Repo.insert(on_conflict: :nothing, returning: true)
     |> handle_insert_result(params.type)
   end
@@ -1836,7 +1898,7 @@ defmodule FediServer.Activities do
 
   def repo_delete(:collections, %URI{} = ap_id) do
     ap_id = URI.to_string(ap_id)
-    query = UserCollection |> where([c], c.collection_id == ^ap_id)
+    query = UserObject |> where([c], c.collection_id == ^ap_id)
     Repo.delete_all(query)
   end
 
