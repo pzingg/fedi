@@ -1260,31 +1260,32 @@ defmodule FediServer.Activities do
 
   ### Implementation
 
-  def get_user_user(%URI{} = follower_iri, %URI{} = following_iri) do
-    follower_id = URI.to_string(follower_iri)
-    following_id = URI.to_string(following_iri)
+  def get_user_user(type, %URI{} = actor_iri, %URI{} = relation_iri) do
+    actor_id = URI.to_string(actor_iri)
+    relation_id = URI.to_string(relation_iri)
 
     query =
       UserUser
-      |> where([c], c.actor == ^follower_id and c.relation == ^following_id)
+      |> where([c], c.type == ^type)
+      |> where([c], c.actor == ^actor_id)
+      |> where([c], c.relation == ^relation_id)
 
     Repo.one(query)
   end
 
-  def update_user_user(:follow, %URI{} = follower_iri, %URI{} = following_iri, :reject) do
-    unfollow(follower_iri, following_iri)
+  def update_user_user(:follow, %URI{} = actor_iri, %URI{} = relation_iri, :reject) do
+    delete_user_user(:follow, actor_iri, relation_iri)
   end
 
-  def update_user_user(:follow, %URI{} = follower_iri, %URI{} = following_iri, :accept) do
-    follower_id = URI.to_string(follower_iri)
-    following_id = URI.to_string(following_iri)
-    follow_types = [:follow, :follow_request]
+  def update_user_user(:follow, %URI{} = actor_iri, %URI{} = relation_iri, :accept) do
+    actor_id = URI.to_string(actor_iri)
+    relation_id = URI.to_string(relation_iri)
 
     query =
       UserUser
-      |> where([c], c.type in ^follow_types)
-      |> where([c], c.actor == ^follower_id)
-      |> where([c], c.relation == ^following_id)
+      |> where([c], c.type in [:follow, :follow_request])
+      |> where([c], c.actor == ^actor_id)
+      |> where([c], c.relation == ^relation_id)
 
     now = DateTime.utc_now()
 
@@ -1293,7 +1294,7 @@ defmodule FediServer.Activities do
         {:error, "Not found"}
 
       {_, _} ->
-        Logger.error("#{follower_id} follows #{following_id} accept")
+        Logger.error("#{actor_id} follows #{relation_id} true")
         :ok
     end
   end
@@ -1331,23 +1332,46 @@ defmodule FediServer.Activities do
     end
   end
 
-  def unfollow(%URI{} = follower_iri, %URI{} = following_iri) do
-    follower_id = URI.to_string(follower_iri)
-    following_id = URI.to_string(following_iri)
+  def unfollow(actor_iri, following_iri) do
+    delete_user_user(:follow, actor_iri, following_iri)
+  end
+
+  def delete_user_user(:follow, %URI{} = actor_iri, %URI{} = relation_iri) do
+    actor_id = URI.to_string(actor_iri)
+    relation_id = URI.to_string(relation_iri)
 
     query =
       UserUser
-      |> where([c], c.type == :follow)
-      |> where([c], c.actor == ^follower_id)
-      |> where([c], c.relation == ^following_id)
+      |> where([c], c.type in [:follow, :follow_request])
+      |> where([c], c.actor == ^actor_id)
+      |> where([c], c.relation == ^relation_id)
 
     case Repo.delete_all(query) do
       {0, _} ->
         {:error, "Not found"}
 
       {_, _} ->
-        Logger.error("#{follower_id} no longer follows #{following_id}")
+        Logger.error("#{actor_id} no longer follows #{relation_id}")
 
+        :ok
+    end
+  end
+
+  def delete_user_user(type, %URI{} = actor_iri, %URI{} = relation_iri) do
+    actor_id = URI.to_string(actor_iri)
+    relation_id = URI.to_string(relation_iri)
+
+    query =
+      UserUser
+      |> where([c], c.type == ^type)
+      |> where([c], c.actor == ^actor_id)
+      |> where([c], c.relation == ^relation_id)
+
+    case Repo.delete_all(query) do
+      {0, _} ->
+        {:error, "Not found"}
+
+      {_, _} ->
         :ok
     end
   end
