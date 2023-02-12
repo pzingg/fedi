@@ -927,7 +927,7 @@ defmodule Fedi.ActivityPub.Utils do
     end)
     |> case do
       {:error, reason} -> {:error, reason}
-      ids_and_types -> {:ok, ids_and_types}
+      ids_and_types -> {:ok, Enum.reverse(ids_and_types)}
     end
   end
 

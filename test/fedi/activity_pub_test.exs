@@ -1,6 +1,5 @@
 defmodule Fedi.ActivityPubTest do
   use ExUnit.Case
-  # doctest Fedi.ActivityPub
 
   require Logger
 

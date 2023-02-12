@@ -92,18 +92,6 @@ defmodule Fedi.ActivityPub.FederatingActivityApi do
   Handles additional side effects for the Reject ActivityStreams
   type, specific to the application.
 
-  The wrapping function determines if this Reject is in response to a
-  Follow activity. If so, then the 'actor' is removed to the original 'actor's
-  'following' collection.
-
-  Otherwise, no side effects are done.
-  """
-  @callback reject(context :: context(), activity :: struct()) :: handler_result()
-
-  @doc """
-  Handles additional side effects for the Reject ActivityStreams
-  type, specific to the application.
-
   The wrapping function has no default side effects. However, if this
   Reject is in response to a Follow then the client MUST NOT go
   forward with adding the 'actor' to the original 'actor's 'following'

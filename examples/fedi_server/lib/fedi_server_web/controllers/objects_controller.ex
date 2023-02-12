@@ -58,7 +58,10 @@ defmodule FediServerWeb.ObjectsController do
     else
       content = data["content"]
 
-      case FediServer.Content.parse_markdown(content, html: true) do
+      case Fedi.Content.parse_markdown(content,
+             html: true,
+             webfinger_module: FediServerWeb.WebFinger
+           ) do
         {:ok, html, _} ->
           render(conn, "show.html", html_content: html)
 

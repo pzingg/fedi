@@ -26,7 +26,7 @@ defmodule FediServer.Activities.UserObject do
   def changeset(%__MODULE__{} = user_object, attrs \\ %{}) do
     user_object
     |> cast(attrs, [:collection_id, :type, :actor, :object, :object_type, :activity, :local?])
-    |> validate_required([:collection_id, :type, :actor, :object, :object_type, :local?])
+    |> validate_required([:collection_id, :type, :actor, :object, :local?])
     |> unique_constraint([:collection_id, :object])
   end
 end

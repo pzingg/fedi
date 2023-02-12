@@ -1,4 +1,4 @@
-defmodule FediServer.ContentTest do
+defmodule Fedi.ContentTest do
   use ExUnit.Case
 
   @input """
@@ -26,7 +26,9 @@ defmodule FediServer.ContentTest do
       """
       |> String.trim()
 
-    assert {:ok, markdown, links} = FediServer.Content.parse_markdown(@input)
+    assert {:ok, markdown, links} =
+             Fedi.Content.parse_markdown(@input, webfinger_module: FediServerWeb.WebFinger)
+
     assert links[:urls] == [%{href: "wikipedia.org", name: "wikipedia.org"}]
 
     assert markdown == expected_markdown
@@ -56,7 +58,7 @@ defmodule FediServer.ContentTest do
       |> Enum.join("")
 
     assert {:ok, html, _links} =
-             FediServer.Content.parse_markdown(@input, html: true, compact_output: true)
+             Fedi.Content.parse_markdown(@input, html: true, compact_output: true)
 
     assert html == expected_html
   end
@@ -76,7 +78,9 @@ defmodule FediServer.ContentTest do
       """
       |> String.trim()
 
-    assert {:ok, markdown, links} = FediServer.Content.parse_markdown(input)
+    assert {:ok, markdown, links} =
+             Fedi.Content.parse_markdown(input, webfinger_module: FediServerWeb.WebFinger)
+
     assert markdown == expected_markdown
     assert links[:markdown_urls] == [%{href: "https://twitter.com?txt=1&reg=2", name: "Twitter"}]
     assert links[:urls] == [%{href: "wikipedia.org", name: "wikipedia.org"}]
@@ -97,7 +101,9 @@ defmodule FediServer.ContentTest do
       """
       |> String.trim()
 
-    assert {:ok, markdown, links} = FediServer.Content.parse_markdown(input)
+    assert {:ok, markdown, links} =
+             Fedi.Content.parse_markdown(input, webfinger_module: FediServerWeb.WebFinger)
+
     assert markdown == expected_markdown
 
     assert links[:markdown_urls] == [
@@ -133,7 +139,9 @@ defmodule FediServer.ContentTest do
       ]
       |> Enum.join("")
 
-    assert {:ok, markdown, links} = FediServer.Content.parse_markdown(input)
+    assert {:ok, markdown, links} =
+             Fedi.Content.parse_markdown(input, webfinger_module: FediServerWeb.WebFinger)
+
     assert markdown == expected_markdown
 
     assert links[:markdown_urls] == [
@@ -143,7 +151,11 @@ defmodule FediServer.ContentTest do
     assert links[:urls] == [%{href: "wikipedia.org", name: "wikipedia.org"}]
 
     assert {:ok, html, _} =
-             FediServer.Content.parse_markdown(input, html: true, compact_output: true)
+             Fedi.Content.parse_markdown(input,
+               html: true,
+               compact_output: true,
+               webfinger_module: FediServerWeb.WebFinger
+             )
 
     assert html == expected_html
   end
@@ -151,11 +163,12 @@ defmodule FediServer.ContentTest do
   test "builds a note" do
     note = %{
       "type" => "Note",
-      "content" => @input
+      "content" => @input,
+      "attributedTo" => "https://mastodon.cloud/users/pzingg"
     }
 
-    assert {:ok, note} =
-             FediServer.Content.build_note(note, "https://mastodon.cloud/users/pzingg", :unlisted)
+    assert {:ok, note} = Fedi.Content.set_tags(note)
+    note = Fedi.Client.set_visibility(note, :unlisted)
 
     assert note["to"] == "https://mastodon.cloud/users/pzingg"
 

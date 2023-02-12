@@ -177,7 +177,9 @@ defmodule FediServer.FixturesHelper do
         "mediaType" => "text/markdown",
         "attributedTo" => actor_alyssa
       }
-      |> FediServer.Content.build_note(actor_alyssa, :public)
+      |> Fedi.Content.set_tags()
+
+    note1_data = Fedi.Client.set_visibility(note1_data, :public)
 
     note1_recipient_params = Activities.canonical_recipients(note1_data["to"])
 

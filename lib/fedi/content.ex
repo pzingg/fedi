@@ -1,7 +1,7 @@
 # Copyright © 2017-2018 E-MetroTel
 # Copyright © 2019-2022 Pleroma Authors
 # SPDX-License-Identifier: MIT
-defmodule FediServer.Content do
+defmodule Fedi.Content do
   @moduledoc """
   Parse out links from Markdown content.
 
@@ -32,7 +32,7 @@ defmodule FediServer.Content do
     "'d"
   ]
 
-  @tlds Path.join(:code.priv_dir(:fedi_server), "tlds-alpha-by-domain.txt")
+  @tlds Path.join(:code.priv_dir(:fedi), "tlds-alpha-by-domain.txt")
         |> File.read!()
         |> String.split("\n", trim: true)
         |> Enum.concat(["example", "onion"])
@@ -44,14 +44,14 @@ defmodule FediServer.Content do
 
   @types [:url, :hashtag, :mention, :email]
 
-  def build_note(note, actor_iri, visibility) when is_map(note) do
+  def set_tags(note) when is_map(note) do
     content = note["content"]
 
     case parse_markdown(content) do
       {:error, reason} ->
         {:error, reason}
 
-      {:ok, content, %{hashtags: hashtags, mentions: mentions} = _links} ->
+      {:ok, _content, %{hashtags: hashtags, mentions: mentions} = _links} ->
         {mentions, mentioned} =
           Enum.map(mentions, fn %{name: name, href: href} ->
             {%{"type" => "Mention", "name" => name, "href" => href}, href}
@@ -66,16 +66,16 @@ defmodule FediServer.Content do
 
         note =
           note
+          |> Map.put_new("mediaType", "text/markdown")
           |> Map.update("cc", mentioned, fn cc -> cc ++ mentioned end)
-          |> Fedi.Client.set_visibility(actor_iri, visibility)
 
-        {:ok,
-         note
-         |> Map.merge(%{
-           "content" => content,
-           "mediaType" => "text/markdown",
-           "tag" => mentions ++ hashtags
-         })}
+        note =
+          case mentions ++ hashtags do
+            [] -> note
+            tags -> Map.put(note, "tag", tags)
+          end
+
+        {:ok, note}
     end
   end
 
@@ -106,8 +106,8 @@ defmodule FediServer.Content do
     input = String.trim(markdown_content)
 
     case Earmark.as_ast(input) do
-      {:error, reason} ->
-        {:error_reason}
+      {:error, _ast, _line} ->
+        {:error, "Invalid markdown input"}
 
       {:ok, ast, _} ->
         # Collect links that Markdown itself will parse
@@ -116,7 +116,7 @@ defmodule FediServer.Content do
             {"a", attributes, [name | _], _} = node, acc ->
               href_attr =
                 Enum.find(attributes, fn
-                  {"href", u} -> true
+                  {"href", _href} -> true
                   _other -> false
                 end)
 
@@ -135,11 +135,13 @@ defmodule FediServer.Content do
         markdown_hrefs = Enum.map(markdown_urls, fn %{href: href} -> href end)
 
         {to_html?, opts} = Keyword.pop(opts, :html)
+        {webfinger_module, opts} = Keyword.pop(opts, :webfinger_module)
 
         endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
 
         user_acc = %{
           endpoint_uri: endpoint_uri,
+          webfinger_module: webfinger_module,
           markdown_hrefs: markdown_hrefs,
           markdown_urls: markdown_urls,
           urls: [],
@@ -161,7 +163,7 @@ defmodule FediServer.Content do
 
           case Earmark.as_html(text, earmark_opts) do
             {:ok, html, _} -> {:ok, html, link_map}
-            {:error, reason} -> {:error, reason}
+            {:error, reason, _} -> {:error, reason}
           end
         else
           {:ok, text, link_map}
@@ -176,7 +178,7 @@ defmodule FediServer.Content do
 
   ## Examples
 
-      iex> FediServer.Content.parse("Check out google.com")
+      iex> Fedi.Content.parse("Check out google.com")
       ~s{Check out <a href="http://google.com">google.com</a>}
   """
   def parse(input, opts \\ %{})
@@ -599,7 +601,7 @@ defmodule FediServer.Content do
     |> Enum.intersperse(link)
   end
 
-  def url_handler(url, buffer, opts, %{markdown_hrefs: markdown_hrefs} = user_acc) do
+  def url_handler(url, buffer, _opts, %{markdown_hrefs: markdown_hrefs} = user_acc) do
     if Enum.member?(markdown_hrefs, url) do
       Logger.debug("ignoring markdown url #{url}")
       {buffer, user_acc}
@@ -613,7 +615,7 @@ defmodule FediServer.Content do
     end
   end
 
-  def email_handler(email, buffer, opts, user_acc) do
+  def email_handler(email, _buffer, _opts, user_acc) do
     url = "mailto:#{email}"
     out = "[#{email}](#{url})"
 
@@ -626,7 +628,7 @@ defmodule FediServer.Content do
   def mention_handler(
         mention,
         buffer,
-        opts,
+        _opts,
         %{endpoint_uri: %URI{host: host} = endpoint_uri} = user_acc
       ) do
     url =
@@ -638,9 +640,15 @@ defmodule FediServer.Content do
           if domain == host do
             Utils.base_uri(endpoint_uri, "/users/#{nickname}") |> URI.to_string()
           else
-            case FediServerWeb.WebFinger.finger(mention) do
-              {:ok, %{"ap_id" => ap_id}} -> ap_id
-              _ -> nil
+            case Map.get(user_acc, :webfinger_module) do
+              nil ->
+                "https://#{domain}/users/#{nickname}"
+
+              mod when is_atom(mod) ->
+                case apply(mod, :finger, [mention]) do
+                  {:ok, %{"ap_id" => ap_id}} -> ap_id
+                  _ -> nil
+                end
             end
           end
       end
@@ -658,9 +666,9 @@ defmodule FediServer.Content do
 
   def hashtag_handler(
         hashtag,
-        buffer,
-        opts,
-        %{endpoint_uri: %URI{path: path} = endpoint_uri} = user_acc
+        _buffer,
+        _opts,
+        %{endpoint_uri: %URI{} = endpoint_uri} = user_acc
       ) do
     tag = hashtag |> String.replace_leading("#", "")
     url = Utils.base_uri(endpoint_uri, "/hashtags/#{tag}") |> URI.to_string()

@@ -51,7 +51,6 @@ defmodule FediServer.MixProject do
       {:sweet_xml, "~> 0.7"},
       {:timex, "~> 3.7"},
       {:http_signatures, "~> 0.1.1"},
-      {:earmark, "~> 1.4"},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},
       {:fedi, path: "../.."}
     ]

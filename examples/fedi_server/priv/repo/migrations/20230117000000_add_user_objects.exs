@@ -8,7 +8,7 @@ defmodule FediServer.Repo.Migrations.AddUserObjects do
       add :type, :string, null: false
       add :actor, :string, null: false
       add :object, :string, null: false
-      add :object_type, :string, null: false
+      add :object_type, :string
       add :activity, :string
       add :local?, :boolean, null: false, default: false
 

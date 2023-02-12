@@ -1801,7 +1801,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_insert({:user_object, type}, params) do
-    Logger.error("Inserting UserObject #{type}: #{params}")
+    Logger.debug("Inserting UserObject: #{params}")
 
     UserObject.changeset(%UserObject{}, Map.put(params, :type, type))
     |> Repo.insert(on_conflict: :nothing, returning: true)
