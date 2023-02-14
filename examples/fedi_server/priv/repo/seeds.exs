@@ -24,11 +24,11 @@ User.new_remote_user(data)
 
 # Add a local user
 endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
-shared_inbox_uri = %URI{endpoint_uri | path: "/inbox"} |> URI.to_string()
+shared_inbox_uri = Utils.base_uri(endpoint_uri, "/inbox") |> URI.to_string()
 
 %User{
-  ap_id: %URI{endpoint_uri | path: "/users/alyssa"} |> URI.to_string(),
-  inbox: %URI{endpoint_uri | path: "/users/alyssa/inbox"} |> URI.to_string(),
+  ap_id: Utils.base_uri(endpoint_uri, "/users/alyssa") |> URI.to_string(),
+  inbox: Utils.base_uri(endpoint_uri, "/users/alyssa/inbox") |> URI.to_string(),
   name: "Alyssa Activa",
   nickname: "alyssa",
   email: "alyssa@example.com",

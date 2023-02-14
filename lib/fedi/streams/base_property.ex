@@ -121,7 +121,7 @@ defmodule Fedi.Streams.BaseProperty do
   def deserialize_type(%Pipeline{input: i, alias_map: alias_map} = pipeline, :object)
       when is_map(i) do
     (pipeline.allowed_types || Fedi.Streams.all_type_modules())
-    |> Enum.reduce_while(:error, fn type_mod, acc ->
+    |> Enum.reduce_while({:error, "No type found for object"}, fn type_mod, acc ->
       with {:ok, v} when is_struct(v) <- apply(type_mod, :deserialize, [i, alias_map]) do
         {:halt, {:ok, struct(pipeline.module, alias: pipeline.alias, member: v)}}
       else

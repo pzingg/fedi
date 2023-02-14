@@ -1159,8 +1159,8 @@ defmodule FediServer.Activities do
 
       case category do
         :actors -> {:error, "Cannot make new id for actors"}
-        :activities -> {:ok, %URI{actor_iri | path: actor_path <> "/activities/#{ulid}"}}
-        _ -> {:ok, %URI{actor_iri | path: actor_path <> "/objects/#{ulid}"}}
+        :activities -> {:ok, Utils.base_uri(actor_iri, actor_path <> "/activities/#{ulid}")}
+        _ -> {:ok, Utils.base_uri(actor_iri, actor_path <> "/objects/#{ulid}")}
       end
     else
       {:error, reason} ->
@@ -1191,7 +1191,7 @@ defmodule FediServer.Activities do
       |> String.replace_trailing("/inbox", "")
       |> String.replace_trailing("/outbox", "")
 
-    actor_id = %URI{box_iri | path: actor_path}
+    actor_id = Utils.base_uri(box_iri, actor_path)
     make_transport(actor_id, app_agent)
   end
 
@@ -1593,7 +1593,7 @@ defmodule FediServer.Activities do
   end
 
   def resolve_and_insert_user(%URI{} = ap_id, app_agent \\ nil) do
-    app_agent = app_agent || FediServer.Application.app_agent()
+    app_agent = app_agent || Fedi.Application.app_agent()
 
     with client <- HTTPClient.anonymous(app_agent),
          {:ok, json_body} <- HTTPClient.fetch_masto_user(client, ap_id),

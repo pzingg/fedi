@@ -22,14 +22,14 @@ defmodule FediServerWeb.TimelinesControllerTest do
     assert response(conn, 200) =~ "4 Activities"
   end
 
-  test "does not fetch home timeline if unauthenticated", %{conn: conn} do
+  test "redirects from home timeline if unauthenticated", %{conn: conn} do
     {_users, _activities, _objects} = outbox_fixtures()
 
     conn =
       conn
       |> get("/web/timelines/home")
 
-    assert response(conn, 401)
+    assert response(conn, 302) =~ "You are being <a href=\"/users/log_in\">redirected</a>."
   end
 
   test "gets local timeline (alyssa)", %{conn: conn} do

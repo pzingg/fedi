@@ -436,7 +436,6 @@ defmodule FediServer.HTTPClient do
   def key_id_to_actor_id(key_id) do
     account =
       key_id
-      |> Utils.to_uri()
       |> Utils.base_uri()
       |> remove_suffix(@known_public_key_suffixes)
 

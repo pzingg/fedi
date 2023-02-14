@@ -82,13 +82,13 @@ defmodule FediServer.FixturesHelper do
 
     # Add a local user
     endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
-    shared_inbox_uri = %URI{endpoint_uri | path: "/inbox"} |> URI.to_string()
+    shared_inbox_uri = Utils.base_uri(endpoint_uri, "/inbox") |> URI.to_string()
 
     alyssa =
       with false <- Keyword.get(opts, :remote_only, false),
            user <- %User{
-             ap_id: %URI{endpoint_uri | path: "/users/alyssa"} |> URI.to_string(),
-             inbox: %URI{endpoint_uri | path: "/users/alyssa/inbox"} |> URI.to_string(),
+             ap_id: Utils.base_uri(endpoint_uri, "/users/alyssa") |> URI.to_string(),
+             inbox: Utils.base_uri(endpoint_uri, "/users/alyssa/inbox") |> URI.to_string(),
              name: "Alyssa Activa",
              nickname: "alyssa",
              email: "alyssa@example.com",
@@ -110,8 +110,8 @@ defmodule FediServer.FixturesHelper do
     daria =
       with false <- Keyword.get(opts, :remote_only, false),
            user <- %User{
-             ap_id: %URI{endpoint_uri | path: "/users/daria"} |> URI.to_string(),
-             inbox: %URI{endpoint_uri | path: "/users/daria/inbox"} |> URI.to_string(),
+             ap_id: Utils.base_uri(endpoint_uri, "/users/daria") |> URI.to_string(),
+             inbox: Utils.base_uri(endpoint_uri, "/users/daria/inbox") |> URI.to_string(),
              name: "Daria Daring",
              nickname: "daria",
              email: "daria@example.com",

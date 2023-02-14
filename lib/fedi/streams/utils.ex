@@ -781,8 +781,17 @@ defmodule Fedi.Streams.Utils do
   Leaves :scheme, :host, :path, :query, and :fragment unchanged.
   """
   def to_uri(url) when is_binary(url) do
-    %URI{} = uri = URI.parse(url)
-    %URI{uri | authority: nil, userinfo: nil, port: nil}
+    %URI{port: port} = uri = URI.parse(url)
+
+    port =
+      case port do
+        80 -> nil
+        443 -> nil
+        p when is_integer(p) -> p
+        _ -> nil
+      end
+
+    %URI{uri | authority: nil, userinfo: nil, port: port}
   end
 
   @doc """
@@ -792,12 +801,16 @@ defmodule Fedi.Streams.Utils do
   """
   def base_uri(uri, path \\ nil)
 
+  def base_uri(uri, path) when is_binary(uri) do
+    to_uri(uri) |> base_uri(path)
+  end
+
   def base_uri(%URI{} = uri, path) when is_binary(path) do
-    %URI{uri | path: path, authority: nil, fragment: nil, port: nil, query: nil, userinfo: nil}
+    %URI{uri | path: path, authority: nil, fragment: nil, query: nil, userinfo: nil}
   end
 
   def base_uri(%URI{} = uri, nil) do
-    %URI{uri | authority: nil, fragment: nil, port: nil, query: nil, userinfo: nil}
+    %URI{uri | authority: nil, fragment: nil, query: nil, userinfo: nil}
   end
 
   def json_dumps(value) do

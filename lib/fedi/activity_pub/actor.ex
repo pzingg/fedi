@@ -140,7 +140,7 @@ defmodule Fedi.ActivityPub.Actor do
            APUtils.decode_json_body(conn),
          {:matched_type, {:ok, as_value}} <-
            {:matched_type, JSONResolver.resolve(m)},
-         {:valid_activity, {:ok, activity, _activity_id}} <-
+         {:valid_activity, {:ok, activity, _activity_id, _object_id}} <-
            {:valid_activity, APUtils.validate_activity(as_value)},
 
          # Allow server implementations to set context data with a hook.
@@ -272,18 +272,8 @@ defmodule Fedi.ActivityPub.Actor do
          # activities.
          {:ok, conn, m} <-
            APUtils.decode_json_body(conn),
-         {:matched_type, {:ok, as_value}} <-
-           {:matched_type, JSONResolver.resolve(m)},
-         # It's ok to post just an object
-         {:valid_activity, {:ok, activity, activity_id}} <-
-           {:valid_activity, ensure_activity(context, as_value, outbox_iri)},
-         # Allow server implementations to set context data with a hook.
-         {:ok, context} <-
-           ActorFacade.post_outbox_request_body_hook(context, conn, activity, top_level: true),
-         # The HTTP request steps are complete, complete the rest of the outbox
-         # and delivery process.
-         {:delivered, {:ok, count}} <-
-           {:delivered, deliver(context, outbox_iri, activity, m)} do
+         {:delivered, {:ok, activity_id, _object_id, count}} <-
+           {:delivered, post_activity(context, m)} do
       # Respond to the request with the new Activity's IRI location.
       #
       # Ref: [AP Section 6](https://www.w3.org/TR/activitypub/#client-to-server-interactions)
@@ -319,26 +309,25 @@ defmodule Fedi.ActivityPub.Actor do
       {:authentication, {:ok, _, conn, _}} ->
         {:ok, APUtils.send_json_resp(conn, :unauthorized, nil, actor_state: :autenticated)}
 
-      # We know it is a bad request if the object or
-      # target properties needed to be populated, but weren't.
-
-      # Send the rejection to the client.
-      {:matched_type, {:error, %Error{code: :unhandled_type} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :matched_type)}
-
-      # Send the rejection to the client.
-      {:valid_activity, {:error, %Error{code: :missing_id} = error}} ->
-        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :valid_activity)}
-
       {:authorization, {:ok, conn, _}} ->
         {:ok, Plug.Conn.put_private(conn, :actor_state, :authorization)}
 
       # Special case: We know it is a bad request if the object or
       # target properties needed to be populated, but weren't.
+
+      # Send the rejection to the peer.
+      {:delivered, {:error, %Error{code: :unhandled_type} = error}} ->
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :matched_type)}
+
+      # Send the rejection to the peer.
+      {:delivered, {:error, %Error{code: :missing_id} = error}} ->
+        {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :valid_activity)}
+
       # Send the rejection to the peer.
       {:delivered, {:error, %Error{code: :object_required} = error}} ->
         {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :delivered)}
 
+      # Send the rejection to the peer.
       {:delivered, {:error, %Error{code: :target_required} = error}} ->
         {:ok, APUtils.send_json_resp(conn, error, nil, actor_state: :delivered)}
 
@@ -349,6 +338,22 @@ defmodule Fedi.ActivityPub.Actor do
       {step, {:error, reason}} ->
         Logger.error("failed in step #{step}: #{reason}")
         {:ok, APUtils.send_json_resp(conn, :internal_server_error, nil, actor_state: step)}
+    end
+  end
+
+  def post_activity(%{box_iri: outbox_iri} = context, m) do
+    with {:ok, as_value} <-
+           JSONResolver.resolve_with_as_context(m),
+         # It's ok to post just an object
+         {:ok, activity, activity_id, object_id} <-
+           ensure_activity(context, as_value, outbox_iri),
+         # Allow server implementations to set context data with a hook.
+         {:ok, context} <-
+           ActorFacade.post_outbox_request_body_hook(context, activity, top_level: true),
+         # The HTTP request steps are complete, complete the rest of the outbox
+         # and delivery process.
+         {:ok, count} <- deliver(context, outbox_iri, activity, m) do
+      {:ok, activity_id, object_id, count}
     end
   end
 
@@ -440,7 +445,7 @@ defmodule Fedi.ActivityPub.Actor do
       when is_struct(as_value) do
     # If the value is not an Activity or type extending from Activity, then
     # we need to wrap it in a Create Activity.
-    with {:ok, activity, _activity_id} <-
+    with {:ok, activity, _activity_id, _object_id} <-
            ensure_activity(actor, as_value, outbox_iri),
          # Post the activity to the actor's outbox and trigger side effects for
          # that particular Activity type.

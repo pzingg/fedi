@@ -229,7 +229,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
             # If automatically rejecting, do not update the
             # followers collection.
-            coll_id = %URI{actor_iri | path: actor_path <> "/followers"}
+            coll_id = Utils.base_uri(actor_iri, actor_path <> "/followers")
 
             case ActorFacade.db_update_collection(context, coll_id, %{add: recipients}) do
               {:ok, _} -> :ok
@@ -265,7 +265,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
       when is_struct(activity) do
     with {:ok, %URI{path: actor_path} = actor_iri, accept_actors} <-
            APUtils.validate_accept_or_reject(context, activity),
-         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
+         coll_id <- Utils.base_uri(actor_iri, actor_path <> "/following"),
          {:ok, _} <-
            ActorFacade.db_update_collection(context, coll_id, %{
              update: accept_actors,
@@ -282,7 +282,7 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
   def reject(context, activity) when is_struct(context) and is_struct(activity) do
     with {:ok, %URI{path: actor_path} = actor_iri, reject_actors} <-
            APUtils.validate_accept_or_reject(context, activity),
-         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
+         coll_id <- Utils.base_uri(actor_iri, actor_path <> "/following"),
          {:ok, _} <-
            ActorFacade.db_update_collection(context, coll_id, %{
              update: reject_actors,

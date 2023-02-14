@@ -86,8 +86,6 @@ defmodule FediServerWeb.Router do
 
     get("/timelines/local", TimelinesController, :local)
     get("/timelines/federated", TimelinesController, :federated)
-
-    get("/", PageController, :index)
   end
 
   scope "/", FediServerWeb do
@@ -126,9 +124,9 @@ defmodule FediServerWeb.Router do
   struct to the connection. Controllers can extract the Actor by
 
   """
-  def set_actor(conn, opts) do
+  def set_actor(conn, _opts) do
     s2s_module =
-      if Keyword.get(opts, :enable_federated) do
+      if FediServer.Application.federated_protocol_enabled?() do
         FediServerWeb.FederatingCallbacks
       else
         nil

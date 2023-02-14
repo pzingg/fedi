@@ -106,8 +106,8 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Defers to the C2S delegate.
   """
   @impl true
-  def post_outbox_request_body_hook(context, %Plug.Conn{} = conn, activity) do
-    ActorFacade.post_outbox_request_body_hook(context, conn, activity)
+  def post_outbox_request_body_hook(context, activity) do
+    ActorFacade.post_outbox_request_body_hook(context, activity)
   end
 
   @doc """

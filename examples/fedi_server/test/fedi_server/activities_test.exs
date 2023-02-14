@@ -9,7 +9,7 @@ defmodule FediServer.ActivitiesTest do
 
   describe "Fixtures" do
     test "user_agent is configured" do
-      assert Application.get_env(:fedi_server, :user_agent) == "(elixir-fedi-0.1.0)"
+      assert Application.get_env(:fedi, :user_agent) == "(elixir-fedi-server-0.1.0)"
     end
 
     test "inserts local and federated users" do

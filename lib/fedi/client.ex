@@ -40,6 +40,7 @@ defmodule Fedi.Client do
   """
   def post(actor_id, markdown_content, m \\ %{}, opts \\ []) do
     visibility = Keyword.get(opts, :visibility, :public)
+
     m
     |> Map.merge(%{
       "type" => "Create",
@@ -110,6 +111,7 @@ defmodule Fedi.Client do
   """
   def reply(actor_id, in_reply_to_id, markdown_content, m \\ %{}, opts \\ []) do
     visibility = Keyword.get(opts, :visibility, :public)
+
     m
     |> Map.merge(%{
       "type" => "Create",
@@ -142,6 +144,7 @@ defmodule Fedi.Client do
   """
   def boost(actor_id, object_id, m \\ %{}, opts \\ []) do
     visibility = Keyword.get(opts, :visibility, :public)
+
     m
     |> Map.merge(%{
       "type" => "Announce",

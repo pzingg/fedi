@@ -7,10 +7,12 @@
 # General application configuration
 import Config
 
-config :fedi_server,
-  user_agent: "(elixir-fedi-0.1.0)"
+config :fedi,
+  user_agent: "(elixir-fedi-server-#{Mix.Project.config()[:version]})",
+  endpoint_url: "https://example.com/"
 
 config :fedi_server,
+  federated_protocol_enabled?: true,
   ecto_repos: [FediServer.Repo]
 
 # Configures the endpoint

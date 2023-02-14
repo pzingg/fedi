@@ -49,7 +49,7 @@ defmodule FediServerWeb.SocialCallbacks do
   to `Actor.handle_post_outbox/3` will do so when handling the error.
   """
   @impl true
-  def post_outbox_request_body_hook(context, %Plug.Conn{} = _conn, activity) do
+  def post_outbox_request_body_hook(context, activity) do
     with {:ok, context} <- verify_actor_and_attributed_to(context, activity) do
       check_object_spoofing(context, activity)
     end
@@ -365,7 +365,7 @@ defmodule FediServerWeb.SocialCallbacks do
     with {:ok, %URI{path: actor_path} = actor_iri, accept_actors} <-
            APUtils.validate_accept_or_reject(context, accept),
          coll_id <-
-           %URI{actor_iri | path: actor_path <> "/following"},
+           Utils.base_uri(actor_iri, actor_path <> "/following"),
          {:ok, _} <-
            ActorFacade.db_update_collection(context, coll_id, %{
              delete: accept_actors
@@ -420,7 +420,7 @@ defmodule FediServerWeb.SocialCallbacks do
          {:ok, object_ids} <-
            APUtils.get_ids(object),
          coll_id <-
-           %URI{actor_iri | path: actor_path <> "/collections/liked"},
+           Utils.base_uri(actor_iri, actor_path <> "/collections/liked"),
          {:ok, _oc} <-
            ActorFacade.db_update_collection(context, coll_id, %{remove: object_ids}) do
       :ok

@@ -128,13 +128,12 @@ defmodule Fedi.ActivityPub.ActorFacade do
 
   @spec post_outbox_request_body_hook(
           context :: context(),
-          conn :: Plug.Conn.t(),
           activity :: struct(),
           opts :: Keyword.t()
         ) ::
           {:ok, context :: context()} | {:error, term()}
-  def post_outbox_request_body_hook(context, conn, activity, opts \\ []) do
-    delegate(context, :c2s, :post_outbox_request_body_hook, [context, conn, activity], opts)
+  def post_outbox_request_body_hook(context, activity, opts \\ []) do
+    delegate(context, :c2s, :post_outbox_request_body_hook, [context, activity], opts)
   end
 
   @spec post_outbox(

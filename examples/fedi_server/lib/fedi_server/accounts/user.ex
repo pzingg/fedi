@@ -65,8 +65,9 @@ defmodule FediServer.Accounts.User do
   def shared_inbox_path, do: Routes.inbox_path(FediServerWeb.Endpoint, :get_shared_inbox)
 
   def shared_inbox_uri do
-    uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
-    %URI{uri | path: shared_inbox_path()} |> URI.to_string()
+    Fedi.Application.endpoint_url()
+    |> Utils.base_uri(shared_inbox_path())
+    |> URI.to_string()
   end
 
   @doc """

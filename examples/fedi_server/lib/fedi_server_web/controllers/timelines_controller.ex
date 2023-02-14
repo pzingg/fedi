@@ -7,7 +7,6 @@ defmodule FediServerWeb.TimelinesController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
   alias FediServer.Activities
-  alias FediServer.HTTPClient
 
   # action_fallback(FediServerWeb.FallbackController)
 
@@ -34,24 +33,42 @@ defmodule FediServerWeb.TimelinesController do
   end
 
   def create(%Plug.Conn{} = conn, %{"post" => post_params}) do
-    %User{ap_id: ap_id, inbox: inbox} = conn.assigns[:current_user]
-    opts = [visibility: :public, webfinger_module: HTTPClient]
-    activity = Fedi.Client.post(ap_id, post_params["content"], %{}, opts) |> Jason.encode!()
+    with {:authenticated, %User{ap_id: ap_id, inbox: inbox}} <-
+           {:authenticated, conn.assigns[:current_user]},
+         {:authenticated, {:ok, context}} <-
+           {:authenticated, Fedi.ActivityPub.ActorFacade.get_actor(conn)},
+         inbox <-
+           Utils.to_uri(inbox),
+         outbox_iri <-
+           Utils.base_uri(ap_id, String.replace_trailing(inbox.path, "/inbox", "/outbox")),
+         context <-
+           struct(context, box_iri: outbox_iri),
+         opts <-
+           [visibility: :public, webfinger_module: FediServerWeb.WebFinger],
+         activity <-
+           Fedi.Client.post(ap_id, post_params["content"], %{}, opts),
+         {:ok, _activity_id, object_id, recipient_count} <-
+           Fedi.ActivityPub.Actor.post_activity(context, activity) do
+      conn
+      |> put_flash(:info, "Posted #{object_id}")
+      |> redirect(to: Routes.timelines_path(conn, :home))
+    else
+      {:error, reason} ->
+        conn
+        |> put_flash(:error, "Post failed: #{reason}")
+        |> redirect(to: Routes.timelines_path(conn, :local))
 
-    inbox = Utils.to_uri(inbox)
-    outbox = Utils.base_uri(inbox, String.replace_trailing(inbox.path, "/inbox", "/outbox"))
-    app_agent = FediServer.Application.app_agent()
-    result = Activities.deliver(inbox, app_agent, activity, outbox)
-
-    conn
-    |> put_flash("posted #{inspect(result)}")
-    |> redirect(to: Routes.timelines_path(conn, :home))
+      {:authenticated, _} ->
+        conn
+        |> put_flash(:error, "Not allowed to post")
+        |> redirect(to: Routes.timelines_path(conn, :local))
+    end
   end
 
   defp render_timeline(conn, which, params) do
     opts = APUtils.collection_opts(params, conn)
 
-    case FediServer.Activities.get_timeline(which, opts) do
+    case Activities.get_timeline(which, opts) do
       {:ok, oc_map} ->
         statuses = Map.get(oc_map, "orderedItems", []) |> List.wrap()
         count = Enum.count(statuses)

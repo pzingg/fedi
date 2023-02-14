@@ -1,5 +1,10 @@
 import Config
 
+config :fedi, endpoint_url: "http://localhost:4000/"
+
+config :fedi_server,
+  federated_protocol_enabled?: false
+
 # Configure your database
 config :fedi_server, FediServer.Repo,
   username: "postgres",

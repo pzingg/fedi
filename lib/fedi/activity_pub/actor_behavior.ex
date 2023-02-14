@@ -60,11 +60,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   send a response to the connection as it is expected that the caller
   to `Actor.handle_post_outbox/3` will do so when handling the error.
   """
-  @callback post_outbox_request_body_hook(
-              context :: context(),
-              conn :: Plug.Conn.t(),
-              activity :: struct()
-            ) ::
+  @callback post_outbox_request_body_hook(context :: context(), activity :: struct()) ::
               {:ok, context :: context()} | {:error, term()}
 
   @doc """

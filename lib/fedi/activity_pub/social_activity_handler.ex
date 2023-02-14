@@ -230,7 +230,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, following_ids} <- APUtils.get_ids(object),
          {:ok, %URI{path: actor_path} = actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, box_iri),
-         coll_id <- %URI{actor_iri | path: actor_path <> "/following"},
+         coll_id <- Utils.base_uri(actor_iri, actor_path <> "/following"),
          ActorFacade.db_update_collection(context, coll_id, %{add: following_ids}) do
       ActorFacade.handle_c2s_activity(context, activity)
     else
@@ -292,7 +292,7 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
          {:ok, %URI{path: actor_path} = actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, outbox_iri),
          {:ok, object_ids} <- APUtils.get_ids(object_prop),
-         coll_id <- %URI{actor_iri | path: actor_path <> "/collections/liked"},
+         coll_id <- Utils.base_uri(actor_iri, actor_path <> "/collections/liked"),
          {:ok, _oc} <-
            ActorFacade.db_update_collection(context, coll_id, %{add: object_ids}) do
       ActorFacade.handle_c2s_activity(context, activity)

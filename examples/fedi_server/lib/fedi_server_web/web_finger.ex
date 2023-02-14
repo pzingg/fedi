@@ -279,7 +279,7 @@ defmodule FediServerWeb.WebFinger do
   end
 
   def get(url, accept_headers) when is_binary(url) do
-    app_agent = FediServer.Application.app_agent()
+    app_agent = Fedi.Application.app_agent()
     transport = HTTPClient.anonymous(app_agent)
     date_str = Fedi.ActivityPub.Utils.date_header_value()
 

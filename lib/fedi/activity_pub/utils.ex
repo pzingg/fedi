@@ -516,8 +516,14 @@ defmodule Fedi.ActivityPub.Utils do
   def validate_activity(as_value) when is_struct(as_value) do
     if is_or_extends?(as_value, "Activity") do
       case Utils.get_json_ld_id(as_value) do
-        %URI{} = id ->
-          {:ok, as_value, id}
+        %URI{} = activity_id ->
+          object_id =
+            case get_object_id(as_value) do
+              {:ok, object_id} -> object_id
+              _ -> nil
+            end
+
+          {:ok, as_value, activity_id, object_id}
 
         _ ->
           {:error, Utils.err_id_required(value: as_value)}
@@ -973,9 +979,9 @@ defmodule Fedi.ActivityPub.Utils do
 
   def actor_collection_id(%URI{path: actor_path} = actor_iri, coll_name) do
     if Enum.member?(@reserved_collection_names, coll_name) do
-      %URI{actor_iri | path: Path.join(actor_path, coll_name)}
+      Utils.base_uri(actor_iri, Path.join(actor_path, coll_name))
     else
-      %URI{actor_iri | path: Path.join([actor_path, "collections", coll_name])}
+      Utils.base_uri(actor_iri, Path.join([actor_path, "collections", coll_name]))
     end
   end
 
@@ -1187,7 +1193,7 @@ defmodule Fedi.ActivityPub.Utils do
       {:ok, recipients} ->
         to = Map.get(recipients, "to", []) |> List.wrap()
         cc = Map.get(recipients, "cc", []) |> List.wrap()
-        followers_id = %URI{actor_iri | path: actor_path <> "/followers"}
+        followers_id = Utils.base_uri(actor_iri, actor_path <> "/followers")
 
         cond do
           Enum.any?(to, fn iri -> public?(iri) end) -> :public
@@ -1440,7 +1446,7 @@ defmodule Fedi.ActivityPub.Utils do
 
   def update_object_collections(context, actor_iri, activity_id, object_ids, coll_name, op) do
     Enum.reduce_while(object_ids, :ok, fn %URI{path: object_path} = object_id, acc ->
-      coll_id = %URI{object_id | path: Path.join(object_path, coll_name)}
+      coll_id = Utils.base_uri(object_id, Path.join(object_path, coll_name))
 
       updates =
         case op do
