@@ -3,18 +3,26 @@ defmodule FediServerWeb.TimelinesController do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias Fedi.ActivityPub.Utils, as: APUtils
+  alias FediServer.Accounts.User
+  alias FediServer.Activities
+  alias FediServer.HTTPClient
 
-  action_fallback(FediServerWeb.FallbackController)
+  # action_fallback(FediServerWeb.FallbackController)
 
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
-  def home(%Plug.Conn{} = conn, params) do
-    if conn.state in @sent_or_chunked do
-      conn
+  def root(%Plug.Conn{} = conn, _params) do
+    if conn.assigns[:current_user] do
+      redirect(conn, to: Routes.timelines_path(conn, :home))
     else
-      render_timeline(conn, :home, params)
+      redirect(conn, to: Routes.timelines_path(conn, :local))
     end
+  end
+
+  def home(%Plug.Conn{} = conn, params) do
+    render_timeline(conn, :home, params)
   end
 
   def local(%Plug.Conn{} = conn, params) do
@@ -23,6 +31,21 @@ defmodule FediServerWeb.TimelinesController do
 
   def federated(%Plug.Conn{} = conn, params) do
     render_timeline(conn, :federated, params)
+  end
+
+  def create(%Plug.Conn{} = conn, %{"post" => post_params}) do
+    %User{ap_id: ap_id, inbox: inbox} = conn.assigns[:current_user]
+    opts = [visibility: :public, webfinger_module: HTTPClient]
+    activity = Fedi.Client.post(ap_id, post_params["content"], %{}, opts) |> Jason.encode!()
+
+    inbox = Utils.to_uri(inbox)
+    outbox = Utils.base_uri(inbox, String.replace_trailing(inbox.path, "/inbox", "/outbox"))
+    app_agent = FediServer.Application.app_agent()
+    result = Activities.deliver(inbox, app_agent, activity, outbox)
+
+    conn
+    |> put_flash("posted #{inspect(result)}")
+    |> redirect(to: Routes.timelines_path(conn, :home))
   end
 
   defp render_timeline(conn, which, params) do
@@ -40,6 +63,8 @@ defmodule FediServerWeb.TimelinesController do
             :federated -> "Federated Timeline"
             _ -> "Home"
           end
+
+        Logger.error("rendering index.html")
 
         render(conn, "index.html",
           title: title,

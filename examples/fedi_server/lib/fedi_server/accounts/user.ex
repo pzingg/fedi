@@ -17,6 +17,7 @@ defmodule FediServer.Accounts.User do
     field(:local?, :boolean)
     field(:email, :string)
     field(:password, :string, virtual: true, redact: true)
+    field(:password_confirmation, :string, virtual: true, redact: true)
     field(:hashed_password, :string, redact: true)
     field(:shared_inbox, :string)
 
@@ -65,7 +66,36 @@ defmodule FediServer.Accounts.User do
 
   def shared_inbox_uri do
     uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
-    %URI{uri | path: shared_inbox_path()}
+    %URI{uri | path: shared_inbox_path()} |> URI.to_string()
+  end
+
+  @doc """
+  Verifies the password.
+
+  If there is no user or the user doesn't have a password, we call
+  `Bcrypt.no_user_verify/0` to avoid timing attacks.
+  """
+  def valid_password?(%__MODULE__{local?: true, hashed_password: hashed_password}, password)
+      when is_binary(hashed_password) and byte_size(password) > 0 do
+    Bcrypt.verify_pass(password, hashed_password)
+  end
+
+  def valid_password?(_, _) do
+    Bcrypt.no_user_verify()
+    false
+  end
+
+  def registration_changeset(%__MODULE__{} = user, attrs, opts \\ []) do
+    %__MODULE__{user | local?: true}
+    |> cast(attrs, [:name, :nickname, :email, :password, :password_confirmation])
+    |> validate_required([:name])
+    |> validate_nickname()
+    |> put_ap_id_and_inbox()
+    |> validate_email()
+    |> validate_password(opts)
+    |> maybe_put_shared_inbox()
+    |> maybe_put_keys()
+    |> maybe_put_data()
   end
 
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
@@ -86,17 +116,61 @@ defmodule FediServer.Accounts.User do
     |> validate_required([:ap_id, :inbox, :name, :nickname, :local?, :on_follow, :data])
     |> unique_constraint(:ap_id)
     |> unique_constraint(:nickname)
-    |> unique_constraint(:email)
+    |> validate_email()
     |> validate_password()
     |> maybe_put_shared_inbox()
     |> maybe_put_keys()
     |> maybe_put_data()
   end
 
+  defp validate_nickname(changeset) do
+    changeset
+    |> validate_required([:nickname])
+    |> validate_format(:nickname, ~r/^[a-z][-_a-z0-9]+$/,
+      message: "must be lowercase alpha and numbers"
+    )
+    |> validate_length(:nickname, min: 4, max: 20)
+  end
+
+  def put_ap_id_and_inbox(changeset) do
+    nickname = get_change(changeset, :nickname)
+
+    if get_field(changeset, :local?) && nickname do
+      endpoint_uri = Fedi.Application.endpoint_url() |> Utils.to_uri()
+      ap_id = Utils.base_uri(endpoint_uri, "/users/#{nickname}")
+      inbox = Utils.base_uri(endpoint_uri, "/users/#{nickname}/inbox")
+
+      changeset
+      |> put_change(:ap_id, URI.to_string(ap_id))
+      |> unsafe_validate_unique(:ap_id, FediServer.Repo)
+      |> unique_constraint(:ap_id)
+      |> put_change(:inbox, URI.to_string(inbox))
+      |> unsafe_validate_unique(:inbox, FediServer.Repo)
+      |> unique_constraint(:inbox)
+    else
+      changeset
+    end
+  end
+
+  defp validate_email(changeset) do
+    if get_field(changeset, :local?) do
+      changeset
+      |> validate_required([:email])
+      |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/,
+        message: "must have the @ sign and no spaces"
+      )
+      |> validate_length(:email, max: 160)
+      |> unsafe_validate_unique(:email, FediServer.Repo)
+      |> unique_constraint(:email)
+    else
+      changeset
+    end
+  end
+
   defp validate_password(changeset, opts \\ []) do
     if get_field(changeset, :local?) && get_change(changeset, :password) do
       changeset
-      # |> validate_length(:password, min: 12, max: 80)
+      |> validate_length(:password, min: 4, max: 80)
       # |> validate_format(:password, ~r/[a-z]/, message: "at least one lower case character")
       # |> validate_format(:password, ~r/[A-Z]/, message: "at least one upper case character")
       # |> validate_format(:password, ~r/[!?@#$%^&*_0-9]/, message: "at least one digit or punctuation character")
@@ -150,17 +224,21 @@ defmodule FediServer.Accounts.User do
           nickname = get_field(changeset, :nickname)
           keys_pem = get_field(changeset, :keys)
 
-          public_key_pem =
-            case FediServer.HTTPClient.public_key_pem_from_keys(keys_pem) do
-              {:ok, pem} ->
-                pem
+          if ap_id && name && nickname && keys_pem do
+            public_key_pem =
+              case FediServer.HTTPClient.public_key_pem_from_keys(keys_pem) do
+                {:ok, pem} ->
+                  pem
 
-              {:error, reason} ->
-                Logger.error("Did not decode a public key #{reason}.")
-                nil
-            end
+                {:error, reason} ->
+                  Logger.error("Did not decode a public key #{reason}.")
+                  nil
+              end
 
-          put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key_pem))
+            put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key_pem))
+          else
+            changeset
+          end
         else
           changeset
         end
@@ -171,10 +249,13 @@ defmodule FediServer.Accounts.User do
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
   def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
+    user_suffix = "/users/#{nickname}"
+    user_url = String.replace_trailing(ap_id, user_suffix, "/@#{nickname}")
+
     %{
       "type" => Keyword.get(opts, :actor_type, "Person"),
       "id" => ap_id,
-      "url" => ap_id,
+      "url" => user_url,
       "name" => name,
       "preferredUsername" => nickname,
       "summary" => Keyword.get(opts, :bio, name),
@@ -186,7 +267,7 @@ defmodule FediServer.Accounts.User do
       "followers" => "#{ap_id}/followers",
       "featured" => "#{ap_id}/collections/featured",
       "endpoints" => %{
-        "sharedInbox" => shared_inbox_uri() |> URI.to_string()
+        "sharedInbox" => shared_inbox_uri()
       },
       "publicKey" => %{
         "id" => "#{ap_id}#main-key",

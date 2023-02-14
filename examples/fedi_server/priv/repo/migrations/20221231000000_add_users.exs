@@ -24,7 +24,6 @@ defmodule FediServer.Repo.Migrations.AddUsers do
 
     create index(:users, :ap_id, unique: true)
     create index(:users, :inbox, unique: true)
-    create index(:users, :nickname, unique: true)
     create index(:users, :email, unique: true)
     create index(:users, :local?)
   end

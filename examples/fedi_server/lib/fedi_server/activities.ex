@@ -255,7 +255,7 @@ defmodule FediServer.Activities do
           User
           |> join(:inner, [u], c in UserObject, on: c.actor == u.ap_id)
           |> select([u], %{id: u.id, data: u.data})
-          # TODO should visibility be filtered by the visibilty of `c.object`?
+          # TODO should visibility be filtered by the visibility of `c.object`?
           # |> filter_collection(opts, 2)
           |> where([u, c], c.object == ^object_id)
           |> where([u, c], c.type == ^type)

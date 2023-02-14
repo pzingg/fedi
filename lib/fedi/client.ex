@@ -38,7 +38,8 @@ defmodule Fedi.Client do
       }
     }
   """
-  def post(actor_id, markdown_content, m \\ %{}, visibility \\ :public) do
+  def post(actor_id, markdown_content, m \\ %{}, opts \\ []) do
+    visibility = Keyword.get(opts, :visibility, :public)
     m
     |> Map.merge(%{
       "type" => "Create",
@@ -49,7 +50,7 @@ defmodule Fedi.Client do
         "attributedTo" => actor_id
       }
     })
-    |> set_object_tags()
+    |> set_object_tags(opts)
     |> set_visibility(visibility)
   end
 
@@ -72,8 +73,9 @@ defmodule Fedi.Client do
       }
     }
   """
-  def direct(actor_id, markdown_content, m \\ %{}) do
-    post(actor_id, markdown_content, m, :direct)
+  def direct(actor_id, markdown_content, m \\ %{}, opts \\ []) do
+    opts = Keyword.put(opts, :visibility, :direct)
+    post(actor_id, markdown_content, m, opts)
   end
 
   @doc """
@@ -106,7 +108,8 @@ defmodule Fedi.Client do
       }
     }
   """
-  def reply(actor_id, in_reply_to_id, markdown_content, m \\ %{}, visibility \\ :public) do
+  def reply(actor_id, in_reply_to_id, markdown_content, m \\ %{}, opts \\ []) do
+    visibility = Keyword.get(opts, :visibility, :public)
     m
     |> Map.merge(%{
       "type" => "Create",
@@ -118,7 +121,7 @@ defmodule Fedi.Client do
         "inReplyTo" => in_reply_to_id
       }
     })
-    |> set_object_tags()
+    |> set_object_tags(opts)
     |> set_visibility(visibility)
   end
 
@@ -137,7 +140,8 @@ defmodule Fedi.Client do
       "object" => "https://example.com/users/original/objects/OBJECTID"
     }
   """
-  def boost(actor_id, object_id, m \\ %{}, visibility \\ :public) do
+  def boost(actor_id, object_id, m \\ %{}, opts \\ []) do
+    visibility = Keyword.get(opts, :visibility, :public)
     m
     |> Map.merge(%{
       "type" => "Announce",
@@ -208,11 +212,11 @@ defmodule Fedi.Client do
     end
   end
 
-  def set_object_tags(m) do
+  def set_object_tags(m, opts \\ []) do
     with %{"content" => content} = object when is_binary(content) <-
            Map.get(m, "object"),
          {:ok, object} <-
-           Fedi.Content.set_tags(object) do
+           Fedi.Content.set_tags(object, opts) do
       {cc, object} = Map.pop(object, "cc")
 
       m = Map.put(m, "object", object)

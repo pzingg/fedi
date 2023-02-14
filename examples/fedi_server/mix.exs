@@ -38,6 +38,8 @@ defmodule FediServer.MixProject do
       {:phoenix_html, "~> 3.2"},
       {:phoenix_live_reload, "~> 1.3", only: :dev},
       {:phoenix_live_view, "~> 0.17"},
+      {:floki, ">= 0.30.0", only: :test},
+      {:esbuild, "~> 0.4", runtime: Mix.env() == :dev},
       {:ecto_sql, "~> 3.6"},
       {:ecto_ulid, "~> 0.3"},
       {:arbor, "~> 1.1"},

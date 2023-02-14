@@ -25,7 +25,10 @@ config :fedi_server, FediServerWeb.Endpoint,
   code_reloader: true,
   debug_errors: true,
   secret_key_base: "X4c7fzbdWdXkr6iD031raY5zlZR4Xft6YEP9/TM/Qkebl1aYmX1kb1IMFJShvh5d",
-  watchers: []
+  watchers: [
+    # Start the esbuild watcher by calling Esbuild.install_and_run(:default, args)
+    esbuild: {Esbuild, :install_and_run, [:default, ~w(--sourcemap=inline --watch)]}
+  ]
 
 # ## SSL Support
 #
@@ -50,6 +53,16 @@ config :fedi_server, FediServerWeb.Endpoint,
 # If desired, both `http:` and `https:` keys can be
 # configured to run both http and https servers on
 # different ports.
+
+# Watch static and templates for browser reloading.
+config :fedi_server, FediServerWeb.Endpoint,
+  live_reload: [
+    patterns: [
+      ~r"priv/static/.*(js|css|png|jpeg|jpg|gif|svg)$",
+      ~r"lib/fedi_server_web/(live|views)/.*(ex)$",
+      ~r"lib/fedi_server_web/templates/.*(eex)$"
+    ]
+  ]
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :console, format: "[$level] $message\n"

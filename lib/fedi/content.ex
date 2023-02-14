@@ -44,10 +44,10 @@ defmodule Fedi.Content do
 
   @types [:url, :hashtag, :mention, :email]
 
-  def set_tags(note) when is_map(note) do
+  def set_tags(note, opts \\ []) when is_map(note) do
     content = note["content"]
 
-    case parse_markdown(content) do
+    case parse_markdown(content, opts) do
       {:error, reason} ->
         {:error, reason}
 
@@ -87,6 +87,7 @@ defmodule Fedi.Content do
 
   - `:html` - if true, return HTML, otherwise return Markdown
   - `:compact_output` - if true, do not add newlines to the HTML output
+  - `:webfinger_module` - a module with a `finger/1` function
 
   Returns a three-element :ok tuple. The second element is
   the markdown text, modified to insert ActivityPub-friendly

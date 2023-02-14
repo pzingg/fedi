@@ -1,4 +1,22 @@
+<%= if @current_user do %>
+<h1><%= @title %> : <%= @current_user.nickname %></h1>
+<h2>What's on your mind?</h2>
+<%= form_for @conn, Routes.timelines_path(@conn, :create), [as: :post], fn f -> %>
+  <%= label f, :content %>
+  <%= textarea f, :content, rows: 10 %>
+  <%= error_tag f, :content %>
+
+  <div>
+    <%= submit "Post" %>
+  </div>
+<% end %>
+<% else %>
 <h1><%= @title %></h1>
+<p>
+  <%= link "Log in", to: Routes.user_session_path(@conn, :new) %> |
+  <%= link "Register", to: Routes.user_registration_path(@conn, :new) %>
+</p>
+<% end %>
 <%= if @count == 0 do %>
 <p>No Activities</p>
 <% end %>

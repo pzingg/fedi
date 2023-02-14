@@ -25,18 +25,20 @@ defmodule FediServerWeb.Endpoint do
   # Code reloading can be explicitly enabled under the
   # :code_reloader configuration of your endpoint.
   if code_reloading? do
+    socket "/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket
+    plug Phoenix.LiveReloader
     plug Phoenix.CodeReloader
-    plug Phoenix.Ecto.CheckRepoStatus, otp_app: :fedi_server
   end
 
   plug Plug.RequestId
   plug Plug.Telemetry, event_prefix: [:phoenix, :endpoint]
 
-  # IMPORTANT. We disable parsing json, because we want
+  # IMPORTANT. We disable parsing :json, because we want
   # the raw binary body to be used by the Actor / Delegate.
+  # :urlencoded is required for Phoenix forms and controllers.
   plug Plug.Parsers,
-    # [:urlencoded, :multipart, :json],
-    parsers: [],
+    # parsers: [:urlencoded, :multipart, :json],
+    parsers: [:urlencoded, :multipart],
     pass: ["*/*"],
     json_decoder: Phoenix.json_library()
 
