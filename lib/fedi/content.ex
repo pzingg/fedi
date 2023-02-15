@@ -36,6 +36,7 @@ defmodule Fedi.Content do
         |> File.read!()
         |> String.split("\n", trim: true)
         |> Enum.concat(["example", "onion"])
+        |> Enum.reject(fn s -> s == "" end)
         |> MapSet.new()
 
   @default_opts %{
@@ -679,5 +680,37 @@ defmodule Fedi.Content do
     user_acc = Map.update(user_acc, :hashtags, [item], fn acc -> [item | acc] end)
 
     {out, user_acc}
+  end
+
+  @doc """
+  Takes two parameters, the single item to process (which will either be a
+  string or a 4-tuple) and the accumulator, and returns a tuple `{processed_item, updated_acc}`.
+  Returning the empty list for processed_item will remove the item processed the AST.
+  """
+  def as_text_item(item, acc) when is_binary(item) do
+    {item, [item | acc]}
+  end
+
+  def as_text_item({_tag, _attributes, _ast, _meta} = item, acc) do
+    {item, acc}
+  end
+
+  def as_text(markdown_content) do
+    input = String.trim(markdown_content)
+
+    case Earmark.as_ast(input) do
+      {:error, _ast, _line} ->
+        {:error, "Invalid markdown input"}
+
+      {:ok, ast, _} ->
+        {_ast, result} = Earmark.Restructure.walk_and_modify_ast(ast, [], &as_text_item/2)
+
+        text =
+          result
+          |> Enum.reverse()
+          |> Enum.join(" ")
+
+        {:ok, Regex.replace(~r/\s\s*/, text, " ") |> String.trim()}
+    end
   end
 end

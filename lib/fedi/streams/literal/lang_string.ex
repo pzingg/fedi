@@ -14,12 +14,16 @@ defmodule Fedi.Streams.Literal.LangString do
     end
   end
 
-  # serialize converts a string value to an interface representation suitable
-  # for marshalling into a text or binary format.
+  @doc """
+  Converts a `lang_string` value to an interface representation suitable
+  for marshalling into a text or binary format.
+  """
   def serialize(this) when is_map(this), do: {:ok, this}
 
-  # deserialize creates string value from an interface representation that
-  # has been unmarshalled from a text or binary format.
+  @doc """
+  Creates a `lang_string` value from an interface representation that
+  has been unmarshalled from a text or binary format.
+  """
   def deserialize(v) when is_map(v) do
     Enum.reduce_while(v, Map.new(), fn {k, v}, acc ->
       case maybe_to_string(v) do
@@ -40,7 +44,9 @@ defmodule Fedi.Streams.Literal.LangString do
     {:error, "#{inspect(v)} cannot be interpreted as a map for rdf:langString"}
   end
 
-  # less returns true if the left string value is less than the right value.
+  @doc """
+  Returns true if the left `lang_string` value is less than the right value.
+  """
   def less(lhs, rhs) when is_map(lhs) and is_map(rhs) do
     lk = Map.keys(lhs) |> Enum.sort()
     rk = Map.keys(rhs) |> Enum.sort()

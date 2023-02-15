@@ -69,10 +69,14 @@ defmodule FediServerWeb.TimelinesController do
     opts = APUtils.collection_opts(params, conn)
 
     case Activities.get_timeline(which, opts) do
-      {:ok, oc_map} ->
-        statuses = Map.get(oc_map, "orderedItems", []) |> List.wrap()
-        count = Enum.count(statuses)
-        next = Map.get(oc_map, "next")
+      {:ok, activities} ->
+        statuses =
+          Enum.map(activities, &FediServerWeb.TimelineHelpers.transform/1)
+          |> Enum.reject(&is_nil(&1))
+
+        # TODO: add page=, min_id= max_id=
+        next = Routes.timelines_url(conn, which)
+        previous = nil
 
         title =
           case which do
@@ -86,9 +90,9 @@ defmodule FediServerWeb.TimelinesController do
         render(conn, "index.html",
           title: title,
           timeline: statuses,
-          count: count,
+          count: Enum.count(statuses),
           next: next,
-          previous: nil
+          previous: previous
         )
 
       {:error, reason} ->

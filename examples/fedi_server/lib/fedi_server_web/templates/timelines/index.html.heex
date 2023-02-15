@@ -5,7 +5,6 @@
   <%= label f, :content %>
   <%= textarea f, :content, rows: 10 %>
   <%= error_tag f, :content %>
-
   <div>
     <%= submit "Post" %>
   </div>
@@ -19,20 +18,10 @@
 <% end %>
 <%= if @count == 0 do %>
 <p>No Activities</p>
-<% end %>
-<%= if @count == 1 do %>
-<p>1 Activity</p>
-<% end %>
-<%= if @count > 1 do %>
-<p><%= @count %> Activities</p>
-<% end %>
+<% else %>
 <%= for activity <- @timeline do %>
-<!-- activity -->
-<div class="activity">
-  <p><%= description(activity) %></p>
-  <p><%= object(activity) %></p>
-</div>
-<!-- end activity -->
+  <StatusComponent.status activity={activity} />
+<% end %>
 <% end %>
 <%= if @previous do %>
 <p><a href={@previous}>Previous 30</a></p>

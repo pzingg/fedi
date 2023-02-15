@@ -1,12 +1,16 @@
 defmodule Fedi.Streams.Literal.Boolean do
   @moduledoc false
 
-  # serialize converts a string value to an interface representation suitable
-  # for marshalling into a text or binary format.
+  @doc """
+  Converts a boolean value to an interface representation suitable
+  for marshalling into a text or binary format.
+  """
   def serialize(this) when is_boolean(this), do: {:ok, this}
 
-  # deserialize creates string value from an interface representation that
-  # has been unmarshalled from a text or binary format.
+  @doc """
+  Creates a boolean value from an interface representation that
+  has been unmarshalled from a text or binary format.
+  """
   def deserialize(v) when is_boolean(v), do: {:ok, v}
 
   def deserialize(v) when is_number(v) do
@@ -19,6 +23,9 @@ defmodule Fedi.Streams.Literal.Boolean do
 
   def deserialize(v), do: {:error, "#{inspect(v)} cannot be interpreted as an xsd:boolean"}
 
+  @doc """
+  Returns true if the left boolean value is less than the right value.
+  """
   def less(lhs, rhs) when is_boolean(lhs) and is_boolean(rhs) do
     !lhs && rhs
   end

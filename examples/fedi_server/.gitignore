@@ -23,3 +23,4 @@ erl_crash.dump
 fedi_server-*.tar
 
 /priv/static/
+/assets/vendor/fontawesome*

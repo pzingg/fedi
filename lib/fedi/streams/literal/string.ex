@@ -13,17 +13,23 @@ defmodule Fedi.Streams.Literal.String do
     end
   end
 
-  # serialize converts a string value to an interface representation suitable
-  # for marshalling into a text or binary format.
+  @doc """
+  Converts a string value to an interface representation suitable
+  for marshalling into a text or binary format.
+  """
   def serialize(this) when is_binary(this), do: {:ok, this}
 
-  # deserialize creates string value from an interface representation that
-  # has been unmarshalled from a text or binary format.
+  @doc """
+  Creates a string value from an interface representation that
+  has been unmarshalled from a text or binary format.
+  """
   def deserialize(v) do
     maybe_to_string(v)
   end
 
-  # less returns true if the left string value is less than the right value.
+  @doc """
+  Returns true if the left string value is less than the right value.
+  """
   def less(lhs, rhs) when is_binary(lhs) and is_binary(rhs) do
     lhs < rhs
   end

@@ -82,6 +82,7 @@ defmodule FediServerWeb.Router do
 
     get("/directory", UsersController, :index)
     get("/accounts/:nickname", UsersController, :show)
+
     get("/statuses/:ulid", ObjectsController, :status)
 
     get("/timelines/local", TimelinesController, :local)
@@ -99,6 +100,9 @@ defmodule FediServerWeb.Router do
 
     get("/users/:nickname", UsersController, :show)
     get("/users/:nickname/objects/:ulid", ObjectsController, :object)
+
+    get("/@:nickname", UsersController, :show)
+    # get("/hashtags/:tag", HashtagsController, :show)
 
     get("/", TimelinesController, :root)
   end

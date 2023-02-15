@@ -40,6 +40,7 @@ defmodule FediServer.MixProject do
       {:phoenix_live_view, "~> 0.17"},
       {:floki, ">= 0.30.0", only: :test},
       {:esbuild, "~> 0.4", runtime: Mix.env() == :dev},
+      {:dart_sass, "~> 0.5", runtime: Mix.env() == :dev},
       {:ecto_sql, "~> 3.6"},
       {:ecto_ulid, "~> 0.3"},
       {:arbor, "~> 1.1"},
@@ -78,6 +79,10 @@ defmodule FediServer.MixProject do
   # No mix test in other environments
   defp aliases(_) do
     [
+      # "assets.deploy": [
+      #  "cmd --cd assets NODE_ENV=production node scripts/build.js",
+      #  "phx.digest"
+      # ],
       setup: ["deps.get", "ecto.setup"],
       "ecto.setup": ["ecto.create", "ecto.migrate", "run priv/repo/seeds.exs"],
       "ecto.reset": ["ecto.drop", "ecto.setup"]

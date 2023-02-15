@@ -1,12 +1,16 @@
 defmodule Fedi.Streams.Literal.DateTime do
   @moduledoc false
 
-  # serialize converts a float value to an interface representation suitable
-  # for marshalling into a text or binary format.
+  @doc """
+  Converts a `DateTime` value to an interface representation suitable
+  for marshalling into a text or binary format.
+  """
   def serialize(%DateTime{} = this), do: {:ok, this}
 
-  # deserialize creates float value from an interface representation that
-  # has been unmarshalled from a text or binary format.
+  @doc """
+  Creates a `DateTime` value from an interface representation that
+  has been unmarshalled from a text or binary format.
+  """
   def deserialize(%DateTime{} = v), do: {:ok, v}
 
   def deserialize(v) when is_binary(v) do
@@ -18,7 +22,9 @@ defmodule Fedi.Streams.Literal.DateTime do
 
   def deserialize(v), do: {:error, "#{inspect(v)} cannot be parsed as an xsd:dateTime"}
 
-  # less returns true if the left value is less than the right value.
+  @doc """
+  Returns true if the left `DateTime` value is less than the right value.
+  """
   def less(%DateTime{} = lhs, %DateTime{} = rhs) do
     lhs < rhs
   end
