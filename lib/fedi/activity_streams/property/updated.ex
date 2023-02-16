@@ -67,16 +67,16 @@ defmodule Fedi.ActivityStreams.Property.Updated do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_date_time_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_date_time_member: DateTime.t() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

@@ -74,7 +74,7 @@ defmodule Fedi.StreamsTest do
       assert name_map_prop.__struct__ == Fedi.ActivityStreams.Property.NameIterator
       assert is_map(name_map_prop.rdf_lang_string_member)
       assert name_map_prop.rdf_lang_string_member["en"] == "Going-Away Party for Jim"
-      assert name_map_prop.unknown == nil
+      assert map_size(name_map_prop.unknown) == 0
     end
 
     test "orderedCollectionPage" do

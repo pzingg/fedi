@@ -8,14 +8,18 @@ defmodule Fedi.ActivityStreams.Type.TentativeAccept do
 
   @namespace :activity_streams
   @type_name "TentativeAccept"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "TentativeAccept",
     "Accept",
     "Activity",
     "Object"
   ]
-  @disjoint_with []
+  @disjoint_with [
+    
+  ]
   @known_properties [
     "actor",
     "instrument",
@@ -27,14 +31,14 @@ defmodule Fedi.ActivityStreams.Type.TentativeAccept do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

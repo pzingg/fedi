@@ -352,13 +352,13 @@ defmodule Fedi.Streams.Utils do
   end
 
   def set_context(%{unknown: unknown} = type, context)
-      when is_binary(context) or is_list(context) do
-    struct(type, unknown: Map.put(unknown || %{}, "@context", context))
+      when is_map(unknown) and (is_binary(context) or is_list(context)) do
+    struct(type, unknown: Map.put(unknown, "@context", context))
   end
 
-  def set_context(%{unknown: unknown} = type, _simple) do
+  def set_context(%{unknown: unknown} = type, _simple) when is_map(unknown) do
     struct(type,
-      unknown: Map.put(unknown || %{}, "@context", "https://www.w3.org/ns/activitystreams")
+      unknown: Map.put(unknown, "@context", "https://www.w3.org/ns/activitystreams")
     )
   end
 

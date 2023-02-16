@@ -10,6 +10,7 @@ defmodule Fedi.ActivityStreams.Property.Hreflang do
   @namespace :activity_streams
   @range [:bcp47]
   @domain [
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"Link", Fedi.ActivityStreams.Type.Link},
     {"Mention", Fedi.ActivityStreams.Type.Mention}
   ]
@@ -18,16 +19,16 @@ defmodule Fedi.ActivityStreams.Property.Hreflang do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :rfc_bcp47_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           rfc_bcp47_member: String.t() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

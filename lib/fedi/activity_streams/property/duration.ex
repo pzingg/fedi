@@ -71,16 +71,16 @@ defmodule Fedi.ActivityStreams.Property.Duration do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_duration_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_duration_member: Timex.Duration.t() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

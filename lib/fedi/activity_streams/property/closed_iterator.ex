@@ -16,20 +16,20 @@ defmodule Fedi.ActivityStreams.Property.ClosedIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_date_time_member,
     :xsd_boolean_member,
     :member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_date_time_member: DateTime.t() | nil,
           xsd_boolean_member: boolean() | nil,
           member: term(),
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

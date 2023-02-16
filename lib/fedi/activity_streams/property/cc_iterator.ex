@@ -67,16 +67,16 @@ defmodule Fedi.ActivityStreams.Property.CcIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           member: term(),
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

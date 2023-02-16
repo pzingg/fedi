@@ -12,14 +12,18 @@ defmodule Fedi.ActivityStreams.Type.Question do
 
   @namespace :activity_streams
   @type_name "Question"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Question",
     "Activity",
     "IntransitiveActivity",
     "Object"
   ]
-  @disjoint_with []
+  @disjoint_with [
+    
+  ]
   @known_properties [
     "actor",
     "anyOf",
@@ -35,14 +39,14 @@ defmodule Fedi.ActivityStreams.Type.Question do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

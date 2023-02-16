@@ -753,14 +753,14 @@ defmodule Mix.Tasks.Ontology.Gen do
       @enforce_keys [:alias]
       defstruct [
         :alias,
-        :unknown,
-        properties: %{}
+        properties: %{},
+        unknown: %{}
       ]
 
       @type t() :: %__MODULE__{
               alias: String.t(),
               properties: map(),
-              unknown: term()
+              unknown: map()
             }
 
       def namespace, do: @namespace
@@ -817,13 +817,13 @@ defmodule Mix.Tasks.Ontology.Gen do
 
       @enforce_keys [:alias]
       defstruct [
-        :alias,
-        :unknown<%= prop[:defstruct] %>
+        :alias<%= prop[:defstruct] %>,
+        unknown: %{}
       ]
 
       @type t() :: %__MODULE__{
-              alias: String.t(),
-              unknown: term()<%= prop[:typet] %>
+              alias: String.t()<%= prop[:typet] %>,
+              unknown: map()
             }
 
       def prop_name, do: @prop_name
@@ -945,13 +945,13 @@ defmodule Mix.Tasks.Ontology.Gen do
 
       @enforce_keys [:alias]
       defstruct [
-        :alias,
-        :unknown<%= prop[:defstruct] %>
+        :alias<%= prop[:defstruct] %>,
+        unknown: %{}
       ]
 
       @type t() :: %__MODULE__{
-              alias: String.t(),
-              unknown: term()<%= prop[:typet] %>
+              alias: String.t()<%= prop[:typet] %>,
+              unknown: map()
             }
 
       def prop_name, do: @prop_name

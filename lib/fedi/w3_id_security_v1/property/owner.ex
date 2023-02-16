@@ -16,14 +16,14 @@ defmodule Fedi.W3IDSecurityV1.Property.Owner do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    :xsd_any_uri_member
+    :xsd_any_uri_member,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
-          xsd_any_uri_member: URI.t() | nil
+          xsd_any_uri_member: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

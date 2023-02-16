@@ -9,6 +9,7 @@ defmodule Fedi.ActivityStreams.Property.Href do
   @namespace :activity_streams
   @range [:any_uri]
   @domain [
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"Link", Fedi.ActivityStreams.Type.Link},
     {"Mention", Fedi.ActivityStreams.Type.Mention}
   ]
@@ -17,14 +18,14 @@ defmodule Fedi.ActivityStreams.Property.Href do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    :xsd_any_uri_member
+    :xsd_any_uri_member,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
-          xsd_any_uri_member: URI.t() | nil
+          xsd_any_uri_member: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

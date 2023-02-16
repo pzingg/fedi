@@ -20,16 +20,16 @@ defmodule Fedi.Toot.Property.Discoverable do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_boolean_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_boolean_member: boolean() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

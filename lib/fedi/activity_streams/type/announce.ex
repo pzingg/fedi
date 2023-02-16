@@ -9,13 +9,16 @@ defmodule Fedi.ActivityStreams.Type.Announce do
 
   @namespace :activity_streams
   @type_name "Announce"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Announce",
     "Activity",
     "Object"
   ]
   @disjoint_with [
+    "Hashtag",
     "Link",
     "Mention"
   ]
@@ -68,14 +71,14 @@ defmodule Fedi.ActivityStreams.Type.Announce do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

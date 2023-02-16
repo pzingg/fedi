@@ -29,6 +29,7 @@ defmodule Fedi.ActivityStreams.Property.PreviewIterator do
     {"Flag", Fedi.ActivityStreams.Type.Flag},
     {"Follow", Fedi.ActivityStreams.Type.Follow},
     {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"IdentityProof", Fedi.ActivityStreams.Type.IdentityProof},
     {"Ignore", Fedi.ActivityStreams.Type.Ignore},
     {"Image", Fedi.ActivityStreams.Type.Image},
@@ -69,16 +70,16 @@ defmodule Fedi.ActivityStreams.Property.PreviewIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           member: term(),
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

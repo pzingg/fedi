@@ -9,6 +9,7 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
   @namespace :activity_streams
   @range [:rfc5988]
   @domain [
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"Link", Fedi.ActivityStreams.Type.Link},
     {"Mention", Fedi.ActivityStreams.Type.Mention}
   ]
@@ -17,16 +18,16 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :rfc_rfc5988_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           rfc_rfc5988_member: String.t() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

@@ -1668,6 +1668,30 @@
           "url": "https://www.w3.org/TR/activitystreams-vocabulary/#dfn-mention"
         },
         {
+          "id": "https://www.w3.org/ns/activitystreams#Hashtag",
+          "type": "owl:Class",
+          "example": {
+            "id": "https://www.w3.org/TR/activitystreams-vocabulary/#hashtag-jsonld",
+            "type": "http://schema.org/CreativeWork",
+            "mainEntity": {
+              "type": "Hashtag",
+              "url": "http://example.org/tags/fediverse",
+              "name": "#fediverse",
+              "summary": "The hashtag '#fediverse' contained in a note."
+            },
+            "name": "Hashtag Example"
+          },
+          "notes": "A specialized Link that represents a #hashtag.",
+          "subClassOf": {
+            "type": "owl:Class",
+            "url": "https://www.w3.org/TR/activitystreams-vocabulary/#dfn-link",
+            "name": "Link"
+          },
+          "disjointWith": [],
+          "name": "Hashtag",
+          "url": "https://www.w3.org/TR/activitystreams-vocabulary/#dfn-hashtag"
+        },
+        {
           "id": "https://www.w3.org/ns/activitystreams#Profile",
           "type": "owl:Class",
           "example": {

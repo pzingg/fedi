@@ -32,6 +32,7 @@ defmodule Fedi.ActivityStreams.Property.MediaType do
     {"Flag", Fedi.ActivityStreams.Type.Flag},
     {"Follow", Fedi.ActivityStreams.Type.Follow},
     {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"IdentityProof", Fedi.ActivityStreams.Type.IdentityProof},
     {"Ignore", Fedi.ActivityStreams.Type.Ignore},
     {"Image", Fedi.ActivityStreams.Type.Image},
@@ -72,16 +73,16 @@ defmodule Fedi.ActivityStreams.Property.MediaType do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :rfc_rfc2045_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           rfc_rfc2045_member: String.t() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

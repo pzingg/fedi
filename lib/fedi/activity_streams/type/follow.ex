@@ -11,13 +11,16 @@ defmodule Fedi.ActivityStreams.Type.Follow do
 
   @namespace :activity_streams
   @type_name "Follow"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Follow",
     "Activity",
     "Object"
   ]
   @disjoint_with [
+    "Hashtag",
     "Link",
     "Mention"
   ]
@@ -70,14 +73,14 @@ defmodule Fedi.ActivityStreams.Type.Follow do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

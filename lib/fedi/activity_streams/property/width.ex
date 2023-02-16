@@ -10,6 +10,7 @@ defmodule Fedi.ActivityStreams.Property.Width do
   @namespace :activity_streams
   @range [:non_neg_integer]
   @domain [
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"Image", Fedi.ActivityStreams.Type.Image},
     {"Link", Fedi.ActivityStreams.Type.Link},
     {"Mention", Fedi.ActivityStreams.Type.Mention}
@@ -19,16 +20,16 @@ defmodule Fedi.ActivityStreams.Property.Width do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_non_neg_integer_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_non_neg_integer_member: non_neg_integer() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

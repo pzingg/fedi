@@ -15,6 +15,7 @@ defmodule Fedi.ActivityStreams.Type.Link do
   @namespace :activity_streams
   @type_name "Link"
   @extended_by [
+    "Hashtag",
     "Mention"
   ]
   @is_or_extends [
@@ -92,14 +93,14 @@ defmodule Fedi.ActivityStreams.Type.Link do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

@@ -8,7 +8,9 @@ defmodule Fedi.ActivityStreams.Type.Mention do
 
   @namespace :activity_streams
   @type_name "Mention"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Mention",
     "Link"
@@ -85,14 +87,14 @@ defmodule Fedi.ActivityStreams.Type.Mention do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

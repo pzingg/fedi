@@ -30,6 +30,7 @@ defmodule Fedi.ActivityStreams.Property.Name do
     {"Flag", Fedi.ActivityStreams.Type.Flag},
     {"Follow", Fedi.ActivityStreams.Type.Follow},
     {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"IdentityProof", Fedi.ActivityStreams.Type.IdentityProof},
     {"Ignore", Fedi.ActivityStreams.Type.Ignore},
     {"Image", Fedi.ActivityStreams.Type.Image},

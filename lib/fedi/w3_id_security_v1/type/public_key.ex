@@ -8,11 +8,15 @@ defmodule Fedi.W3IDSecurityV1.Type.PublicKey do
 
   @namespace :w3_id_security_v1
   @type_name "PublicKey"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "PublicKey"
   ]
-  @disjoint_with []
+  @disjoint_with [
+    
+  ]
   @known_properties [
     "owner",
     "publicKeyPem"
@@ -21,14 +25,14 @@ defmodule Fedi.W3IDSecurityV1.Type.PublicKey do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

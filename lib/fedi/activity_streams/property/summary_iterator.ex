@@ -29,6 +29,7 @@ defmodule Fedi.ActivityStreams.Property.SummaryIterator do
     {"Flag", Fedi.ActivityStreams.Type.Flag},
     {"Follow", Fedi.ActivityStreams.Type.Follow},
     {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"IdentityProof", Fedi.ActivityStreams.Type.IdentityProof},
     {"Ignore", Fedi.ActivityStreams.Type.Ignore},
     {"Image", Fedi.ActivityStreams.Type.Image},
@@ -69,18 +70,18 @@ defmodule Fedi.ActivityStreams.Property.SummaryIterator do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_string_member,
     :rdf_lang_string_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_string_member: String.t() | nil,
           rdf_lang_string_member: map() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

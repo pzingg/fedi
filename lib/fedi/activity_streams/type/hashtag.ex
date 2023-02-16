@@ -1,64 +1,87 @@
-defmodule Fedi.ActivityStreams.Type.Event do
+defmodule Fedi.ActivityStreams.Type.Hashtag do
   # This module was generated from an ontology. DO NOT EDIT!
   # Run `mix help ontology.gen` for details.
 
   @moduledoc """
-  Represents any kind of event.
+  A specialized Link that represents a #hashtag.
   """
 
   @namespace :activity_streams
-  @type_name "Event"
+  @type_name "Hashtag"
   @extended_by [
     
   ]
   @is_or_extends [
-    "Event",
-    "Object"
+    "Hashtag",
+    "Link"
   ]
   @disjoint_with [
-    "Hashtag",
-    "Link",
-    "Mention"
+    "Accept",
+    "Activity",
+    "Add",
+    "Announce",
+    "Application",
+    "Article",
+    "Audio",
+    "Branch",
+    "Collection",
+    "CollectionPage",
+    "Commit",
+    "Create",
+    "Delete",
+    "Dislike",
+    "Document",
+    "Emoji",
+    "Event",
+    "Flag",
+    "Follow",
+    "Group",
+    "IdentityProof",
+    "Ignore",
+    "Image",
+    "IntransitiveActivity",
+    "Join",
+    "Leave",
+    "Like",
+    "Listen",
+    "Move",
+    "Note",
+    "Object",
+    "Offer",
+    "OrderedCollection",
+    "Organization",
+    "Page",
+    "Person",
+    "Place",
+    "Profile",
+    "Push",
+    "Read",
+    "Reject",
+    "Relationship",
+    "Remove",
+    "Repository",
+    "Service",
+    "Ticket",
+    "TicketDependency",
+    "Tombstone",
+    "Undo",
+    "Update",
+    "Video",
+    "View"
   ]
   @known_properties [
-    "altitude",
-    "attachment",
     "attributedTo",
-    "audience",
-    "bcc",
-    "bto",
-    "cc",
-    "content",
-    "contentMap",
-    "context",
-    "duration",
-    "endTime",
-    "generator",
-    "icon",
-    "image",
-    "inReplyTo",
-    "likes",
-    "location",
+    "height",
+    "href",
+    "hreflang",
     "mediaType",
     "name",
     "nameMap",
-    "object",
     "preview",
-    "published",
-    "replies",
-    "sensitive",
-    "shares",
-    "source",
-    "startTime",
+    "rel",
     "summary",
     "summaryMap",
-    "tag",
-    "team",
-    "ticketsTrackedBy",
-    "to",
-    "tracksTicketsFor",
-    "updated",
-    "url"
+    "width"
   ]
 
   @enforce_keys [:alias]

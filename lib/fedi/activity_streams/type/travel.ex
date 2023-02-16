@@ -10,14 +10,18 @@ defmodule Fedi.ActivityStreams.Type.Travel do
 
   @namespace :activity_streams
   @type_name "Travel"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Travel",
     "Activity",
     "IntransitiveActivity",
     "Object"
   ]
-  @disjoint_with []
+  @disjoint_with [
+    
+  ]
   @known_properties [
     "actor",
     "instrument",
@@ -29,14 +33,14 @@ defmodule Fedi.ActivityStreams.Type.Travel do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

@@ -17,16 +17,16 @@ defmodule Fedi.ActivityStreams.Property.Accuracy do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
     :xsd_float_member,
-    :iri
+    :iri,
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
-          unknown: term(),
           xsd_float_member: float() | nil,
-          iri: URI.t() | nil
+          iri: URI.t() | nil,
+          unknown: map()
         }
 
   def prop_name, do: @prop_name

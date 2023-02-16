@@ -8,12 +8,15 @@ defmodule Fedi.Toot.Type.Emoji do
 
   @namespace :toot
   @type_name "Emoji"
-  @extended_by []
+  @extended_by [
+    
+  ]
   @is_or_extends [
     "Emoji",
     "Object"
   ]
   @disjoint_with [
+    "Hashtag",
     "Link",
     "Mention"
   ]
@@ -61,14 +64,14 @@ defmodule Fedi.Toot.Type.Emoji do
   @enforce_keys [:alias]
   defstruct [
     :alias,
-    :unknown,
-    properties: %{}
+    properties: %{},
+    unknown: %{}
   ]
 
   @type t() :: %__MODULE__{
           alias: String.t(),
           properties: map(),
-          unknown: term()
+          unknown: map()
         }
 
   def namespace, do: @namespace

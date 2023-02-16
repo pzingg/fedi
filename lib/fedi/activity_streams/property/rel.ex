@@ -13,6 +13,7 @@ defmodule Fedi.ActivityStreams.Property.Rel do
   @namespace :activity_streams
   @range [:rfc5988]
   @domain [
+    {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
     {"Link", Fedi.ActivityStreams.Type.Link},
     {"Mention", Fedi.ActivityStreams.Type.Mention}
   ]
