@@ -20,6 +20,7 @@ defmodule FediServer.Activities.Object do
     field(:actor, :string)
     field(:local?, :boolean)
     field(:public?, :boolean)
+    field(:listed?, :boolean)
     field(:data, :map)
 
     belongs_to(:in_reply_to, __MODULE__, references: :ap_id)
@@ -51,6 +52,7 @@ defmodule FediServer.Activities.Object do
       :actor,
       :local?,
       :public?,
+      :listed?,
       :data,
       :inserted_at,
       :updated_at

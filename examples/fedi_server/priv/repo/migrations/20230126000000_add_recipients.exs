@@ -31,14 +31,18 @@ defmodule FediServer.Repo.Migrations.AddRecipients do
 
     alter table(:activities) do
       add :public?, :boolean, null: false, default: false
+      add :listed?, :boolean, null: false, default: false
     end
 
     create index(:activities, :public?)
+    create index(:activities, :listed?)
 
     alter table(:objects) do
       add :public?, :boolean, null: false, default: false
+      add :listed?, :boolean, null: false, default: false
     end
 
     create index(:objects, :public?)
+    create index(:objects, :listed?)
   end
 end

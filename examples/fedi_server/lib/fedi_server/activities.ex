@@ -128,6 +128,7 @@ defmodule FediServer.Activities do
   def get_timeline(:home, opts) do
     actor_id = Keyword.get(opts, :visible_to)
     page_size = Keyword.get(opts, :page_size, 30)
+    opts = Keyword.put(opts, :hide_unlisted?, true)
 
     if is_nil(actor_id) do
       {:error, "Unauthorized"}
@@ -146,6 +147,7 @@ defmodule FediServer.Activities do
 
   def get_timeline(:local, opts) do
     page_size = Keyword.get(opts, :page_size, 30)
+    opts = Keyword.put(opts, :hide_unlisted?, true)
 
     Activity
     |> where([a], a.local? == true)
@@ -158,6 +160,7 @@ defmodule FediServer.Activities do
 
   def get_timeline(actor_id, opts) when is_binary(actor_id) do
     page_size = Keyword.get(opts, :page_size, 30)
+    opts = Keyword.put(opts, :hide_unlisted?, true)
 
     Activity
     |> where([a], a.actor == ^actor_id)
@@ -441,28 +444,32 @@ defmodule FediServer.Activities do
     else
       [:min_id, :max_id, :visible_to]
       |> Enum.reduce(query, fn key, q ->
-        filter_collection(q, key, Keyword.get(opts, key))
+        filter_collection(q, key, Keyword.get(opts, key), opts)
       end)
     end
   end
 
-  def filter_collection(query, :max_id, nil), do: query
+  def filter_collection(query, :max_id, nil, _opts), do: query
 
-  def filter_collection(query, :max_id, max_id) do
+  def filter_collection(query, :max_id, max_id, _opts) do
     query |> where(as(:object).id < ^max_id)
   end
 
-  def filter_collection(query, :min_id, nil), do: query
+  def filter_collection(query, :min_id, nil, _opts), do: query
 
-  def filter_collection(query, :min_id, min_id) do
+  def filter_collection(query, :min_id, min_id, _opts) do
     query |> where(as(:object).id >= ^min_id)
   end
 
-  def filter_collection(query, :visible_to, nil) do
-    query |> where(as(:object).public? == true)
+  def filter_collection(query, :visible_to, nil, opts) do
+    if Keyword.get(opts, :hide_unlisted?, false) do
+      query |> where([object: o], o.public? == true and o.listed? == true)
+    else
+      query |> where(as(:object).public? == true)
+    end
   end
 
-  def filter_collection(query, :visible_to, ap_id) when is_binary(ap_id) do
+  def filter_collection(query, :visible_to, ap_id, _opts) when is_binary(ap_id) do
     query
     |> join(:left, [object: o], dr in assoc(o, :direct_recipients), as: :direct)
     |> join(:left, [object: o], fr in assoc(o, :following_recipients), as: :follower)

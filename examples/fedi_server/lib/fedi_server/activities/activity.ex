@@ -13,6 +13,7 @@ defmodule FediServer.Activities.Activity do
     field(:object, :string)
     field(:local?, :boolean)
     field(:public?, :boolean)
+    field(:listed?, :boolean)
     field(:data, :map)
 
     has_many(:direct_recipients, {"activities_recipients", FediServer.Activities.Recipient},
@@ -32,7 +33,7 @@ defmodule FediServer.Activities.Activity do
 
   def changeset(%__MODULE__{} = activity, attrs \\ %{}) do
     activity
-    |> cast(attrs, [:id, :ap_id, :type, :actor, :object, :local?, :public?, :data])
+    |> cast(attrs, [:id, :ap_id, :type, :actor, :object, :local?, :public?, :listed?, :data])
     |> cast_assoc(:direct_recipients)
     |> cast_assoc(:following_recipients)
     |> validate_required([:ap_id, :type, :actor, :data])

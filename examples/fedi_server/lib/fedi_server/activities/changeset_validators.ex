@@ -37,24 +37,24 @@ defmodule FediServer.Activities.ChangesetValidators do
     data = get_field(changeset, :data, %{})
     to = Map.get(data, "to", []) |> List.wrap()
     cc = Map.get(data, "cc", []) |> List.wrap()
-    followers_id = "#{get_field(changeset, :actor)}/followers"
 
-    cond do
-      Enum.any?(to, fn iri -> Utils.public?(iri) end) ->
-        # :public
-        put_change(changeset, :public?, true)
+    {public?, listed?} =
+      cond do
+        Enum.any?(to, fn iri -> Utils.public?(iri) end) ->
+          # :public
+          {true, true}
 
-      Enum.any?(cc, fn iri -> Utils.public?(iri) end) ->
-        # :unlisted
-        put_change(changeset, :public?, true)
+        Enum.any?(cc, fn iri -> Utils.public?(iri) end) ->
+          # :unlisted
+          {true, false}
 
-      Enum.member?(to ++ cc, followers_id) ->
-        # :followers_only
-        put_change(changeset, :public?, false)
+        true ->
+          # :followers_only, :direct
+          {false, false}
+      end
 
-      true ->
-        # :direct
-        put_change(changeset, :public?, false)
-    end
+    changeset
+    |> put_change(:public?, public?)
+    |> put_change(:listed?, listed?)
   end
 end

@@ -13,7 +13,7 @@ defmodule FediServer.Activities.UserObject do
   @foreign_key_type Ecto.ULID
   schema "user_objects" do
     field(:collection_id, :string)
-    field(:type, Ecto.Enum, values: [:like, :share, :favourite, :bookmark, :custom])
+    field(:type, Ecto.Enum, values: [:like, :share, :reblog, :favourite, :bookmark, :custom])
     field(:actor, :string)
     field(:object, :string)
     field(:object_type, :string)

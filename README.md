@@ -66,15 +66,17 @@ Status URLS
 
 The application supports these singleton items:
 
-- `/@:nickname`
+- `/@:nickname` (HTML shows user profile and timeline. JSON shows user profile only.)
 - `/@:nickname/:object_id`
-- `/users/:nickname` (JSON only)
+- `/users/:nickname` (JSON only - user profile only)
 - `/users/:nickname/statuses/:object_id`
 
 The application supports these collections:
 
 - `/@:nickname/:object_id/likes`
 - `/@:nickname/:object_id/shares`
+- `/@:nickname/:object_id/reblogs`
+- `/@:nickname/:object_id/favourites`
 - `/@:nickname/featured`
 - `/@:nickname/followers`
 - `/@:nickname/following`
@@ -92,6 +94,8 @@ The application supports these collections:
 - `/users/:nickname/outbox`
 - `/users/:nickname/statuses/:object_id/likes`
 - `/users/:nickname/statuses/:object_id/shares`
+- `/users/:nickname/statuses/:object_id/reblogs`
+- `/users/:nickname/statuses/:object_id/favourites`
 - `/users/:nickname/with_replies` (posts and replies)
 - `/users/:nickname` (JSON gives user profile. HTML redirects to `/@:nickname` - posts)
 
