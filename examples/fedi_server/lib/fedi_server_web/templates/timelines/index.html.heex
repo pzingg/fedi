@@ -19,8 +19,13 @@
 <%= if @count == 0 do %>
 <p>No Activities</p>
 <% else %>
+<%= if @count == 1 do %>
+<!-- 1 activity -->
+<% else %>
+<!-- <%= @count %> activities -->
+<% end %>
 <%= for activity <- @timeline do %>
-  <StatusComponent.status activity={activity} />
+  <StatusComponent.status act={activity} />
 <% end %>
 <% end %>
 <%= if @previous do %>

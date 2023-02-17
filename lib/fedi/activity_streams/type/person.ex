@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Person do
 
   @namespace :activity_streams
   @type_name "Person"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Person",
     "Object"

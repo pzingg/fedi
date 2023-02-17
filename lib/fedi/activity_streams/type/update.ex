@@ -11,9 +11,7 @@ defmodule Fedi.ActivityStreams.Type.Update do
 
   @namespace :activity_streams
   @type_name "Update"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Update",
     "Activity",

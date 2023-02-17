@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Image do
 
   @namespace :activity_streams
   @type_name "Image"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Image",
     "Document",

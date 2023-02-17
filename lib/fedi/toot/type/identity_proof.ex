@@ -8,9 +8,7 @@ defmodule Fedi.Toot.Type.IdentityProof do
 
   @namespace :toot
   @type_name "IdentityProof"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "IdentityProof",
     "Object"

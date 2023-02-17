@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Listen do
 
   @namespace :activity_streams
   @type_name "Listen"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Listen",
     "Activity",

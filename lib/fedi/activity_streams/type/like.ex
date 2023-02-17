@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Like do
 
   @namespace :activity_streams
   @type_name "Like"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Like",
     "Activity",

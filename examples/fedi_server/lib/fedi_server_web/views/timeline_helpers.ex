@@ -21,16 +21,14 @@ defmodule FediServerWeb.TimelineHelpers do
   def transform(
         %{
           object: %{"id" => object_id} = object,
-          object_ulid: object_ulid,
-          object_published: object_published,
           actor: %{"id" => actor_id} = actor
         },
         booster_info
       ) do
-    attributed_to_id = object["attributedTo"]
+    attributed_to_id = Map.get(object, "attributedTo")
 
     actor =
-      if attributed_to_id != actor_id do
+      if !is_nil(attributed_to_id) and attributed_to_id != actor_id do
         case Activities.get_object_data(attributed_to_id) do
           {:ok, attributed_to} -> attributed_to
           _ -> actor
@@ -64,26 +62,26 @@ defmodule FediServerWeb.TimelineHelpers do
         _ -> ""
       end
 
-    days_past = Timex.diff(DateTime.utc_now(), object_published, :day)
+    published = get_published(object)
+    days_past = Timex.diff(DateTime.utc_now(), published, :day)
 
     published_relative =
       if days_past < 3 do
-        Timex.from_now(object_published)
+        Timex.from_now(published)
       else
-        Timex.format!(object_published, "{Mshort} {D}, {YYYY}")
+        Timex.format!(published, "{Mshort} {D}, {YYYY}")
       end
 
-    published_title = Timex.format!(object_published, "{Mshort} {D}, {YYYY}, {h24}:{m}")
+    published_title = Timex.format!(published, "{Mshort} {D}, {YYYY}, {h24}:{m}")
     aria_label = "#{content_text}, #{published_title}, #{actor_info.nickname}"
 
     assigns = %{
       boost_id: nil,
-      ulid: object_ulid,
       aria_label: aria_label,
       object_id: object_id,
       published_relative: published_relative,
       published_title: published_title,
-      published_utc: Timex.format!(object_published, "{ISO:Basic:Z}"),
+      published_utc: Timex.format!(published, "{ISO:Basic:Z}"),
       attributed_to_name: actor_info.name,
       attributed_to_account: actor_info.account,
       attributed_to_url: actor_info.url,
@@ -100,6 +98,35 @@ defmodule FediServerWeb.TimelineHelpers do
       })
     else
       assigns
+    end
+  end
+
+  def transform(timeline_item, _booster_info) do
+    cond do
+      is_nil(timeline_item.object) ->
+        Logger.debug("timeline_item not complete, object: #{inspect(timeline_item)}")
+
+      is_nil(timeline_item.actor) ->
+        Logger.debug("timeline_item not complete, actor: #{inspect(timeline_item)}")
+
+      is_nil(timeline_item.activity) ->
+        Logger.debug("timeline_item not complete, activity: #{inspect(timeline_item)}")
+
+      true ->
+        :ok
+    end
+
+    nil
+  end
+
+  def get_published(object) do
+    with dt_string when is_binary(dt_string) <- Map.get(object, "published"),
+         {:ok, dt} <- Timex.parse(dt_string, "{RFC3339z}") do
+      dt
+    else
+      _ ->
+        Logger.error("no valid 'published' in #{inspect(object)}")
+        DateTime.utc_now() |> DateTime.truncate(:second)
     end
   end
 

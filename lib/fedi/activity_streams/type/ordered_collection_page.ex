@@ -10,9 +10,7 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollectionPage do
 
   @namespace :activity_streams
   @type_name "OrderedCollectionPage"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "OrderedCollectionPage",
     "Collection",
@@ -20,9 +18,7 @@ defmodule Fedi.ActivityStreams.Type.OrderedCollectionPage do
     "Object",
     "OrderedCollection"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "current",
     "earlyItems",

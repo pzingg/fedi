@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.View do
 
   @namespace :activity_streams
   @type_name "View"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "View",
     "Activity",

@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Page do
 
   @namespace :activity_streams
   @type_name "Page"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Page",
     "Document",

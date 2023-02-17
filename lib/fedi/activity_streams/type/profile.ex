@@ -10,9 +10,7 @@ defmodule Fedi.ActivityStreams.Type.Profile do
 
   @namespace :activity_streams
   @type_name "Profile"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Profile",
     "Object"

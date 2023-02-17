@@ -11,9 +11,7 @@ defmodule Fedi.ActivityStreams.Type.Follow do
 
   @namespace :activity_streams
   @type_name "Follow"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Follow",
     "Activity",

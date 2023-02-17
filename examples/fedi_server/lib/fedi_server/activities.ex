@@ -134,70 +134,75 @@ defmodule FediServer.Activities do
     else
       actors = [actor_id | get_following_ids(actor_id)]
 
-      query =
-        Activity
-        |> where([a], a.actor in ^actors)
-        |> timeline_where_and_join()
-        # |> filter_collection(opts)
-        |> limit(^page_size)
-        |> timeline_select_and_order_by()
-
-      {:ok, Repo.all(query)}
+      Activity
+      |> where([a], a.actor in ^actors)
+      |> timeline_where_and_join(opts)
+      |> timeline_select()
+      |> limit(^page_size)
+      |> order_by([a], desc: a.id)
+      |> get_timeline_items(:home)
     end
   end
 
   def get_timeline(:local, opts) do
     page_size = Keyword.get(opts, :page_size, 30)
 
-    query =
-      Activity
-      |> where([a], a.local? == true)
-      |> timeline_where_and_join()
-      |> filter_collection(opts)
-      |> limit(^page_size)
-      |> timeline_select_and_order_by()
-
-    {:ok, Repo.all(query)}
+    Activity
+    |> where([a], a.local? == true)
+    |> timeline_where_and_join(opts)
+    |> timeline_select()
+    |> limit(^page_size)
+    |> order_by([a], desc: a.id)
+    |> get_timeline_items(:local)
   end
 
   def get_timeline(actor_id, opts) when is_binary(actor_id) do
     page_size = Keyword.get(opts, :page_size, 30)
 
-    query =
-      Activity
-      |> where([a], a.actor == ^actor_id)
-      |> timeline_where_and_join()
-      # |> filter_collection(opts)
-      |> limit(^page_size)
-      |> timeline_select_and_order_by()
-
-    {:ok, Repo.all(query)}
+    Activity
+    |> where([a], a.actor == ^actor_id)
+    |> timeline_where_and_join(opts)
+    |> timeline_select()
+    |> limit(^page_size)
+    |> order_by([a], desc: a.id)
+    |> get_timeline_items(actor_id)
   end
 
   def get_timeline(which, _opts) do
     {:error, "#{which} timeline is unimplemented"}
   end
 
-  def timeline_where_and_join(query) do
+  def timeline_where_and_join(query, opts) do
     query
-    |> where([a], a.type in ["Create", "Update", "Announce"])
     |> join(:left, [a], o in Object, as: :object, on: o.ap_id == a.object)
     |> join(:left, [a], u in User, as: :actor, on: u.ap_id == a.actor)
+    |> where(
+      [a, object: o],
+      a.type in ["Create", "Update", "Announce"] and o.type in ["Article", "Note"]
+    )
+    |> filter_collection(opts)
   end
 
-  def timeline_select_and_order_by(query) do
+  def timeline_select(query) do
     query
     |> select([a, object: o, actor: u], %{
       activity: a.data,
       activity_local?: a.local?,
       actor: u.data,
-      actor_local?: a.local?,
+      actor_local?: u.local?,
       object: o.data,
-      object_local?: o.local?,
-      object_ulid: o.id,
-      object_published: o.inserted_at
+      object_local?: o.local?
     })
-    |> order_by([a], desc: a.id)
+  end
+
+  def get_timeline_items(query, name) when is_binary(name) do
+    items = Repo.all(query)
+    Logger.error("got #{Enum.count(items)} for actor #{name}")
+    {:ok, items}
+  end
+
+  def get_timeline_items(query, _name) do
+    {:ok, Repo.all(query)}
   end
 
   def ordered_collection_summary(actor_iri, coll_name) do
@@ -260,12 +265,11 @@ defmodule FediServer.Activities do
       case collection_type(coll_name) do
         {:mailbox, outgoing} ->
           Activity
+          |> select([a], %{id: a.id, data: a.data})
           |> join(:inner, [a], c in Mailbox, as: :mailbox, on: c.activity_id == a.ap_id)
           |> join(:inner, [a, mailbox: c], o in Object, as: :object, on: o.ap_id == a.object)
-          |> select([a], %{id: a.id, data: a.data})
+          |> where([a, mailbox: c], c.outgoing == ^outgoing and c.actor == ^actor_id)
           |> filter_collection(opts)
-          |> where([a, mailbox: c], c.actor == ^actor_id)
-          |> where([a, mailbox: c], c.outgoing == ^outgoing)
           |> limit(^page_size)
           |> order_by([a], desc: a.id)
 
@@ -274,37 +278,33 @@ defmodule FediServer.Activities do
           object_id = actor_id
 
           User
-          |> join(:inner, [u], c in UserObject, as: :uobj, on: c.actor == u.ap_id)
           |> select([u], %{id: u.id, data: u.data})
+          |> join(:inner, [u], c in UserObject, as: :uobj, on: c.actor == u.ap_id)
+          |> where([uobj: c], c.type == ^type and c.object == ^object_id)
           # TODO should visibility be filtered by the visibility of `c.object`?
-          |> where([uobj: c], c.object == ^object_id)
-          |> where([uobj: c], c.type == ^type)
-          |> order_by([uobj: c], desc: c.activity)
           |> limit(^page_size)
+          |> order_by([uobj: c], desc: c.activity)
 
         :follow_request ->
           UserUser
           |> select([c], %{id: c.id, iri: c.relation})
-          |> where([c], c.type == :follow_request)
-          |> where([c], c.actor == ^actor_id)
-          |> order_by([c], desc: c.id)
+          |> where([c], c.type == :follow_request and c.actor == ^actor_id)
           |> limit(^page_size)
+          |> order_by([c], desc: c.id)
 
         :following ->
           UserUser
           |> select([c], %{id: c.id, iri: c.relation})
-          |> where([c], c.type == :follow)
-          |> where([c], c.actor == ^actor_id)
-          |> order_by([c], desc: c.id)
+          |> where([c], c.type == :follow and c.actor == ^actor_id)
           |> limit(^page_size)
+          |> order_by([c], desc: c.id)
 
         :followers ->
           UserUser
           |> select([c], %{id: c.id, iri: c.actor})
-          |> where([c], c.type == :follow)
-          |> where([c], c.relation == ^actor_id)
-          |> order_by([c], desc: c.id)
+          |> where([c], c.type == :follow and c.relation == ^actor_id)
           |> limit(^page_size)
+          |> order_by([c], desc: c.id)
 
         # Custom UserObjects
         {:custom_user_object, name} ->
@@ -312,13 +312,12 @@ defmodule FediServer.Activities do
 
           Object
           |> from(as: :object)
-          |> join(:inner, [object: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
-          |> where([uobj: c], c.type == :custom)
-          |> where([uobj: c], c.collection_id == ^coll_id)
           |> select([object: o], %{id: o.id, iri: o.ap_id})
+          |> join(:inner, [object: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
+          |> where([uobj: c], c.type == :custom and c.collection_id == ^coll_id)
           |> filter_collection(opts)
-          |> order_by([object: o], desc: o.id)
           |> limit(^page_size)
+          |> order_by([object: o], desc: o.id)
 
         _ ->
           nil
@@ -460,30 +459,21 @@ defmodule FediServer.Activities do
   end
 
   def filter_collection(query, :visible_to, nil) do
-    filter_collection_public(query)
-  end
-
-  def filter_collection(query, :visible_to, ap_id) when is_binary(ap_id) do
-    filter_collection_recipients(query, ap_id)
-  end
-
-  def filter_collection_public(query) do
     query |> where(as(:object).public? == true)
   end
 
-  def filter_collection_recipients(query, ap_id) do
-    if ap_id do
-      query
-      |> join(:left, [object: o], dr in assoc(o, :direct_recipients), as: :direct)
-      |> join(:left, [object: o], fr in assoc(o, :following_recipients), as: :follower)
-      |> join(:left, [object: o], fg in UserUser, on: fg.actor == ^ap_id, as: :following)
-      |> filter_collection_public()
-      |> or_where([direct: dr], dr.address == ^ap_id)
-      |> or_where([follower: fr], fr.address == ^ap_id)
-      |> or_where([follower: fr, following: fg], fg.type == :follow and fr.address == fg.relation)
-    else
-      query
-    end
+  def filter_collection(query, :visible_to, ap_id) when is_binary(ap_id) do
+    query
+    |> join(:left, [object: o], dr in assoc(o, :direct_recipients), as: :direct)
+    |> join(:left, [object: o], fr in assoc(o, :following_recipients), as: :follower)
+    |> join(:left, [follower: fr], fg in UserUser,
+      on: fg.type == :follow and fg.relation == fr.address,
+      as: :following
+    )
+    |> where(
+      [object: o, direct: dr, follower: fr, following: fg],
+      o.public? == true or dr.address == ^ap_id or fr.address == ^ap_id or fg.actor == ^ap_id
+    )
   end
 
   def debug_sql(query) do
@@ -1014,8 +1004,6 @@ defmodule FediServer.Activities do
   @impl true
   def create(as_type) do
     with {:ok, params} <- build_params(as_type) do
-      params = maybe_add_published(params)
-
       case repo_insert(params.schema, params) do
         {:error, reason} ->
           {:error, reason}
@@ -1025,13 +1013,6 @@ defmodule FediServer.Activities do
       end
     end
   end
-
-  def maybe_add_published(%{schema: :objects, data: json_data} = params) when is_map(json_data) do
-    json_data = Map.put(json_data, "published", DateTime.utc_now())
-    Map.put(params, :data, json_data)
-  end
-
-  def maybe_add_published(params), do: params
 
   @doc """
   Sets an existing entry to the database based on the value's id.
@@ -1044,8 +1025,6 @@ defmodule FediServer.Activities do
   @impl true
   def update(as_type) do
     with {:ok, params} <- build_params(as_type) do
-      params = maybe_add_updated(params)
-
       case repo_update(params.schema, params) do
         {:error, reason} ->
           {:error, reason}
@@ -1055,13 +1034,6 @@ defmodule FediServer.Activities do
       end
     end
   end
-
-  def maybe_add_updated(%{schema: :objects, data: json_data} = params) when is_map(json_data) do
-    json_data = Map.put(json_data, "updated", DateTime.utc_now())
-    Map.put(params, :data, json_data)
-  end
-
-  def maybe_add_updated(params), do: params
 
   def build_params(as_type) do
     with {:activity_actor, %URI{} = actor_iri} <-
@@ -1364,7 +1336,7 @@ defmodule FediServer.Activities do
       |> where([c], c.actor == ^actor_id)
       |> where([c], c.relation == ^relation_id)
 
-    now = DateTime.utc_now()
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
 
     case Repo.update_all(query, set: [type: :follow, updated_at: now]) do
       {0, _} ->
@@ -1655,13 +1627,13 @@ defmodule FediServer.Activities do
     end
   end
 
-  def ensure_user(%URI{} = ap_id, local?, app_agent \\ nil) do
+  def ensure_user(%URI{} = ap_id, app_agent \\ nil) do
     case repo_get_by_ap_id(:actors, ap_id) do
       %User{} = user ->
         {:ok, user}
 
       _ ->
-        if local? do
+        if local?(ap_id) do
           {:error, "Local user #{ap_id} not found"}
         else
           resolve_and_insert_user(ap_id, app_agent)
@@ -1956,7 +1928,8 @@ defmodule FediServer.Activities do
   def repo_update(:objects, params) do
     with %Object{} = object <- repo_get_by_ap_id(:objects, URI.parse(params.ap_id)) do
       try do
-        Object.changeset(object, params) |> Repo.update(returning: true)
+        Object.changeset(object, params, dt_property: "updated")
+        |> Repo.update(returning: true)
       rescue
         # Triggered if someone tried to update the actor for the object
         ex in Postgrex.Error ->

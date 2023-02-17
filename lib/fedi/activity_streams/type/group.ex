@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Group do
 
   @namespace :activity_streams
   @type_name "Group"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Group",
     "Object"

@@ -85,8 +85,6 @@ defmodule FediServerWeb.TimelinesController do
             _ -> "Home"
           end
 
-        Logger.error("rendering index.html")
-
         render(conn, "index.html",
           title: title,
           timeline: statuses,

@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Delete do
 
   @namespace :activity_streams
   @type_name "Delete"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Delete",
     "Activity",

@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Note do
 
   @namespace :activity_streams
   @type_name "Note"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Note",
     "Object"

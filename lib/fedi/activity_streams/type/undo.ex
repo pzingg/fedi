@@ -12,9 +12,7 @@ defmodule Fedi.ActivityStreams.Type.Undo do
 
   @namespace :activity_streams
   @type_name "Undo"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Undo",
     "Activity",

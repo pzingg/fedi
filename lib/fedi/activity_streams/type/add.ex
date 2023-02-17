@@ -11,9 +11,7 @@ defmodule Fedi.ActivityStreams.Type.Add do
 
   @namespace :activity_streams
   @type_name "Add"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Add",
     "Activity",

@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Dislike do
 
   @namespace :activity_streams
   @type_name "Dislike"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Dislike",
     "Activity",

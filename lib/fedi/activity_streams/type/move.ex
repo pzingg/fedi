@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Move do
 
   @namespace :activity_streams
   @type_name "Move"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Move",
     "Activity",

@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Video do
 
   @namespace :activity_streams
   @type_name "Video"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Video",
     "Document",

@@ -9,18 +9,14 @@ defmodule Fedi.ActivityStreams.Type.Invite do
 
   @namespace :activity_streams
   @type_name "Invite"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Invite",
     "Activity",
     "Object",
     "Offer"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "actor",
     "instrument",

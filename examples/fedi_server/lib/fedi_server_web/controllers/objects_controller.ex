@@ -3,12 +3,14 @@ defmodule FediServerWeb.ObjectsController do
 
   require Logger
 
+  alias Fedi.Streams.Utils
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
+  alias FediServer.Activities
 
-  action_fallback(FediServerWeb.FallbackController)
+  # action_fallback(FediServerWeb.FallbackController)
 
-  def object(%Plug.Conn{} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
+  def show(%Plug.Conn{} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
     opts =
       case conn.assigns[:current_user] do
         %User{ap_id: ap_id} ->
@@ -22,7 +24,7 @@ defmodule FediServerWeb.ObjectsController do
     |> render_object(conn)
   end
 
-  def object(%Plug.Conn{} = conn, _params) do
+  def show(%Plug.Conn{} = conn, _params) do
     APUtils.send_json_resp(conn, :not_found)
   end
 
@@ -30,12 +32,13 @@ defmodule FediServerWeb.ObjectsController do
   # If the deleted object is requested the server SHOULD respond with either
   # the HTTP 410 Gone status code if a Tombstone object is presented as the
   # response body, otherwise respond with a HTTP 404 Not Found.
-  defp render_object(%{data: data}, %Plug.Conn{} = conn) when is_map(data) do
+  defp render_object(%{actor: actor_id, data: data}, %Plug.Conn{} = conn) when is_map(data) do
     format = get_format(conn)
     status = check_for_tombstone(data)
 
     if format in ["html"] do
-      render_object_html(data, conn, status)
+      actor_iri = Utils.to_uri(actor_id)
+      render_object_html(actor_iri, data, conn, status)
     else
       render_object_json(data, conn, status)
     end
@@ -52,21 +55,29 @@ defmodule FediServerWeb.ObjectsController do
     end
   end
 
-  defp render_object_html(data, conn, status) do
+  defp render_object_html(actor_iri, object_data, conn, status) do
     if status == :gone do
       conn |> put_status(:gone) |> halt()
     else
-      content = data["content"]
+      case Activities.ensure_user(actor_iri) do
+        {:ok, %User{data: actor_data}} ->
+          activity =
+            FediServerWeb.TimelineHelpers.transform(
+              %{
+                object: object_data,
+                actor: actor_data
+              },
+              nil
+            )
 
-      case Fedi.Content.parse_markdown(content,
-             html: true,
-             webfinger_module: FediServerWeb.WebFinger
-           ) do
-        {:ok, html, _} ->
-          render(conn, "show.html", html_content: html)
+          if activity do
+            render(conn, "show.html", activity: activity)
+          else
+            conn |> put_status(:internal_server_error) |> halt()
+          end
 
-        error ->
-          Logger.error("parse_markdown ERROR #{inspect(error)}")
+        {:error, reason} ->
+          Logger.error("Could not get user #{actor_iri}")
           conn |> put_status(:internal_server_error) |> halt()
       end
     end

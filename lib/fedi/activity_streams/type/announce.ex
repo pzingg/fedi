@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Announce do
 
   @namespace :activity_streams
   @type_name "Announce"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Announce",
     "Activity",

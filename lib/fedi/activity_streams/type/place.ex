@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Place do
 
   @namespace :activity_streams
   @type_name "Place"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Place",
     "Object"

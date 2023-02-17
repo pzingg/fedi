@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Service do
 
   @namespace :activity_streams
   @type_name "Service"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Service",
     "Object"

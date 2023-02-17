@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Join do
 
   @namespace :activity_streams
   @type_name "Join"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Join",
     "Activity",

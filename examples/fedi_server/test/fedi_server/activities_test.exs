@@ -20,7 +20,7 @@ defmodule FediServer.ActivitiesTest do
   end
 
   describe "Conversations" do
-    test "adds Notes in reply to other notes" do
+    test "adds notes in reply to other notes" do
       {_users, _activities, [in_reply_to | _]} = outbox_fixtures()
 
       fixture_ap_ids =

@@ -10,18 +10,14 @@ defmodule Fedi.ActivityStreams.Type.Travel do
 
   @namespace :activity_streams
   @type_name "Travel"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Travel",
     "Activity",
     "IntransitiveActivity",
     "Object"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "actor",
     "instrument",

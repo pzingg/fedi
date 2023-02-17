@@ -12,18 +12,14 @@ defmodule Fedi.ActivityStreams.Type.Question do
 
   @namespace :activity_streams
   @type_name "Question"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Question",
     "Activity",
     "IntransitiveActivity",
     "Object"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "actor",
     "anyOf",

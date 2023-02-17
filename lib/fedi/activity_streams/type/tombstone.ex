@@ -10,9 +10,7 @@ defmodule Fedi.ActivityStreams.Type.Tombstone do
 
   @namespace :activity_streams
   @type_name "Tombstone"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Tombstone",
     "Object"

@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Hashtag do
 
   @namespace :activity_streams
   @type_name "Hashtag"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Hashtag",
     "Link"

@@ -9,9 +9,7 @@ defmodule Fedi.ActivityStreams.Type.Leave do
 
   @namespace :activity_streams
   @type_name "Leave"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Leave",
     "Activity",

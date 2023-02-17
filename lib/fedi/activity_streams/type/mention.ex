@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Mention do
 
   @namespace :activity_streams
   @type_name "Mention"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Mention",
     "Link"

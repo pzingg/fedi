@@ -38,7 +38,7 @@ defmodule FediServer.Activities.Object do
     timestamps()
   end
 
-  def changeset(%__MODULE__{} = object, attrs \\ %{}) do
+  def changeset(%__MODULE__{} = object, attrs \\ %{}, opts \\ []) do
     object
     |> cast(attrs, [
       :ap_id,
@@ -48,11 +48,48 @@ defmodule FediServer.Activities.Object do
       :actor,
       :local?,
       :public?,
-      :data
+      :data,
+      :inserted_at,
+      :updated_at
     ])
     |> cast_assoc(:direct_recipients)
     |> cast_assoc(:following_recipients)
     |> validate_required([:ap_id, :type, :actor, :local?, :public?, :data])
     |> unique_constraint(:ap_id)
+    |> set_published_or_updated(opts)
+  end
+
+  def set_published_or_updated(changeset, opts) do
+    data = get_field(changeset, :data)
+    dt_property = Keyword.get(opts, :dt_property, "published")
+
+    if !is_map(data) do
+      changeset
+    else
+      # TODO handle "Tombstone" type
+      if Enum.member?(["published", "updated", "deleted"], dt_property) do
+        if Map.has_key?(data, dt_property) do
+          changeset
+        else
+          now = DateTime.utc_now() |> DateTime.truncate(:second)
+          data = Map.put(data, dt_property, Timex.format!(now, "{RFC3339z}"))
+
+          case dt_property do
+            "published" ->
+              changeset
+              |> put_change(:data, data)
+              |> put_change(:inserted_at, now)
+              |> put_change(:updated_at, now)
+
+            _ ->
+              changeset
+              |> put_change(:data, data)
+              |> put_change(:updated_at, now)
+          end
+        end
+      else
+        changeset
+      end
+    end
   end
 end

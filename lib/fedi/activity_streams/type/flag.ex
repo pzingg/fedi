@@ -10,9 +10,7 @@ defmodule Fedi.ActivityStreams.Type.Flag do
 
   @namespace :activity_streams
   @type_name "Flag"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Flag",
     "Activity",

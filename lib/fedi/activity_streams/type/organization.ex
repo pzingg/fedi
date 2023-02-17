@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Organization do
 
   @namespace :activity_streams
   @type_name "Organization"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Organization",
     "Object"

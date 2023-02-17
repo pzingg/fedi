@@ -622,7 +622,7 @@ defmodule Fedi.ActivityPub.Utils do
     updated = Map.get(former_properties, "updated")
 
     # Set deleted time to now.
-    now = now || DateTime.utc_now()
+    now = now || DateTime.utc_now() |> DateTime.truncate(:second)
     deleted = %P.Deleted{alias: alias_, xsd_date_time_member: now}
 
     properties =

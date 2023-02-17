@@ -10,18 +10,14 @@ defmodule Fedi.ActivityStreams.Type.Arrive do
 
   @namespace :activity_streams
   @type_name "Arrive"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Arrive",
     "Activity",
     "IntransitiveActivity",
     "Object"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "actor",
     "instrument",

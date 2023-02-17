@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Audio do
 
   @namespace :activity_streams
   @type_name "Audio"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Audio",
     "Document",

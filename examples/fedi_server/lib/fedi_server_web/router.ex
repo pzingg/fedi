@@ -15,7 +15,7 @@ defmodule FediServerWeb.Router do
   end
 
   pipeline :api do
-    plug(:accepts, ["json"])
+    plug(:put_format, "json")
     plug(:fetch_session)
     plug(:fetch_current_user)
     plug(:set_actor)
@@ -39,11 +39,11 @@ defmodule FediServerWeb.Router do
   end
 
   pipeline :accepts_html do
-    plug(:accepts, ["html"])
+    plug(:put_format, "html")
   end
 
   pipeline :accepts_any do
-    plug(:accepts, ["json", "html"])
+    plug(:accepts, ["html", "json"])
   end
 
   scope "/.well-known", FediServerWeb do
@@ -90,19 +90,28 @@ defmodule FediServerWeb.Router do
   end
 
   scope "/", FediServerWeb do
-    pipe_through([:accepts_any, :browser])
+    pipe_through([:accepts_html, :browser])
 
     get("/users/register", UserRegistrationController, :new)
     post("/users/register", UserRegistrationController, :create)
     get("/users/log_in", UserSessionController, :new)
     post("/users/log_in", UserSessionController, :create)
     delete("/users/log_out", UserSessionController, :delete)
+  end
 
+  scope "/", FediServerWeb do
+    pipe_through([:accepts_any, :browser])
     get("/users/:nickname", UsersController, :show)
-    get("/users/:nickname/objects/:ulid", ObjectsController, :object)
+    get("/users/:nickname/objects/:ulid", ObjectsController, :show)
+    # get("/users/:nickname/objects/:ulid/reblogs", ObjectsController, :reblogs)
+    # get("/users/:nickname/objects/:ulid/favourites", ObjectsController, :favourites)
 
     get("/@:nickname", UsersController, :show)
-    # get("/hashtags/:tag", HashtagsController, :show)
+    get("/@:nickname/:ulid", ObjectsController, :show)
+    # get("/@:nickname/:ulid/reblogs", ObjectsController, :reblogs)
+    # get("/@:nickname/:ulid/favourites", ObjectsController, :favourites)
+
+    # get("/tags/:tag", HashtagsController, :show)
 
     get("/", TimelinesController, :root)
   end

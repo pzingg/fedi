@@ -8,18 +8,14 @@ defmodule Fedi.ActivityStreams.Type.TentativeAccept do
 
   @namespace :activity_streams
   @type_name "TentativeAccept"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "TentativeAccept",
     "Accept",
     "Activity",
     "Object"
   ]
-  @disjoint_with [
-    
-  ]
+  @disjoint_with []
   @known_properties [
     "actor",
     "instrument",

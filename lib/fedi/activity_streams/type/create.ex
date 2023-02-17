@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Create do
 
   @namespace :activity_streams
   @type_name "Create"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Create",
     "Activity",

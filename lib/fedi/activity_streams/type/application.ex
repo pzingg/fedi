@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Application do
 
   @namespace :activity_streams
   @type_name "Application"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Application",
     "Object"

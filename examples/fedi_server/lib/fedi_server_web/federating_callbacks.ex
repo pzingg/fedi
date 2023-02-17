@@ -205,7 +205,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   @impl true
   def blocked(%{box_iri: inbox_iri} = _context, actor_iris) when is_list(actor_iris) do
     with {:ok, actor_iri} <- Activities.actor_for_inbox(inbox_iri),
-         {:ok, user} <- Activities.ensure_user(actor_iri, true) do
+         {:ok, user} <- Activities.ensure_user(actor_iri) do
       {:ok, Activities.any_blocked?(user, actor_iris)}
     end
   end
@@ -240,7 +240,7 @@ defmodule FediServerWeb.FederatingCallbacks do
   @impl true
   def on_follow(%{box_iri: inbox_iri} = _context) do
     with {:ok, actor_iri} <- Activities.actor_for_inbox(inbox_iri),
-         {:ok, %User{on_follow: on_follow}} <- Activities.ensure_user(actor_iri, true) do
+         {:ok, %User{on_follow: on_follow}} <- Activities.ensure_user(actor_iri) do
       {:ok, on_follow}
     end
   end
@@ -323,7 +323,7 @@ defmodule FediServerWeb.FederatingCallbacks do
          {:relation, %URI{} = following_id} <-
            {:relation, APUtils.to_id(object)},
          {:ok, %User{}} <-
-           Activities.ensure_user(actor_iri, true) do
+           Activities.ensure_user(actor_iri) do
       Activities.unfollow(actor_iri, following_id)
     else
       {:error, reason} ->

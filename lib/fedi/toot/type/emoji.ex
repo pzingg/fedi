@@ -8,9 +8,7 @@ defmodule Fedi.Toot.Type.Emoji do
 
   @namespace :toot
   @type_name "Emoji"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Emoji",
     "Object"

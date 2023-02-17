@@ -237,9 +237,9 @@ defmodule FediServerWeb.SocialCallbacks do
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
          {:actor_id, %URI{} = actor_iri} <- {:actor_id, APUtils.to_id(actor)},
          {:relation, %URI{} = following_id} <- {:relation, APUtils.to_id(object)},
-         {:ok, %User{}} <- Activities.ensure_user(actor_iri, true),
+         {:ok, %User{}} <- Activities.ensure_user(actor_iri),
          # Insert remote following user if not in db
-         {:ok, %User{}} <- Activities.ensure_user(following_id, false),
+         {:ok, %User{}} <- Activities.ensure_user(following_id),
          {:ok, _relationship} <- Activities.follow(actor_iri, following_id, :pending) do
       {:ok, activity, true}
     else
@@ -271,7 +271,7 @@ defmodule FediServerWeb.SocialCallbacks do
          {:activity_object, object} <- {:activity_object, Utils.get_object(activity)},
          {:actor_id, %URI{} = actor_iri} <- {:actor_id, APUtils.to_id(actor)},
          {:blocked_id, %URI{} = blocked_id} <- {:blocked_id, APUtils.to_id(object)},
-         {:ok, %User{} = user} <- Activities.ensure_user(actor_iri, true),
+         {:ok, %User{} = user} <- Activities.ensure_user(actor_iri),
          {:ok, _blocked_account} <- Activities.block(user, blocked_id) do
       Logger.error("Blocked #{blocked_id}")
       {:ok, activity, false}
@@ -380,7 +380,7 @@ defmodule FediServerWeb.SocialCallbacks do
          {:relation, %URI{} = following_id} <-
            {:relation, APUtils.to_id(object)},
          {:ok, %User{}} <-
-           Activities.ensure_user(actor_iri, true) do
+           Activities.ensure_user(actor_iri) do
       Activities.unfollow(actor_iri, following_id)
     else
       {:error, reason} ->
@@ -400,7 +400,7 @@ defmodule FediServerWeb.SocialCallbacks do
          {:blocked_id, %URI{} = blocked_id} <-
            {:blocked_id, APUtils.to_id(object)},
          {:ok, %User{} = user} <-
-           Activities.ensure_user(actor_iri, true) do
+           Activities.ensure_user(actor_iri) do
       Activities.unblock(user, blocked_id)
     else
       {:error, reason} ->

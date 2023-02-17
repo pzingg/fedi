@@ -8,9 +8,7 @@ defmodule Fedi.ActivityStreams.Type.Event do
 
   @namespace :activity_streams
   @type_name "Event"
-  @extended_by [
-    
-  ]
+  @extended_by []
   @is_or_extends [
     "Event",
     "Object"

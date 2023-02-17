@@ -204,6 +204,7 @@ defmodule FediServer.FixturesHelper do
         ap_id: create1_ap_id,
         type: "Create",
         actor: actor_alyssa,
+        object: note1_ap_id,
         local?: true,
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
@@ -238,7 +239,7 @@ defmodule FediServer.FixturesHelper do
     {:ok, _note2} =
       %Object{
         id: note2_id,
-        ap_id: "https://example.com/users/alyssa/objects/#{note2_id}",
+        ap_id: note2_ap_id,
         type: note2_data["type"],
         actor: actor_alyssa,
         local?: true,
@@ -257,6 +258,7 @@ defmodule FediServer.FixturesHelper do
         ap_id: create2_ap_id,
         type: "Create",
         actor: actor_alyssa,
+        object: note2_ap_id,
         local?: true,
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
@@ -307,6 +309,7 @@ defmodule FediServer.FixturesHelper do
         ap_id: create3_ap_id,
         type: "Create",
         actor: actor_daria,
+        object: note3_ap_id,
         local?: true,
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
@@ -322,7 +325,7 @@ defmodule FediServer.FixturesHelper do
 
     tombstone_data = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
-      "id" => "https://example.com/users/alyssa/objects/#{note2_id}",
+      "id" => note2_ap_id,
       "formerType" => "Note",
       "deleted" => "Sat, 14 Jan 2023 15:35:13 GMT",
       "type" => "Tombstone"
@@ -354,6 +357,7 @@ defmodule FediServer.FixturesHelper do
         ap_id: delete2_ap_id,
         type: "Delete",
         actor: actor_alyssa,
+        object: note2_ap_id,
         local?: true,
         data: %{
           "@context" => "https://www.w3.org/ns/activitystreams",
