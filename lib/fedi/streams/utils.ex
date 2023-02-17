@@ -46,6 +46,41 @@ defmodule Fedi.Streams.Utils do
   @link_types ["Link", "Mention"]
   @collection_types ["Collection", "CollectionPage", "OrderedColletion", "OrderedCollectionPage"]
 
+  @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
+  @public_json_ld "Public"
+  @public_json_ld_as "as:Public"
+  @public_addresses [@public_activity_streams, @public_json_ld, @public_json_ld_as]
+
+  @doc """
+  Returns the string that indicates an Activity is meant
+  to be visible for general public consumption.
+  """
+  def public_activity_streams(), do: @public_activity_streams
+
+  @doc """
+  Determines if an IRI string is the Public collection as defined in
+  the spec, including JSON-LD compliant collections.
+
+  Ref: [AP Section 5.6](https://www.w3.org/TR/activitypub/#public-addressing)
+  """
+  def public?(%URI{} = iri) do
+    public?(URI.to_string(iri))
+  end
+
+  def public?(recipients) when is_map(recipients) do
+    Map.keys(recipients) |> public?()
+  end
+
+  def public?([_ | _] = recipients) do
+    Enum.any?(recipients, &public?(&1))
+  end
+
+  def public?(addr) when is_binary(addr) do
+    Enum.member?(@public_addresses, addr)
+  end
+
+  def public?(_), do: false
+
   ### Errors
 
   @doc """

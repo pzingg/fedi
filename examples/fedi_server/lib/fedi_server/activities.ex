@@ -791,6 +791,15 @@ defmodule FediServer.Activities do
   end
 
   @doc """
+  Returns true if the IRI could reference something on
+  this instance.
+  """
+  @impl true
+  def ours?(%URI{} = iri) do
+    {:ok, local?(iri)}
+  end
+
+  @doc """
   Returns true if the database has an entry for the IRI and it
   exists in the database.
 
@@ -1075,7 +1084,7 @@ defmodule FediServer.Activities do
         r -> r
       end)
 
-    {public, rest} = Enum.split_with(recipients, &APUtils.public?(&1))
+    {public, rest} = Enum.split_with(recipients, &Utils.public?(&1))
     {following, direct} = Enum.split_with(rest, &String.ends_with?(&1, "/followers"))
 
     following =
@@ -1093,14 +1102,6 @@ defmodule FediServer.Activities do
       direct_recipients: direct,
       following_recipients: following
     }
-  end
-
-  def fix_recipient(addr, actor_followers) do
-    cond do
-      APUtils.public?(addr) -> APUtils.public_activity_streams()
-      addr == actor_followers -> [actor_followers, "/:actor:/followers"]
-      true -> addr
-    end
   end
 
   def unique_constraint_error(changeset) do
@@ -1481,15 +1482,15 @@ defmodule FediServer.Activities do
   @doc """
   Returns true if the IRI is for this server.
   """
-  def local?(%URI{path: path} = iri, suffix) do
-    local?(iri) && String.ends_with?(path, suffix)
-  end
-
-  def local?(%URI{} = iri) do
+  def local?(%URI{path: path} = iri) do
     endpoint_url = Fedi.Application.endpoint_url()
     test_url = Utils.base_uri(iri, "/") |> URI.to_string()
 
     endpoint_url == test_url
+  end
+
+  def local?(%URI{path: path} = iri, suffix) do
+    local?(iri) && String.ends_with?(path, suffix)
   end
 
   @doc """
@@ -1713,7 +1714,10 @@ defmodule FediServer.Activities do
   end
 
   def repo_ap_id_exists?(:collections, %URI{} = ap_id) do
-    local?(ap_id)
+    coll_id = URI.to_string(ap_id)
+
+    query = UserObject |> where([c], c.collection_id == ^coll_id)
+    Repo.exists?(query)
   end
 
   def repo_ap_id_exists?(other, _) do
@@ -1749,7 +1753,10 @@ defmodule FediServer.Activities do
     {:error, "Invalid schema for get #{other}"}
   end
 
-  def maybe_filter_object(%{public?: true} = object, _opts), do: object
+  def maybe_filter_object(%{public?: true} = object, _opts) do
+    Logger.debug("visible: public")
+    object
+  end
 
   def maybe_filter_object(%{public?: _} = object, opts) do
     case Keyword.get(opts, :visible_to) do
@@ -1759,6 +1766,7 @@ defmodule FediServer.Activities do
         |> filter_visibility(ap_id)
 
       _ ->
+        Logger.debug("invisible to public (no viewer)")
         nil
     end
   end
@@ -1775,7 +1783,7 @@ defmodule FediServer.Activities do
     following_recipients = Enum.map(following_recipients, &Map.get(&1, :address))
 
     if Enum.member?(direct_recipients ++ following_recipients, viewer) do
-      # Logger.error("visible: direct")
+      Logger.debug("visible to #{viewer}: direct")
       object
     else
       query =
@@ -1785,10 +1793,10 @@ defmodule FediServer.Activities do
         |> where([c], c.relation in ^following_recipients)
 
       if Repo.exists?(query) do
-        # Logger.error("visible: follower")
+        Logger.debug("visible to #{viewer}: follower")
         object
       else
-        # Logger.error("invisible")
+        Logger.debug("invisible to #{viewer}")
         nil
       end
     end
@@ -1833,7 +1841,7 @@ defmodule FediServer.Activities do
 
   def repo_insert(:actors, params) do
     ulid = Ecto.ULID.generate()
-    Logger.debug("Inserting user: #{params.ap_id}")
+    Logger.debug("Inserting user #{ulid}: #{inspect(params)}")
 
     User.changeset(%User{id: ulid}, params)
     |> Repo.insert(returning: true)
@@ -1841,19 +1849,17 @@ defmodule FediServer.Activities do
   end
 
   def repo_insert(:activities, params) do
-    ulid = params.ulid || Ecto.ULID.generate()
-    Logger.debug("Inserting activity: #{params.ap_id}")
+    Logger.debug("Inserting activity: #{inspect(params)}")
 
-    Activity.changeset(%Activity{id: ulid}, params)
+    Activity.changeset(%Activity{}, params)
     |> Repo.insert(returning: true)
     |> handle_insert_result("activity")
   end
 
   def repo_insert(:objects, params) do
-    ulid = params.ulid || Ecto.ULID.generate()
-    Logger.debug("Inserting object: #{params.ap_id}")
+    Logger.debug("Inserting object: #{inspect(params)}")
 
-    Object.changeset(%Object{id: ulid}, params)
+    Object.changeset(%Object{}, params)
     |> Repo.insert(returning: true)
     |> handle_insert_result("object")
   end

@@ -96,8 +96,9 @@ defmodule FediServerWeb.InboxControllerTest do
     assert response(conn, 200)
 
     # Get the payload that was delivered to daria
-    [{"https://example.com/users/daria/inbox", %{json: payload}}] =
-      Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+    deliveries = Agent.get(__MODULE__, fn acc -> Enum.reverse(acc) end)
+    assert Enum.count(deliveries) == 1
+    assert {"https://example.com/users/daria/inbox", %{json: payload}} = List.first(deliveries)
 
     assert is_map(payload)
     assert payload["type"] == "Create"

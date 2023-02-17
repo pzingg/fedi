@@ -151,7 +151,8 @@ defmodule Fedi.ActivityPub.ActorFacade do
   @spec add_new_ids(context :: context(), activity :: struct(), opts :: Keyword.t()) ::
           {:ok, activity :: struct()} | {:error, term()}
   def add_new_ids(context, activity, opts \\ []) do
-    delegate(context, :c2s, :add_new_ids, [context, activity], opts)
+    {drop_existing_ids?, opts} = Keyword.pop(opts, :drop_existing_ids?, false)
+    delegate(context, :c2s, :add_new_ids, [context, activity, drop_existing_ids?], opts)
   end
 
   @spec wrap_in_create(
@@ -312,6 +313,12 @@ defmodule Fedi.ActivityPub.ActorFacade do
           {:ok, ordered_collection_page :: struct()} | {:error, term()}
   def db_update_collection(context, coll_id, updates) do
     database_apply(context, :update_collection, [coll_id, updates])
+  end
+
+  @spec db_ours?(context :: context, id :: URI.t()) ::
+          {:ok, boolean()} | {:error, term()}
+  def db_ours?(context, id) do
+    database_apply(context, :ours?, [id])
   end
 
   @spec db_owns?(context :: context, id :: URI.t()) ::

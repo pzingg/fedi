@@ -9,6 +9,8 @@ defmodule FediServer.Activities.Object do
 
   import Ecto.Changeset
 
+  alias FediServer.Activities.ChangesetValidators
+
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: false}
   @foreign_key_type :string
@@ -41,6 +43,7 @@ defmodule FediServer.Activities.Object do
   def changeset(%__MODULE__{} = object, attrs \\ %{}, opts \\ []) do
     object
     |> cast(attrs, [
+      :id,
       :ap_id,
       :in_reply_to_id,
       :reblog_of_id,
@@ -54,12 +57,14 @@ defmodule FediServer.Activities.Object do
     ])
     |> cast_assoc(:direct_recipients)
     |> cast_assoc(:following_recipients)
-    |> validate_required([:ap_id, :type, :actor, :local?, :public?, :data])
+    |> validate_required([:ap_id, :type, :actor, :local?, :data])
     |> unique_constraint(:ap_id)
-    |> set_published_or_updated(opts)
+    |> ChangesetValidators.validate_id()
+    |> ChangesetValidators.maybe_set_public()
+    |> maybe_set_published(opts)
   end
 
-  def set_published_or_updated(changeset, opts) do
+  def maybe_set_published(changeset, opts) do
     data = get_field(changeset, :data)
     dt_property = Keyword.get(opts, :dt_property, "published")
 

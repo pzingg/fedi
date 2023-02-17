@@ -8,7 +8,14 @@ defmodule FediServerWeb.FallbackController do
     |> render(:"404")
   end
 
-  def call(conn, {:error, :internal_server_error}) do
+  def call(conn, {:error, :gone}) do
+    conn
+    |> put_status(:gone)
+    |> put_view(FediServerWeb.ErrorView)
+    |> render(:"410")
+  end
+
+  def call(conn, {:error, _}) do
     conn
     |> put_status(:internal_server_error)
     |> put_view(FediServerWeb.ErrorView)

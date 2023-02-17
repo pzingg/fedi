@@ -5,6 +5,11 @@
   <%= label f, :content %>
   <%= textarea f, :content, rows: 10 %>
   <%= error_tag f, :content %>
+
+  <%= label f, :visibility %>
+  <%= select f, :visibility, options: [{"Public", "public"}, {"Unlisted", "unlisted"}, {"Followers only", "followers_only"}, {"Private", "private"}] %>
+  <%= error_tag f, :visibility %>
+
   <div>
     <%= submit "Post" %>
   </div>

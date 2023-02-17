@@ -6,6 +6,8 @@ defmodule FediServerWeb.UsersController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Activities
 
+  action_fallback(FediServerWeb.FallbackController)
+
   def index(conn, _params) do
     users = FediServer.Activities.get_local_users()
     count = Enum.count(users)
@@ -49,16 +51,19 @@ defmodule FediServerWeb.UsersController do
 
       {:error, reason} ->
         Logger.error("timeline error #{reason}")
-        conn |> put_status(500) |> halt()
+        # FallbackController will handle it
+        {:error, :internal_server_error}
     end
   end
 
-  def render_profile_and_timeline_html(conn, nil, _) do
-    conn |> put_status(404) |> halt()
+  def render_profile_and_timeline_html(_conn, nil, _) do
+    # FallbackController will handle it
+    {:error, :not_found}
   end
 
-  def render_profile_and_timeline_html(conn, _, _) do
-    conn |> put_status(500) |> halt()
+  def render_profile_and_timeline_html(_conn, _, _) do
+    # FallbackController will handle it
+    {:error, :internal_server_error}
   end
 
   def render_profile_json(conn, %{data: data}) when is_map(data) do

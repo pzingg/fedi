@@ -12,11 +12,6 @@ defmodule Fedi.ActivityPub.Utils do
   @content_type_header "content-type"
   @accept_header "accept"
   @content_type_value "application/ld+json; profile=\"https:www.w3.org/ns/activitystreams\""
-  @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
-  @public_activity_streams_iri Utils.to_uri(@public_activity_streams)
-  @public_json_ld "Public"
-  @public_json_ld_as "as:Public"
-  @public_addresses [@public_activity_streams, @public_json_ld, @public_json_ld_as]
   @users_or_collections_regex ~r/^\/users\/([^\/]+)($|\/(.+))/
   @reserved_collection_names ["inbox", "outbox", "following", "followers", "likes", "shares"]
 
@@ -104,38 +99,6 @@ defmodule Fedi.ActivityPub.Utils do
         {:error, "Invalid json body"}
     end
   end
-
-  @doc """
-  Returns the IRI that indicates an Activity is meant
-  to be visible for general public consumption.
-  """
-  def public_activity_streams, do: @public_activity_streams
-
-  def public_addresses, do: @public_addresses
-
-  @doc """
-  Determines if an IRI string is the Public collection as defined in
-  the spec, including JSON-LD compliant collections.
-
-  Ref: [AP Section 5.6](https://www.w3.org/TR/activitypub/#public-addressing)
-  """
-  def public?(%URI{} = iri) do
-    public?(URI.to_string(iri))
-  end
-
-  def public?(recipients) when is_map(recipients) do
-    Map.keys(recipients) |> public?()
-  end
-
-  def public?([_ | _] = recipients) do
-    Enum.any?(recipients, &public?(&1))
-  end
-
-  def public?(addr) when is_binary(addr) do
-    Enum.member?(@public_addresses, addr)
-  end
-
-  def public?(_), do: false
 
   @doc """
   Returns a property's id, or raises an error if it is not found.
@@ -615,25 +578,29 @@ defmodule Fedi.ActivityPub.Utils do
       ]
     }
 
-    # Copy over the published property if it existed
-    published = Map.get(former_properties, "published")
-
-    # Copy over the updated property if it existed
-    updated = Map.get(former_properties, "updated")
-
     # Set deleted time to now.
     now = now || DateTime.utc_now() |> DateTime.truncate(:second)
     deleted = %P.Deleted{alias: alias_, xsd_date_time_member: now}
 
+    properties = [
+      {"id", id_prop},
+      {"formerType", former_type},
+      {"deleted", deleted}
+    ]
+
+    # QUESTION: Is this the best behavior, or should the audience properties
+    # come from the parent "Delete" activity?
+
+    # Copy over the original updated, published, to, cc, audience properties
+    properties_to_copy = ["published", "updated", "to", "cc", "audience"]
+
     properties =
-      [
-        {"id", id_prop},
-        {"formerType", former_type},
-        {"published", published},
-        {"updated", updated},
-        {"deleted", deleted}
-      ]
-      |> Enum.filter(fn {_k, v} -> !is_nil(v) end)
+      Enum.reduce(properties_to_copy, properties, fn prop_name, acc ->
+        case Map.get(former_properties, prop_name) do
+          nil -> acc
+          value -> [{prop_name, value} | acc]
+        end
+      end)
       |> Map.new()
 
     %T.Tombstone{alias: alias_, properties: properties}
@@ -892,7 +859,7 @@ defmodule Fedi.ActivityPub.Utils do
 
         with :ok <- valid_collection?(context, coll_id),
              {:owns?, {:ok, true}} <-
-               {:owns?, ActorFacade.db_owns?(context, coll_id)},
+               {:owns?, ActorFacade.db_ours?(context, coll_id)},
              {:ok, object_ids} <-
                get_ids(object_prop),
              {:ok, _oc} <-
@@ -1188,22 +1155,26 @@ defmodule Fedi.ActivityPub.Utils do
     end
   end
 
-  def get_visibility(activity, %URI{path: actor_path} = actor_iri) do
+  def get_visibility(activity, %URI{} = actor_iri) when is_struct(activity) do
     case get_recipients(activity, direct: true, as_map: true) do
       {:ok, recipients} ->
-        to = Map.get(recipients, "to", []) |> List.wrap()
-        cc = Map.get(recipients, "cc", []) |> List.wrap()
-        followers_id = Utils.base_uri(actor_iri, actor_path <> "/followers")
-
-        cond do
-          Enum.any?(to, fn iri -> public?(iri) end) -> :public
-          Enum.any?(cc, fn iri -> public?(iri) end) -> :unlisted
-          Enum.member?(to ++ cc, followers_id) -> :followers_only
-          true -> :direct
-        end
+        get_visibility(recipients, actor_iri)
 
       _ ->
         :direct
+    end
+  end
+
+  def get_visibility(recipients, %URI{path: actor_path} = actor_iri) when is_map(recipients) do
+    to = Map.get(recipients, "to", []) |> List.wrap()
+    cc = Map.get(recipients, "cc", []) |> List.wrap()
+    followers_id = Utils.base_uri(actor_iri, actor_path <> "/followers")
+
+    cond do
+      Enum.any?(to, fn %URI{} = iri -> Utils.public?(iri) end) -> :public
+      Enum.any?(cc, fn %URI{} = iri -> Utils.public?(iri) end) -> :unlisted
+      Enum.member?(to ++ cc, followers_id) -> :followers_only
+      true -> :direct
     end
   end
 

@@ -308,9 +308,9 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   or Collections owned by the actor.
   """
   def owned_recipients(context, activity) do
-    with {:ok, recipients} <- APUtils.get_recipients(activity, which: :direct_only) do
+    with {:ok, recipients} <- APUtils.get_recipients(activity, which: :all) do
       Enum.reduce_while(recipients, [], fn iri, acc ->
-        case ActorFacade.db_owns?(context, iri) do
+        case ActorFacade.db_ours?(context, iri) do
           {:error, reason} -> {:halt, {:error, reason}}
           {:ok, true} -> {:cont, [iri | acc]}
           _ -> {:cont, acc}
@@ -444,14 +444,14 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   Create activity.
   """
   @impl true
-  def add_new_ids(context, activity) do
-    case set_object_id(context, activity) do
+  def add_new_ids(context, activity, drop_existing_ids?) do
+    case set_object_id(context, activity, drop_existing_ids?) do
       {:ok, activity} ->
         if APUtils.is_or_extends?(activity, "Create") do
           case APUtils.get_actor_id(activity, context) do
             {:ok, actor_id} ->
               APUtils.update_objects(activity, fn object ->
-                set_object_attributed_to_and_id(context, actor_id, object)
+                set_object_attributed_to_and_id(context, actor_id, object, drop_existing_ids?)
               end)
 
             {:error, reason} ->
@@ -539,7 +539,7 @@ defmodule Fedi.ActivityPub.SideEffectActor do
          #    server MAY deliver that object to all known sharedInbox endpoints
          #    on the network.
          {_public_recipients, recipients} <-
-           Enum.split_with(activity_recipients, &APUtils.public?(&1)),
+           Enum.split_with(activity_recipients, &Utils.public?(&1)),
          # Verify the inbox on the sender.
          {:ok, actor_iri} <-
            ActorFacade.db_actor_for_outbox(context, outbox_iri),
@@ -920,13 +920,17 @@ defmodule Fedi.ActivityPub.SideEffectActor do
   If an Activity is submitted with a value in the id property,
   servers MUST ignore this and generate a new id for the Activity.
   """
-  def set_object_id(context, object) do
-    with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do
-      Utils.set_json_ld_id(object, id)
+  def set_object_id(context, object, drop_existing_ids?) do
+    if drop_existing_ids? || needs_new_id?(context, object) do
+      with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do
+        Utils.set_json_ld_id(object, id)
+      end
+    else
+      {:ok, object}
     end
   end
 
-  def set_object_attributed_to_and_id(context, %URI{} = actor_iri, object) do
+  def set_object_attributed_to_and_id(context, %URI{} = actor_iri, object, drop_existing_ids?) do
     # FIXME This will happen later in SocialActivityHandler.create
     # but db_new_id requires an actor to build the id.
     # Perhaps take it out of the context instead?
@@ -937,8 +941,16 @@ defmodule Fedi.ActivityPub.SideEffectActor do
         Utils.set_iri(object, "attributedTo", actor_iri)
       end
 
-    with {:ok, %URI{} = id} <- ActorFacade.db_new_id(context, object) do
-      Utils.set_json_ld_id(object, id)
+    set_object_id(context, object, drop_existing_ids?)
+  end
+
+  def needs_new_id?(context, object) do
+    with %URI{} = id <- Utils.get_json_ld_id(object),
+         {:ok, true} <- ActorFacade.db_ours?(context, id) do
+      false
+    else
+      _ ->
+        true
     end
   end
 

@@ -41,6 +41,13 @@ defmodule Fedi.ActivityPub.DatabaseApi do
               {:ok, ordered_collection_page :: struct()} | {:error, term()}
 
   @doc """
+  Returns true if the IRI could reference something on
+  this instance.
+  """
+  @callback ours?(id :: URI.t()) ::
+              {:ok, boolean()} | {:error, term()}
+
+  @doc """
   Returns true if the database has an entry for the IRI and it
   exists in the database.
   """

@@ -171,7 +171,7 @@ defmodule FediServerWeb.SocialCallbacks do
   `Actor.handle_post_outbox/3`.
   """
   @impl true
-  defdelegate add_new_ids(context, activity), to: SideEffectActor
+  defdelegate add_new_ids(context, activity, drop_existing_ids?), to: SideEffectActor
 
   @doc """
   Delegates the authentication and authorization of a POST to an outbox.

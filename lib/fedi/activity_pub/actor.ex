@@ -346,7 +346,7 @@ defmodule Fedi.ActivityPub.Actor do
            JSONResolver.resolve_with_as_context(m),
          # It's ok to post just an object
          {:ok, activity, activity_id, object_id} <-
-           ensure_activity(context, as_value, outbox_iri),
+           ensure_activity(context, as_value, outbox_iri, true),
          # Allow server implementations to set context data with a hook.
          {:ok, context} <-
            ActorFacade.post_outbox_request_body_hook(context, activity, top_level: true),
@@ -482,7 +482,8 @@ defmodule Fedi.ActivityPub.Actor do
   non-transient objects, the server MUST attach an id to both the
   wrapping Create and its wrapped Object.
   """
-  def ensure_activity(actor, as_value, outbox) when is_struct(as_value) do
+  def ensure_activity(actor, as_value, outbox, drop_existing_ids? \\ false)
+      when is_struct(as_value) do
     activity_result =
       if APUtils.is_or_extends?(as_value, "Activity") do
         {:ok, as_value}
@@ -499,7 +500,10 @@ defmodule Fedi.ActivityPub.Actor do
          {:is_activity, true} <- {:is_activity, APUtils.is_or_extends?(activity, "Activity")},
          # Delegate generating new IDs for the activity and all new objects.
          {:ok, activity} <-
-           ActorFacade.add_new_ids(actor, activity, top_level: true) do
+           ActorFacade.add_new_ids(actor, activity,
+             drop_existing_ids?: drop_existing_ids?,
+             top_level: true
+           ) do
       APUtils.validate_activity(activity)
     else
       {:error, result} -> {:error, result}

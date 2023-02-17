@@ -79,12 +79,13 @@ defmodule Fedi.ActivityPub.SocialActivityHandler do
       # Copy over the 'to', 'bto', 'cc', 'bcc', and 'audience' recipients
       # between the activity and all child objects and vice versa.
       case APUtils.normalize_recipients(activity) do
-        {:ok, activity} ->
+        {:ok, %{properties: %{"object" => %P.Object{values: values}}} = activity} ->
           # Persist all objects we've created, which will include sensitive
           # recipients such as 'bcc' and 'bto'.
           context = Map.put(context, :deliverable, true)
+          Map.get(activity.properties, "object", object)
 
-          Enum.reduce_while(object.values, :ok, fn
+          Enum.reduce_while(values, :ok, fn
             %{member: %{__struct__: _, properties: _} = as_type}, acc ->
               case APUtils.get_id(as_type) do
                 %URI{} = _id ->

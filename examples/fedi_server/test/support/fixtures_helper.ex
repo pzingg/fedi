@@ -1,6 +1,8 @@
 defmodule FediServer.FixturesHelper do
   @moduledoc false
 
+  import Ecto.Query
+
   require Logger
 
   alias Fedi.Streams.Utils
@@ -323,12 +325,14 @@ defmodule FediServer.FixturesHelper do
       |> Activity.changeset(create3_recipient_params)
       |> Repo.insert(returning: true)
 
+    # QUESTION: should the tombstone object always be addressed to the original object's audience?
     tombstone_data = %{
       "@context" => "https://www.w3.org/ns/activitystreams",
       "id" => note2_ap_id,
       "formerType" => "Note",
       "deleted" => "Sat, 14 Jan 2023 15:35:13 GMT",
-      "type" => "Tombstone"
+      "type" => "Tombstone",
+      "to" => note2_data["to"]
     }
 
     # No change to actor, recipients, or local

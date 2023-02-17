@@ -160,7 +160,7 @@ defmodule Fedi.ContentTest do
     assert html == expected_html
   end
 
-  test "builds a note" do
+  test "builds an unlisted note" do
     note = %{
       "type" => "Note",
       "content" => @input,
@@ -170,12 +170,12 @@ defmodule Fedi.ContentTest do
     assert {:ok, note} = Fedi.Content.set_tags(note)
     note = Fedi.Client.set_visibility(note, :unlisted)
 
-    assert note["to"] == "https://mastodon.cloud/users/pzingg"
+    assert note["to"] == "https://mastodon.cloud/users/pzingg/followers"
 
     assert MapSet.new(note["cc"]) ==
              MapSet.new([
+               "https://mastodon.cloud/users/pzingg",
                "https://www.w3.org/ns/activitystreams#Public",
-               "https://mastodon.cloud/users/pzingg/followers",
                "https://mastodon.social/users/judell"
              ])
 

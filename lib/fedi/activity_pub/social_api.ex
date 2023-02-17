@@ -63,7 +63,11 @@ defmodule Fedi.ActivityPub.SocialApi do
   `Actor.handle_post_outbox/3`.
   """
 
-  @callback add_new_ids(context :: context(), activity :: struct()) ::
+  @callback add_new_ids(
+              context :: context(),
+              activity :: struct(),
+              drop_existing_ids? :: boolean()
+            ) ::
               {:ok, activity :: struct()} | {:error, term()}
 
   @doc """

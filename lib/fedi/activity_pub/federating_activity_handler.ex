@@ -244,7 +244,8 @@ defmodule Fedi.ActivityPub.FederatingActivityHandler do
 
             _ ->
               with {:ok, outbox_iri} <- ActorFacade.db_outbox_for_inbox(context, inbox_iri),
-                   {:ok, response} <- ActorFacade.add_new_ids(context, response) do
+                   {:ok, response} <-
+                     ActorFacade.add_new_ids(context, response, drop_existing_ids?: true) do
                 ActorFacade.deliver(context, outbox_iri, response)
               else
                 {:error, reason} -> {:error, reason}

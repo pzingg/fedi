@@ -8,7 +8,7 @@ defmodule FediServerWeb.ObjectsController do
   alias FediServer.Accounts.User
   alias FediServer.Activities
 
-  # action_fallback(FediServerWeb.FallbackController)
+  action_fallback(FediServerWeb.FallbackController)
 
   def show(%Plug.Conn{} = conn, %{"nickname" => _nickname, "ulid" => ulid}) do
     opts =
@@ -33,10 +33,9 @@ defmodule FediServerWeb.ObjectsController do
   # the HTTP 410 Gone status code if a Tombstone object is presented as the
   # response body, otherwise respond with a HTTP 404 Not Found.
   defp render_object(%{actor: actor_id, data: data}, %Plug.Conn{} = conn) when is_map(data) do
-    format = get_format(conn)
     status = check_for_tombstone(data)
 
-    if format in ["html"] do
+    if Enum.member?(["html"], get_format(conn)) do
       actor_iri = Utils.to_uri(actor_id)
       render_object_html(actor_iri, data, conn, status)
     else
@@ -46,10 +45,10 @@ defmodule FediServerWeb.ObjectsController do
 
   defp render_object(error_or_nil, %Plug.Conn{} = conn) do
     status = if error_or_nil, do: :internal_server_error, else: :not_found
-    format = get_format(conn)
 
-    if format in ["html"] do
-      conn |> put_status(status) |> halt()
+    if Enum.member?(["html"], get_format(conn)) do
+      # FallbackController will handle it
+      {:error, status}
     else
       APUtils.send_json_resp(conn, status)
     end
@@ -57,7 +56,8 @@ defmodule FediServerWeb.ObjectsController do
 
   defp render_object_html(actor_iri, object_data, conn, status) do
     if status == :gone do
-      conn |> put_status(:gone) |> halt()
+      # FallbackController will handle it
+      {:error, :gone}
     else
       case Activities.ensure_user(actor_iri) do
         {:ok, %User{data: actor_data}} ->
@@ -73,12 +73,14 @@ defmodule FediServerWeb.ObjectsController do
           if activity do
             render(conn, "show.html", activity: activity)
           else
-            conn |> put_status(:internal_server_error) |> halt()
+            # FallbackController will handle it
+            {:error, :internal_server_error}
           end
 
         {:error, reason} ->
-          Logger.error("Could not get user #{actor_iri}")
-          conn |> put_status(:internal_server_error) |> halt()
+          Logger.error("Could not get user #{actor_iri}: #{reason}")
+          # FallbackController will handle it
+          {:error, :internal_server_error}
       end
     end
   end

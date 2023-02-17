@@ -2,6 +2,8 @@ defmodule FediServer.Activities.Activity do
   use Ecto.Schema
   import Ecto.Changeset
 
+  alias FediServer.Activities.ChangesetValidators
+
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: false}
   schema "activities" do
@@ -30,10 +32,12 @@ defmodule FediServer.Activities.Activity do
 
   def changeset(%__MODULE__{} = activity, attrs \\ %{}) do
     activity
-    |> cast(attrs, [:ap_id, :type, :actor, :object, :local?, :public?, :data])
+    |> cast(attrs, [:id, :ap_id, :type, :actor, :object, :local?, :public?, :data])
     |> cast_assoc(:direct_recipients)
     |> cast_assoc(:following_recipients)
-    |> validate_required([:ap_id, :type, :actor, :public?, :data])
+    |> validate_required([:ap_id, :type, :actor, :data])
     |> unique_constraint(:ap_id)
+    |> ChangesetValidators.validate_id()
+    |> ChangesetValidators.maybe_set_public()
   end
 end

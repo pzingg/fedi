@@ -262,7 +262,7 @@ defmodule Fedi.ActivityPub.ActorBehavior do
   If an error is returned, it is returned to the caller of
   `Actor.handle_post_outbox/3`.
   """
-  @callback add_new_ids(context :: context(), activity :: term()) ::
+  @callback add_new_ids(context :: context(), activity :: term(), drop_existing_ids? :: boolean()) ::
               {:ok, activity :: term()} | {:error, term()}
 
   @doc """

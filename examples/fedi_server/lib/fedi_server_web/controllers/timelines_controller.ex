@@ -8,7 +8,7 @@ defmodule FediServerWeb.TimelinesController do
   alias FediServer.Accounts.User
   alias FediServer.Activities
 
-  # action_fallback(FediServerWeb.FallbackController)
+  action_fallback(FediServerWeb.FallbackController)
 
   @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
@@ -33,6 +33,9 @@ defmodule FediServerWeb.TimelinesController do
   end
 
   def create(%Plug.Conn{} = conn, %{"post" => post_params}) do
+    content = post_params["content"]
+    visibility = post_params["visibility"] |> String.to_existing_atom()
+
     with {:authenticated, %User{ap_id: ap_id, inbox: inbox}} <-
            {:authenticated, conn.assigns[:current_user]},
          {:authenticated, {:ok, context}} <-
@@ -44,10 +47,10 @@ defmodule FediServerWeb.TimelinesController do
          context <-
            struct(context, box_iri: outbox_iri),
          opts <-
-           [visibility: :public, webfinger_module: FediServerWeb.WebFinger],
+           [visibility: visibility, webfinger_module: FediServerWeb.WebFinger],
          activity <-
-           Fedi.Client.post(ap_id, post_params["content"], %{}, opts),
-         {:ok, _activity_id, object_id, recipient_count} <-
+           Fedi.Client.post(ap_id, content, %{}, opts),
+         {:ok, _activity_id, object_id, _recipient_count} <-
            Fedi.ActivityPub.Actor.post_activity(context, activity) do
       conn
       |> put_flash(:info, "Posted #{object_id}")
@@ -95,7 +98,8 @@ defmodule FediServerWeb.TimelinesController do
 
       {:error, reason} ->
         Logger.error("timeline error #{reason}")
-        conn |> put_status(500) |> halt()
+        # FallbackController will handle it
+        {:error, :internal_server_error}
     end
   end
 end

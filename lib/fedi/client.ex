@@ -5,9 +5,7 @@ defmodule Fedi.Client do
 
   require Logger
 
-  alias Fedi.ActivityPub.Utils, as: APUtils
-
-  @public_activity_streams "https://www.w3.org/ns/activitystreams#Public"
+  alias Fedi.Streams.Utils
 
   @doc """
   Create a new post
@@ -181,19 +179,19 @@ defmodule Fedi.Client do
 
   def set_visibility(m, visibility) do
     actor_id = get_actor(m)
-    to = Map.get(m, "to", []) |> List.wrap() |> Enum.reject(&APUtils.public?(&1))
-    cc = Map.get(m, "cc", []) |> List.wrap() |> Enum.reject(&APUtils.public?(&1))
+    to = Map.get(m, "to", []) |> List.wrap() |> Enum.reject(&Utils.public?(&1))
+    cc = Map.get(m, "cc", []) |> List.wrap() |> Enum.reject(&Utils.public?(&1))
 
     {to, cc} =
       case visibility do
         :public ->
-          {[@public_activity_streams | to], ["#{actor_id}/followers" | cc]}
+          {[Utils.public_activity_streams() | to], ["#{actor_id}/followers" | cc]}
 
         :unlisted ->
-          {to, [@public_activity_streams | ["#{actor_id}/followers" | cc]]}
+          {["#{actor_id}/followers" | to], [Utils.public_activity_streams() | cc]}
 
         :followers_only ->
-          {to, ["#{actor_id}/followers" | cc]}
+          {["#{actor_id}/followers" | to], cc}
 
         :direct ->
           {to, cc}
@@ -251,7 +249,7 @@ defmodule Fedi.Client do
         m[prop_name]
         |> List.wrap()
         |> Enum.map(fn addr ->
-          if APUtils.public?(addr) do
+          if Utils.public?(addr) do
             nil
           else
             addr
