@@ -11,6 +11,7 @@
 <%= for user <- @users do %>
 <img src={user.avatar_url} />
 <p>Name: <%= user.name %><br/>
-Nickname: <%= user.nickname %></p>
+Nickname: <%= user.nickname %><br/>
+Home page: <a href={user.url}><%= user.url %></a></p>
 <% end %>
 <% end %>

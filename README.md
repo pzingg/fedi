@@ -64,39 +64,39 @@ Status URLS
 - `id` - "https://mastodon.cloud/users/pzingg/statuses/109365863602876549"
 - `url` - "https://mastodon.cloud/@pzingg/109365863602876549"
 
-The application supports these singleton items:
+The application supports these singleton items via GET requests:
 
 - `/@:nickname` (HTML shows user profile and timeline. JSON shows user profile only.)
 - `/@:nickname/:object_id`
-- `/users/:nickname` (JSON only - user profile only)
+- `/users/:nickname` (HTML shows user profile and timeline. JSON shows user profile only.)
 - `/users/:nickname/statuses/:object_id`
 
-The application supports these collections:
+The application supports these collections via GET requests:
 
-- `/@:nickname/:object_id/likes`
-- `/@:nickname/:object_id/shares`
-- `/@:nickname/:object_id/reblogs`
-- `/@:nickname/:object_id/favourites`
-- `/@:nickname/featured`
-- `/@:nickname/followers`
-- `/@:nickname/following`
-- `/@:nickname/liked`
-- `/@:nickname/media` (HTML only - media)
-- `/@:nickname/with_replies` (HTML only - posts and replies)
+- `/@:nickname/:object_id/likes` (TODO)
+- `/@:nickname/:object_id/shares` (TODO)
+- `/@:nickname/:object_id/reblogs` (TODO)
+- `/@:nickname/:object_id/favourites` (TODO)
+- `/@:nickname/featured` (TODO)
+- `/@:nickname/followers` (JSON)
+- `/@:nickname/following` (JSON)
+- `/@:nickname/liked` (TODO)
+- `/@:nickname/media` (TODO. HTML only - media)
+- `/@:nickname/with_replies` (TODO. HTML only - posts and replies)
 - `/@:nickname` (HTML only - posts)
-- `/inbox`
-- `/users/:nickname/collections/featured`
-- `/users/:nickname/collections/liked`
-- `/users/:nickname/followers`
-- `/users/:nickname/following`
-- `/users/:nickname/inbox`
-- `/users/:nickname/media` (media)
-- `/users/:nickname/outbox`
-- `/users/:nickname/statuses/:object_id/likes`
-- `/users/:nickname/statuses/:object_id/shares`
-- `/users/:nickname/statuses/:object_id/reblogs`
-- `/users/:nickname/statuses/:object_id/favourites`
-- `/users/:nickname/with_replies` (posts and replies)
+- `/inbox` (TODO - JSON - shared inbox)
+- `/users/:nickname/followers` (JSON)
+- `/users/:nickname/following` (JSON)
+- `/users/:nickname/inbox` (Accept JSON-LD only)
+- `/users/:nickname/outbox` (Accept JSON-LD only)
+- `/users/:nickname/media` (TODO; media)
+- `/users/:nickname/collections/featured` (TODO)
+- `/users/:nickname/collections/liked` (TODO)
+- `/users/:nickname/statuses/:object_id/likes` (TODO)
+- `/users/:nickname/statuses/:object_id/shares` (TODO)
+- `/users/:nickname/statuses/:object_id/reblogs` (TODO)
+- `/users/:nickname/statuses/:object_id/favourites` (TODO)
+- `/users/:nickname/with_replies` (TODO - posts and replies)
 - `/users/:nickname` (JSON gives user profile. HTML redirects to `/@:nickname` - posts)
 
 as well as ad-hoc account collections.
@@ -111,15 +111,15 @@ There are also basic stubs for the Mastodon timelines "Home", "Local" and
 
 The routes for these "web" urls are:
 
-- `/web/accounts/:nickname`
-- `/web/bookmarks`
+- `/web/accounts/:nickname` (HTML shows user profile and timeline.)
 - `/web/directory`
-- `/web/favorites`
+- `/web/bookmarks` (TODO)
+- `/web/favorites` (TODO)
 - `/web/statuses/:object_id`
-- `/web/timelines/direct`
-- `/web/timelines/federated`
 - `/web/timelines/home`
 - `/web/timelines/local`
+- `/web/timelines/direct` (TODO. Direct messages only)
+- `/web/timelines/federated` (TODO)
 
 ## Mastodon-equivalent activities
 
@@ -279,6 +279,11 @@ If you block an entire server:
 - You won’t see other people’s boosts of that server in your home feed
 - You won’t see notifications from that server
 - You will lose any followers that you might have had on that server
+
+### RSS support
+
+- RSS 2.0 support, with Dave Winer markdown ideas
+- RSSCloud server support for notifications
 
 ### Top level documentation
 

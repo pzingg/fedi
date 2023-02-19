@@ -7,6 +7,7 @@ defmodule FediServerWeb.ObjectsController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
   alias FediServer.Activities
+  alias FediServer.Activities.Object
 
   action_fallback(FediServerWeb.FallbackController)
 
@@ -32,21 +33,20 @@ defmodule FediServerWeb.ObjectsController do
   # If the deleted object is requested the server SHOULD respond with either
   # the HTTP 410 Gone status code if a Tombstone object is presented as the
   # response body, otherwise respond with a HTTP 404 Not Found.
-  defp render_object(%{actor: actor_id, data: data}, %Plug.Conn{} = conn) when is_map(data) do
+  defp render_object(%Object{data: data} = object, %Plug.Conn{} = conn) when is_map(data) do
     status = check_for_tombstone(data)
 
     if Enum.member?(["html"], get_format(conn)) do
-      actor_iri = Utils.to_uri(actor_id)
-      render_object_html(actor_iri, data, conn, status)
+      render_object_html(object, conn, status)
     else
-      render_object_json(data, conn, status)
+      render_object_json(object, conn, status)
     end
   end
 
   defp render_object(error_or_nil, %Plug.Conn{} = conn) do
     status = if error_or_nil, do: :internal_server_error, else: :not_found
 
-    if Enum.member?(["html"], get_format(conn)) do
+    if get_format(conn) == "html" do
       # FallbackController will handle it
       {:error, status}
     else
@@ -54,16 +54,20 @@ defmodule FediServerWeb.ObjectsController do
     end
   end
 
-  defp render_object_html(actor_iri, object_data, conn, status) do
+  defp render_object_html(%Object{id: ulid, actor: actor_id, data: object_data}, conn, status) do
     if status == :gone do
       # FallbackController will handle it
       {:error, :gone}
     else
+      actor_iri = Utils.to_uri(actor_id)
+
       case Activities.ensure_user(actor_iri) do
         {:ok, %User{data: actor_data}} ->
           activity =
             FediServerWeb.TimelineHelpers.transform(
               %{
+                domain: :objects,
+                id: ulid,
                 object: object_data,
                 actor: actor_data
               },
@@ -85,7 +89,7 @@ defmodule FediServerWeb.ObjectsController do
     end
   end
 
-  defp render_object_json(data, conn, status) do
+  defp render_object_json(%Object{data: data}, conn, status) do
     case Jason.encode(data) do
       {:ok, body} ->
         APUtils.send_json_resp(conn, status, body)

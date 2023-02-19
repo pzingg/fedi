@@ -6,7 +6,7 @@ defmodule FediServerWeb.StatusComponent do
 
   def status(assigns) do
     ~H"""
-    <article data-id={@act.id}>
+    <article data-domain={@act.domain} data-id={@act.id}>
       <div tabindex="-1">
         <div class="status__wrapper status__wrapper-public focusable" tabindex="0" aria-label={@act.aria_label}>
           <%= if @act.boost_id do %>

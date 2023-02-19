@@ -1,4 +1,3 @@
-<h1>User Profile</h1>
 <img src={@user.avatar_url} />
 <p>Name: <%= @user.name %><br/>
 Nickname: <%= @user.nickname %></p>
@@ -9,6 +8,7 @@ Nickname: <%= @user.nickname %></p>
 <p>No activities</p>
 <% end %>
 <% else %>
+<h1><%= @user.nickname %>'s Timeline</h1>
 <%= if @count == 1 do %>
 <!-- 1 activity -->
 <% else %>

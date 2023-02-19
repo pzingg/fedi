@@ -27,6 +27,26 @@ defmodule FediServerWeb.InboxController do
     |> maybe_send_response(conn, "post_inbox", nickname)
   end
 
+  def get_shared_inbox(conn, params) do
+    # Get the Actor struct placed in the connection by the
+    # `set_actor/2` plug in router.ex.
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
+
+    # Pass the connection to the fedi Actor logic
+    Fedi.ActivityPub.Actor.handle_get_inbox(actor, conn, params)
+    |> maybe_send_response(conn, "get_shared_inbox", "")
+  end
+
+  def post_shared_inbox(conn, params) do
+    # Get the Actor struct placed in the connection by the
+    # `set_actor/2` plug in router.ex.
+    actor = Fedi.ActivityPub.ActorFacade.get_actor!(conn)
+
+    # Pass the connection to the fedi Actor logic
+    Fedi.ActivityPub.Actor.handle_post_inbox(actor, conn, params)
+    |> maybe_send_response(conn, "post_shared_inbox", "")
+  end
+
   def maybe_send_response(result, conn, label, nickname) do
     case result do
       {:ok, processed_conn} ->
@@ -48,13 +68,5 @@ defmodule FediServerWeb.InboxController do
 
         Fedi.ActivityPub.Utils.send_json_resp(conn, :internal_server_error)
     end
-  end
-
-  def get_shared_inbox(conn, _params) do
-    Fedi.ActivityPub.Utils.send_json_resp(conn, :forbidden)
-  end
-
-  def post_shared_inbox(conn, _params) do
-    Fedi.ActivityPub.Utils.send_json_resp(conn, :forbidden)
   end
 end

@@ -83,7 +83,7 @@ defmodule FediServerWeb.Router do
     get("/directory", UsersController, :index)
     get("/accounts/:nickname", UsersController, :show)
 
-    get("/statuses/:ulid", ObjectsController, :status)
+    get("/statuses/:ulid", ObjectsController, :show)
 
     get("/timelines/local", TimelinesController, :local)
     get("/timelines/federated", TimelinesController, :federated)

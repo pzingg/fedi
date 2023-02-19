@@ -11,7 +11,9 @@ defmodule FediServerWeb.TimelineHelpers do
       get_actor_info(actor)
       |> Map.put(:activity_id, boost_id)
 
-    transform(activity, booster_info)
+    activity
+    |> Map.put(:domain, :activities)
+    |> transform(booster_info)
   end
 
   def transform(activity) do
@@ -20,7 +22,8 @@ defmodule FediServerWeb.TimelineHelpers do
 
   def transform(
         %{
-          id: activity_ulid,
+          domain: domain,
+          id: ulid,
           object: %{"id" => object_id} = object,
           actor: %{"id" => actor_id} = actor
         },
@@ -77,7 +80,8 @@ defmodule FediServerWeb.TimelineHelpers do
     aria_label = "#{content_text}, #{published_title}, #{actor_info.nickname}"
 
     assigns = %{
-      id: activity_ulid,
+      domain: domain,
+      id: ulid,
       boost_id: nil,
       aria_label: aria_label,
       object_id: object_id,
@@ -104,20 +108,7 @@ defmodule FediServerWeb.TimelineHelpers do
   end
 
   def transform(timeline_item, _booster_info) do
-    cond do
-      is_nil(timeline_item.object) ->
-        Logger.debug("timeline_item not complete, object: #{inspect(timeline_item)}")
-
-      is_nil(timeline_item.actor) ->
-        Logger.debug("timeline_item not complete, actor: #{inspect(timeline_item)}")
-
-      is_nil(timeline_item.activity) ->
-        Logger.debug("timeline_item not complete, activity: #{inspect(timeline_item)}")
-
-      true ->
-        :ok
-    end
-
+    Logger.error("timeline_item is not complete: #{inspect(timeline_item)}")
     nil
   end
 
