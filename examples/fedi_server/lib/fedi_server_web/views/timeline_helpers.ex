@@ -20,6 +20,7 @@ defmodule FediServerWeb.TimelineHelpers do
 
   def transform(
         %{
+          id: activity_ulid,
           object: %{"id" => object_id} = object,
           actor: %{"id" => actor_id} = actor
         },
@@ -76,6 +77,7 @@ defmodule FediServerWeb.TimelineHelpers do
     aria_label = "#{content_text}, #{published_title}, #{actor_info.nickname}"
 
     assigns = %{
+      id: activity_ulid,
       boost_id: nil,
       aria_label: aria_label,
       object_id: object_id,
@@ -130,8 +132,22 @@ defmodule FediServerWeb.TimelineHelpers do
     end
   end
 
-  def get_actor_info(%{"id" => id, "preferredUsername" => nickname, "name" => name, "url" => url}) do
+  def get_actor_info(
+        %{"id" => id, "preferredUsername" => nickname, "name" => name, "url" => url} = actor_data
+      ) do
     %URI{host: domain} = Utils.to_uri(id)
+
+    avatar_url =
+      case get_in(actor_data, ["icon", "url"]) do
+        url when is_binary(url) ->
+          url
+
+        _ ->
+          email_hash =
+            :crypto.hash(:md5, "#{nickname}@#{domain}") |> Base.encode16() |> String.downcase()
+
+          "https://www.gravatar.com/avatar/#{email_hash}.jpg?s=144&d=mp"
+      end
 
     %{
       id: id,
@@ -139,10 +155,20 @@ defmodule FediServerWeb.TimelineHelpers do
       nickname: nickname,
       account: "@#{nickname}@#{domain}",
       name: name,
-      avatar_url:
-        "https://media.mastodon.cloud/accounts/avatars/000/018/356/original/8fb7c58e48468071.jpg"
+      avatar_url: avatar_url
     }
   end
 
   def get_actor_info(_actor_data), do: nil
+
+  def next_url(route_url, statuses) do
+    case List.last(statuses) do
+      %{id: last_id} ->
+        %URI{} = route = Utils.to_uri(route_url)
+        %URI{route | query: "max_id=#{last_id}&page=true"} |> URI.to_string()
+
+      _ ->
+        nil
+    end
+  end
 end

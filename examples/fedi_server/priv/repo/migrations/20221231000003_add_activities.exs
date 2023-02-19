@@ -3,7 +3,7 @@ defmodule FediServer.Repo.Migrations.AddActivities do
 
   def change do
     create table(:activities, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
+      add :id, :uuid, null: false, primary_key: true
       add :ap_id, :string, null: false
       add :type, :string, null: false
       add :actor, :string, null: false

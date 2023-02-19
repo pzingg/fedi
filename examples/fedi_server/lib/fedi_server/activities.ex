@@ -127,7 +127,6 @@ defmodule FediServer.Activities do
 
   def get_timeline(:home, opts) do
     actor_id = Keyword.get(opts, :visible_to)
-    page_size = Keyword.get(opts, :page_size, 30)
     opts = Keyword.put(opts, :hide_unlisted?, true)
 
     if is_nil(actor_id) do
@@ -135,60 +134,48 @@ defmodule FediServer.Activities do
     else
       actors = [actor_id | get_following_ids(actor_id)]
 
-      Activity
-      |> where([a], a.actor in ^actors)
-      |> timeline_where_and_join(opts)
-      |> timeline_select()
-      |> limit(^page_size)
-      |> order_by([a], desc: a.id)
-      |> get_timeline_items(:home)
+      {:ok,
+       Activity
+       |> from(as: :primary)
+       |> where([primary: a], a.actor in ^actors)
+       |> timeline_where_and_join(opts)
+       |> timeline_select()
+       |> Repo.all()}
     end
   end
 
   def get_timeline(:local, opts) do
-    page_size = Keyword.get(opts, :page_size, 30)
     opts = Keyword.put(opts, :hide_unlisted?, true)
 
-    Activity
-    |> where([a], a.local? == true)
-    |> timeline_where_and_join(opts)
-    |> timeline_select()
-    |> limit(^page_size)
-    |> order_by([a], desc: a.id)
-    |> get_timeline_items(:local)
+    {:ok,
+     Activity
+     |> from(as: :primary)
+     |> where([primary: a], a.local? == true)
+     |> timeline_where_and_join(opts)
+     |> timeline_select()
+     |> Repo.all()}
   end
 
   def get_timeline(actor_id, opts) when is_binary(actor_id) do
-    page_size = Keyword.get(opts, :page_size, 30)
     opts = Keyword.put(opts, :hide_unlisted?, true)
 
-    Activity
-    |> where([a], a.actor == ^actor_id)
-    |> timeline_where_and_join(opts)
-    |> timeline_select()
-    |> limit(^page_size)
-    |> order_by([a], desc: a.id)
-    |> get_timeline_items(actor_id)
+    {:ok,
+     Activity
+     |> from(as: :primary)
+     |> where([primary: a], a.actor == ^actor_id)
+     |> timeline_where_and_join(opts)
+     |> timeline_select()
+     |> Repo.all()}
   end
 
   def get_timeline(which, _opts) do
     {:error, "#{which} timeline is unimplemented"}
   end
 
-  def timeline_where_and_join(query, opts) do
-    query
-    |> join(:left, [a], o in Object, as: :object, on: o.ap_id == a.object)
-    |> join(:left, [a], u in User, as: :actor, on: u.ap_id == a.actor)
-    |> where(
-      [a, object: o],
-      a.type in ["Create", "Update", "Announce"] and o.type in ["Article", "Note"]
-    )
-    |> filter_collection(opts)
-  end
-
   def timeline_select(query) do
     query
-    |> select([a, object: o, actor: u], %{
+    |> select([primary: a, object: o, actor: u], %{
+      id: a.id,
       activity: a.data,
       activity_local?: a.local?,
       actor: u.data,
@@ -198,14 +185,17 @@ defmodule FediServer.Activities do
     })
   end
 
-  def get_timeline_items(query, name) when is_binary(name) do
-    items = Repo.all(query)
-    Logger.error("got #{Enum.count(items)} for actor #{name}")
-    {:ok, items}
-  end
-
-  def get_timeline_items(query, _name) do
-    {:ok, Repo.all(query)}
+  def timeline_where_and_join(query, opts) do
+    query
+    |> join(:left, [primary: a], o in Object, as: :object, on: o.ap_id == a.object)
+    |> join(:left, [primary: a], u in User, as: :actor, on: u.ap_id == a.actor)
+    |> where(
+      [primary: a, object: o],
+      a.type in ["Create", "Update", "Announce"] and o.type in ["Article", "Note"]
+    )
+    |> filter_visible(opts)
+    |> filter_min_max_page(opts)
+    |> order_by([primary: a], desc: a.id)
   end
 
   def ordered_collection_summary(actor_iri, coll_name) do
@@ -260,75 +250,6 @@ defmodule FediServer.Activities do
     build_summary(query, actor_iri, coll_name)
   end
 
-  def ordered_collection_page(actor_iri, coll_name, opts) do
-    actor_id = URI.to_string(actor_iri)
-    page_size = Keyword.get(opts, :page_size, 30)
-
-    query =
-      case collection_type(coll_name) do
-        {:mailbox, outgoing} ->
-          Activity
-          |> select([a], %{id: a.id, data: a.data})
-          |> join(:inner, [a], c in Mailbox, as: :mailbox, on: c.activity_id == a.ap_id)
-          |> join(:inner, [a, mailbox: c], o in Object, as: :object, on: o.ap_id == a.object)
-          |> where([a, mailbox: c], c.outgoing == ^outgoing and c.actor == ^actor_id)
-          |> filter_collection(opts)
-          |> limit(^page_size)
-          |> order_by([a], desc: a.id)
-
-        {:user_object, type} ->
-          # `actor_id` is really the `object_id`
-          object_id = actor_id
-
-          User
-          |> select([u], %{id: u.id, data: u.data})
-          |> join(:inner, [u], c in UserObject, as: :uobj, on: c.actor == u.ap_id)
-          |> where([uobj: c], c.type == ^type and c.object == ^object_id)
-          # TODO should visibility be filtered by the visibility of `c.object`?
-          |> limit(^page_size)
-          |> order_by([uobj: c], desc: c.activity)
-
-        :follow_request ->
-          UserUser
-          |> select([c], %{id: c.id, iri: c.relation})
-          |> where([c], c.type == :follow_request and c.actor == ^actor_id)
-          |> limit(^page_size)
-          |> order_by([c], desc: c.id)
-
-        :following ->
-          UserUser
-          |> select([c], %{id: c.id, iri: c.relation})
-          |> where([c], c.type == :follow and c.actor == ^actor_id)
-          |> limit(^page_size)
-          |> order_by([c], desc: c.id)
-
-        :followers ->
-          UserUser
-          |> select([c], %{id: c.id, iri: c.actor})
-          |> where([c], c.type == :follow and c.relation == ^actor_id)
-          |> limit(^page_size)
-          |> order_by([c], desc: c.id)
-
-        # Custom UserObjects
-        {:custom_user_object, name} ->
-          coll_id = "#{actor_id}/collections/#{name}"
-
-          Object
-          |> from(as: :object)
-          |> select([object: o], %{id: o.id, iri: o.ap_id})
-          |> join(:inner, [object: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
-          |> where([uobj: c], c.type == :custom and c.collection_id == ^coll_id)
-          |> filter_collection(opts)
-          |> limit(^page_size)
-          |> order_by([object: o], desc: o.id)
-
-        _ ->
-          nil
-      end
-
-    build_page(query, actor_iri, coll_name, opts)
-  end
-
   def build_summary(nil, _, coll_name) do
     {:error, "Can't understand collection #{coll_name}"}
   end
@@ -362,6 +283,71 @@ defmodule FediServer.Activities do
     {:ok, %T.OrderedCollectionPage{alias: "", properties: properties}}
   end
 
+  def ordered_collection_page(actor_iri, coll_name, opts) do
+    actor_id = URI.to_string(actor_iri)
+
+    query =
+      case collection_type(coll_name) do
+        {:mailbox, outgoing} ->
+          Activity
+          |> from(as: :primary)
+          |> select([primary: a], %{id: a.id, data: a.data})
+          |> join(:inner, [primary: a], c in Mailbox, as: :mailbox, on: c.activity_id == a.ap_id)
+          |> join(:inner, [primary: a, mailbox: c], o in Object,
+            as: :object,
+            on: o.ap_id == a.object
+          )
+          |> where([primary: a, mailbox: c], c.outgoing == ^outgoing and c.actor == ^actor_id)
+          |> filter_visible(opts)
+          |> order_by([primary: a], desc: a.id)
+
+        {:user_object, type} ->
+          # `actor_id` is really the `object_id`
+          object_id = actor_id
+          # TODO should visibility be filtered by the visibility of `c.object`?
+          User
+          |> select([u], %{id: u.id, data: u.data})
+          |> join(:inner, [u], c in UserObject, as: :uobj, on: c.actor == u.ap_id)
+          |> where([uobj: c], c.type == ^type and c.object == ^object_id)
+          |> order_by([uobj: c], desc: c.activity)
+
+        :follow_request ->
+          UserUser
+          |> select([c], %{id: c.id, iri: c.relation})
+          |> where([c], c.type == :follow_request and c.actor == ^actor_id)
+          |> order_by([c], desc: c.id)
+
+        :following ->
+          UserUser
+          |> select([c], %{id: c.id, iri: c.relation})
+          |> where([c], c.type == :follow and c.actor == ^actor_id)
+          |> order_by([c], desc: c.id)
+
+        :followers ->
+          UserUser
+          |> select([c], %{id: c.id, iri: c.actor})
+          |> where([c], c.type == :follow and c.relation == ^actor_id)
+          |> order_by([c], desc: c.id)
+
+        # Custom UserObjects
+        {:custom_user_object, name} ->
+          coll_id = "#{actor_id}/collections/#{name}"
+
+          Object
+          |> from(as: :primary)
+          |> select([object: o], %{id: o.id, iri: o.ap_id})
+          |> join(:inner, [object: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
+          |> where([uobj: c], c.type == :custom and c.collection_id == ^coll_id)
+          |> filter_visible(opts)
+          |> order_by([object: o], desc: o.id)
+
+        _ ->
+          {nil, nil}
+      end
+
+    build_page(query, actor_iri, coll_name, opts)
+  end
+
   def build_page(nil, _, coll_name, _) do
     {:error, "Can't understand collection #{coll_name}"}
   end
@@ -371,8 +357,9 @@ defmodule FediServer.Activities do
     build_page(query, coll_id, opts)
   end
 
-  def build_page(query, coll_id, _opts) do
-    result = Repo.all(query)
+  def build_page(query, coll_id, opts) do
+    page_query = filter_min_max_page(query, opts)
+    result = Repo.all(page_query)
 
     ordered_item_iters =
       Enum.map(result, fn
@@ -411,7 +398,6 @@ defmodule FediServer.Activities do
       "orderedItems" => ordered_items_prop
     }
 
-    # TODO handle Keyword.get(opts, :min_id)
     properties =
       case List.last(result) do
         %{id: last_id} ->
@@ -438,38 +424,25 @@ defmodule FediServer.Activities do
     |> Repo.all()
   end
 
-  def filter_collection(query, opts) when is_list(opts) do
+  def filter_visible(query, opts) when is_list(opts) do
     if Keyword.get(opts, :unfiltered, false) do
       query
     else
-      [:min_id, :max_id, :visible_to]
-      |> Enum.reduce(query, fn key, q ->
-        filter_collection(q, key, Keyword.get(opts, key), opts)
-      end)
+      visible_to = Keyword.get(opts, :visible_to)
+      hide_unlisted? = Keyword.get(opts, :hide_unlisted?, false)
+      filter_visible(query, visible_to, hide_unlisted?)
     end
   end
 
-  def filter_collection(query, :max_id, nil, _opts), do: query
-
-  def filter_collection(query, :max_id, max_id, _opts) do
-    query |> where(as(:object).id < ^max_id)
+  def filter_visible(query, nil, true) do
+    query |> where([object: o], o.public? == true and o.listed? == true)
   end
 
-  def filter_collection(query, :min_id, nil, _opts), do: query
-
-  def filter_collection(query, :min_id, min_id, _opts) do
-    query |> where(as(:object).id >= ^min_id)
+  def filter_visible(query, nil, _) do
+    query |> where(as(:primary).public? == true)
   end
 
-  def filter_collection(query, :visible_to, nil, opts) do
-    if Keyword.get(opts, :hide_unlisted?, false) do
-      query |> where([object: o], o.public? == true and o.listed? == true)
-    else
-      query |> where(as(:object).public? == true)
-    end
-  end
-
-  def filter_collection(query, :visible_to, ap_id, _opts) when is_binary(ap_id) do
+  def filter_visible(query, ap_id, _hide_unlisted?) when is_binary(ap_id) do
     query
     |> join(:left, [object: o], dr in assoc(o, :direct_recipients), as: :direct)
     |> join(:left, [object: o], fr in assoc(o, :following_recipients), as: :follower)
@@ -481,6 +454,39 @@ defmodule FediServer.Activities do
       [object: o, direct: dr, follower: fr, following: fg],
       o.public? == true or dr.address == ^ap_id or fr.address == ^ap_id or fg.actor == ^ap_id
     )
+  end
+
+  def filter_min_max_page(query, opts) when is_list(opts) do
+    if Keyword.get(opts, :unfiltered, false) do
+      query
+    else
+      query =
+        [:min_id, :max_id]
+        |> Enum.reduce(query, fn key, q ->
+          filter_min_max_page(q, key, Keyword.get(opts, key))
+        end)
+
+      page_size = Keyword.get(opts, :page_size, 30)
+      query |> limit(^page_size)
+    end
+  end
+
+  def filter_min_max_page(query, :max_id, nil), do: query
+
+  def filter_min_max_page(query, :max_id, max_id) do
+    case Ecto.ULID.dump(max_id) do
+      {:ok, max_id} -> where(query, as(:primary).id < ^max_id)
+      _ -> query
+    end
+  end
+
+  def filter_min_max_page(query, :min_id, nil), do: query
+
+  def filter_min_max_page(query, :min_id, min_id) do
+    case Ecto.ULID.dump(min_id) do
+      {:ok, min_id} -> where(query, as(:primary).id >= ^min_id)
+      _ -> query
+    end
   end
 
   def debug_sql(query) do
@@ -1489,7 +1495,7 @@ defmodule FediServer.Activities do
   @doc """
   Returns true if the IRI is for this server.
   """
-  def local?(%URI{path: path} = iri) do
+  def local?(%URI{} = iri) do
     endpoint_url = Fedi.Application.endpoint_url()
     test_url = Utils.base_uri(iri, "/") |> URI.to_string()
 
@@ -1698,7 +1704,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_exists?(other, _) do
-    {:error, "Invalid schema for exists #{other}"}
+    {:error, "Invalid schema for repo_exists? #{other}"}
   end
 
   def repo_ap_id_exists?(:actors, %URI{} = ap_id) do
@@ -1728,7 +1734,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_ap_id_exists?(other, _) do
-    {:error, "Invalid schema for ap_id_exists #{other}"}
+    {:error, "Invalid schema for repo_ap_id_exists? #{other}"}
   end
 
   def repo_get(which, id_value, opts \\ [])
@@ -1757,7 +1763,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_get(other, _, _) do
-    {:error, "Invalid schema for get #{other}"}
+    {:error, "Invalid schema for repo_get #{other}"}
   end
 
   def maybe_filter_object(%{public?: true} = object, _opts) do
@@ -1843,7 +1849,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_get_by_ap_id(other, %URI{} = _) do
-    {:error, "Invalid schema for get by ap_id #{other}"}
+    {:error, "Invalid schema for repo_get_by_ap_id #{other}"}
   end
 
   def repo_insert(:actors, params) do
@@ -1904,7 +1910,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_insert(other, _) do
-    {:error, "Invalid schema for insert #{other}"}
+    {:error, "Invalid schema for repo_insert #{other}"}
   end
 
   def handle_insert_result({:ok, data}, _), do: {:ok, data}
@@ -1962,7 +1968,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_update(other, _) do
-    {:error, "Invalid schema for insert #{other}"}
+    {:error, "Invalid schema for repo_update #{other}"}
   end
 
   def repo_delete(:actors, %URI{} = ap_id) do
@@ -1990,7 +1996,7 @@ defmodule FediServer.Activities do
   end
 
   def repo_delete(other, _) do
-    {:error, "Invalid schema for delete #{other}"}
+    {:error, "Invalid schema for repo_delete #{other}"}
   end
 
   def describe_errors(%Ecto.Changeset{action: action, data: %{__struct__: module}} = changeset) do

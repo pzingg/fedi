@@ -3,7 +3,7 @@ defmodule FediServer.Repo.Migrations.AddObjects do
 
   def change do
     create table(:objects, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
+      add :id, :uuid, null: false, primary_key: true
       add :reblog_of_id, :string
       add :in_reply_to_id, :string
       add :ap_id, :string, null: false

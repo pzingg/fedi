@@ -6,7 +6,7 @@ defmodule FediServerWeb.StatusComponent do
 
   def status(assigns) do
     ~H"""
-    <article>
+    <article data-id={@act.id}>
       <div tabindex="-1">
         <div class="status__wrapper status__wrapper-public focusable" tabindex="0" aria-label={@act.aria_label}>
           <%= if @act.boost_id do %>
@@ -32,7 +32,9 @@ defmodule FediServerWeb.StatusComponent do
               </a>
               <a href={@act.attributed_to_url} title={@act.attributed_to_account} class="status__display-name" target="_blank" rel="noopener noreferrer">
                 <div class="status__avatar">
-                  <div class="account__avatar" style={"background-image: url('#{@act.attributed_to_avatar_url}');"}></div>
+                  <div class="account__avatar">
+                    <img src={@act.attributed_to_avatar_url} />
+                  </div>
                 </div>
                 <span class="display-name">
                   <strong class="display-name__html"><%= @act.attributed_to_name %></strong>

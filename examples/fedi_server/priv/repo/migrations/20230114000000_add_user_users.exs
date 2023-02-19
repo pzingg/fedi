@@ -3,7 +3,7 @@ defmodule FediServer.Repo.Migrations.AddUserUsers do
 
   def change do
     create table(:user_users, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
+      add :id, :uuid, null: false, primary_key: true
       add :type, :string, null: false
       add :actor, :string, null: false
       add :relation, :string, null: false

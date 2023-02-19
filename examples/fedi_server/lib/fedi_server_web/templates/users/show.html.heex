@@ -1,8 +1,13 @@
 <h1>User Profile</h1>
-<p>Name: <%= @user["name"] %></p>
-<p>Nickname: <%= @user["preferredUsername"] %></p>
+<img src={@user.avatar_url} />
+<p>Name: <%= @user.name %><br/>
+Nickname: <%= @user.nickname %></p>
 <%= if @count == 0 do %>
-<p>No Activities</p>
+<%= if @max_id do %>
+<p>No more activities</p>
+<% else %>
+<p>No activities</p>
+<% end %>
 <% else %>
 <%= if @count == 1 do %>
 <!-- 1 activity -->
@@ -12,9 +17,6 @@
 <%= for activity <- @timeline do %>
   <StatusComponent.status act={activity} />
 <% end %>
-<% end %>
-<%= if @previous do %>
-<p><a href={@previous}>Previous 30</a></p>
 <% end %>
 <%= if @next do %>
 <p><a href={@next}>Next 30</a></p>

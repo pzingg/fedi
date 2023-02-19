@@ -7,6 +7,7 @@ defmodule FediServer.Accounts.User do
   alias Fedi.Streams.Utils
   alias FediServerWeb.Router.Helpers, as: Routes
 
+  @derive {Phoenix.Param, key: :nickname}
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: true}
   schema "users" do
@@ -223,9 +224,10 @@ defmodule FediServer.Accounts.User do
           ap_id = get_field(changeset, :ap_id)
           name = get_field(changeset, :name)
           nickname = get_field(changeset, :nickname)
+          email = get_field(changeset, :email)
           keys_pem = get_field(changeset, :keys)
 
-          if ap_id && name && nickname && keys_pem do
+          if ap_id && name && nickname && email && keys_pem do
             public_key_pem =
               case FediServer.HTTPClient.public_key_pem_from_keys(keys_pem) do
                 {:ok, pem} ->
@@ -236,7 +238,11 @@ defmodule FediServer.Accounts.User do
                   nil
               end
 
-            put_change(changeset, :data, fediverse_data(ap_id, name, nickname, public_key_pem))
+            put_change(
+              changeset,
+              :data,
+              fediverse_data(ap_id, name, nickname, email, public_key_pem)
+            )
           else
             changeset
           end
@@ -249,9 +255,10 @@ defmodule FediServer.Accounts.User do
   @doc """
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
-  def fediverse_data(ap_id, name, nickname, public_key, opts \\ []) do
+  def fediverse_data(ap_id, name, nickname, email, public_key, opts \\ []) do
     user_suffix = "/users/#{nickname}"
     user_url = String.replace_trailing(ap_id, user_suffix, "/@#{nickname}")
+    email_hash = :crypto.hash(:md5, email) |> Base.encode16() |> String.downcase()
 
     %{
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -274,8 +281,12 @@ defmodule FediServer.Accounts.User do
         "id" => "#{ap_id}#main-key",
         "owner" => ap_id,
         "publicKeyPem" => public_key
+      },
+      "icon" => %{
+        "type" => "Image",
+        "mediaType" => "image/jpeg",
+        "url" => "https://www.gravatar.com/avatar/#{email_hash}.jpg?s=144&d=mp"
       }
-      # "icon" => icon,
       # "attachment" => fields,
       # "tag" => emoji_tags,
       # "capabilities" => capabilities,

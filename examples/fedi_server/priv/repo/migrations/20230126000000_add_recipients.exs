@@ -3,10 +3,9 @@ defmodule FediServer.Repo.Migrations.AddRecipients do
 
   def change do
     create table(:activities_recipients, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
+      add :id, :uuid, null: false, primary_key: true
 
-      add :assoc_id, references(:activities, type: :binary_id, on_delete: :delete_all),
-        null: false
+      add :assoc_id, references(:activities, type: :uuid, on_delete: :delete_all), null: false
 
       add :type, :string, null: false, default: "direct"
       add :address, :string, null: false
@@ -18,8 +17,8 @@ defmodule FediServer.Repo.Migrations.AddRecipients do
     create index(:activities_recipients, :address)
 
     create table(:objects_recipients, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
-      add :assoc_id, references(:objects, type: :binary_id, on_delete: :delete_all), null: false
+      add :id, :uuid, null: false, primary_key: true
+      add :assoc_id, references(:objects, type: :uuid, on_delete: :delete_all), null: false
       add :type, :string, null: false, default: "direct"
       add :address, :string, null: false
 

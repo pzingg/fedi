@@ -7,10 +7,11 @@ defmodule FediServerWeb.TimelinesController do
   alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts.User
   alias FediServer.Activities
+  alias FediServerWeb.TimelineHelpers
 
   action_fallback(FediServerWeb.FallbackController)
 
-  @sent_or_chunked [:sent, :chunked, :upgraded, :file]
+  # @sent_or_chunked [:sent, :chunked, :upgraded, :file]
 
   def root(%Plug.Conn{} = conn, _params) do
     if conn.assigns[:current_user] do
@@ -69,17 +70,16 @@ defmodule FediServerWeb.TimelinesController do
   end
 
   defp render_timeline(conn, which, params) do
-    opts = APUtils.collection_opts(params, conn)
+    opts =
+      params
+      |> Map.put("page", "true")
+      |> APUtils.collection_opts(conn)
 
     case Activities.get_timeline(which, opts) do
       {:ok, activities} ->
         statuses =
-          Enum.map(activities, &FediServerWeb.TimelineHelpers.transform/1)
+          Enum.map(activities, &TimelineHelpers.transform/1)
           |> Enum.reject(&is_nil(&1))
-
-        # TODO: add page=, min_id= max_id=
-        next = Routes.timelines_url(conn, which)
-        previous = nil
 
         title =
           case which do
@@ -92,8 +92,8 @@ defmodule FediServerWeb.TimelinesController do
           title: title,
           timeline: statuses,
           count: Enum.count(statuses),
-          next: next,
-          previous: previous
+          max_id: Map.get(params, "max_id"),
+          next: TimelineHelpers.next_url(Routes.timelines_url(conn, which), statuses)
         )
 
       {:error, reason} ->

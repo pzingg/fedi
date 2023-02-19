@@ -5,7 +5,7 @@ defmodule FediServer.Repo.Migrations.AddUsers do
     execute "CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;"
 
     create table(:users, primary_key: false) do
-      add :id, :binary_id, null: false, primary_key: true
+      add :id, :uuid, null: false, primary_key: true
       add :ap_id, :string, null: false
       add :inbox, :string, null: false
       add :name, :string, null: false
