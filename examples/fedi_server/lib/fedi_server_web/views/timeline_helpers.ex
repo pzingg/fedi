@@ -22,25 +22,66 @@ defmodule FediServerWeb.TimelineHelpers do
 
   def transform(
         %{
-          domain: domain,
           id: ulid,
-          object: %{"id" => object_id} = object,
-          actor: %{"id" => actor_id} = actor
-        },
+          actor: actor_map_or_id,
+          object: %{"id" => _} = object
+        } = activity,
         booster_info
-      ) do
-    attributed_to_id = Map.get(object, "attributedTo")
-
-    actor =
-      if !is_nil(attributed_to_id) and attributed_to_id != actor_id do
-        case Activities.get_object_data(attributed_to_id) do
-          {:ok, attributed_to} -> attributed_to
-          _ -> actor
-        end
+      )
+      when is_map(object) do
+    actor_id =
+      if is_map(actor_map_or_id) do
+        Map.get(actor_map_or_id, "id")
       else
-        actor
+        actor_map_or_id
       end
 
+    attributed_to_id = Map.get(object, "attributedTo")
+
+    actor_map_or_id =
+      if is_nil(attributed_to_id) || attributed_to_id == actor_id do
+        actor_map_or_id
+      else
+        attributed_to_id
+      end
+
+    actor =
+      if is_map(actor_map_or_id) do
+        actor_map_or_id
+      else
+        case Activities.get_object_data(actor_map_or_id) do
+          {:ok, actor} ->
+            actor
+
+          _ ->
+            Logger.error("timeline item has no actor: #{inspect(activity)}")
+            nil
+        end
+      end
+
+    domain = Map.get(activity, :domain, :objects)
+    transform(actor, domain, ulid, object, booster_info)
+  end
+
+  def transform(%{object: object} = activity, _booster_info) when is_map(object) do
+    Logger.error("timeline item object has no id: #{inspect(object)}")
+    nil
+  end
+
+  def transform(%{object: object} = activity, _booster_info) do
+    Logger.error("timeline item object is not a map: #{inspect(object)}")
+    nil
+  end
+
+  def transform(activity, _booster_info) do
+    missing_keys = [:id, :actor] |> Enum.reject(&Map.has_key?(&1))
+    Logger.error("timeline item mising required keys: #{inspect(missing_keys)}")
+    nil
+  end
+
+  def transform(nil, _domain, _ulid, _object, _booster_info), do: nil
+
+  def transform(actor, domain, ulid, %{"id" => object_id} = object, booster_info) do
     actor_info = get_actor_info(actor)
 
     reply_count =
@@ -49,7 +90,7 @@ defmodule FediServerWeb.TimelineHelpers do
         _n -> "1+"
       end
 
-    content = object["content"]
+    content = Map.get(object, "content", "No content")
 
     content_html =
       case Fedi.Content.parse_markdown(content,
@@ -105,11 +146,6 @@ defmodule FediServerWeb.TimelineHelpers do
     else
       assigns
     end
-  end
-
-  def transform(timeline_item, _booster_info) do
-    Logger.error("timeline_item is not complete: #{inspect(timeline_item)}")
-    nil
   end
 
   def get_published(object) do
