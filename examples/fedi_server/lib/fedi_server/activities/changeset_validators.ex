@@ -16,7 +16,7 @@ defmodule FediServer.Activities.ChangesetValidators do
 
         case existing_id do
           nil ->
-            Logger.debug("no id in local changeset, got #{id} from ap_id")
+            Logger.debug("no id in local changeset, getting #{id} from ap_id")
             put_change(changeset, :id, id)
 
           ^id ->

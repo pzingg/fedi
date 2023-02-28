@@ -7,9 +7,11 @@
 # General application configuration
 import Config
 
-config :fedi, user_agent: "(elixir-fedi-#{Mix.Project.config()[:version]})"
+instance_url = "https://example.com"
 
-config :fedi, endpoint_url: "https://example.com/"
+config :fedi,
+  user_agent: "(elixir-fedi-server-#{Mix.Project.config()[:version]})",
+  endpoint_url: instance_url <> "/"
 
 # Configures Elixir's Logger
 config :logger, :console,

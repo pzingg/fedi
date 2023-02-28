@@ -111,6 +111,9 @@ defmodule FediServer.Accounts do
     |> Repo.insert()
   end
 
+  @doc """
+  Updates just the `:last_login_at` member of the user.
+  """
   def update_last_login(%User{} = user) do
     User.login_changeset(user) |> Repo.update()
   end
