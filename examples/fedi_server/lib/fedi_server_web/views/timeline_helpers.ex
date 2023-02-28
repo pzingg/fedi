@@ -63,18 +63,18 @@ defmodule FediServerWeb.TimelineHelpers do
     transform(actor, domain, ulid, object, booster_info)
   end
 
-  def transform(%{object: object} = activity, _booster_info) when is_map(object) do
+  def transform(%{object: object}, _booster_info) when is_map(object) do
     Logger.error("timeline item object has no id: #{inspect(object)}")
     nil
   end
 
-  def transform(%{object: object} = activity, _booster_info) do
+  def transform(%{object: object}, _booster_info) do
     Logger.error("timeline item object is not a map: #{inspect(object)}")
     nil
   end
 
   def transform(activity, _booster_info) do
-    missing_keys = [:id, :actor] |> Enum.reject(&Map.has_key?(&1))
+    missing_keys = [:id, :actor] |> Enum.reject(&Map.has_key?(activity, &1))
     Logger.error("timeline item mising required keys: #{inspect(missing_keys)}")
     nil
   end
@@ -90,7 +90,7 @@ defmodule FediServerWeb.TimelineHelpers do
         _n -> "1+"
       end
 
-    content = Map.get(object, "content", "No content")
+    content = object["content"]
 
     content_html =
       case Fedi.Content.parse_markdown(content,

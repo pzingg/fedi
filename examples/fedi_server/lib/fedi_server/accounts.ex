@@ -112,6 +112,13 @@ defmodule FediServer.Accounts do
   end
 
   @doc """
+  Updates just the `:last_login_at` member of the user.
+  """
+  def update_last_login(%User{} = user) do
+    User.login_changeset(user) |> Repo.update()
+  end
+
+  @doc """
   Returns an `%Ecto.Changeset{}` for tracking user changes.
 
   ## Examples

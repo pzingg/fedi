@@ -20,13 +20,15 @@ if System.get_env("PHX_SERVER") do
   config :fedi_server, FediServerWeb.Endpoint, server: true
 end
 
-{endpoint_url, federated_protocol_enabled?} =
+{default_instance_url, federated_protocol_enabled?} =
   case config_env() do
-    :dev -> {"http://localhost:4000/", false}
-    _ -> {"https://example.com/", true}
+    :dev -> {"http://localhost:4000", false}
+    _ -> {"https://example.com", true}
   end
 
-config :fedi, endpoint_url: endpoint_url
+instance_url = System.get_env("INSTANCE_URL", default_instance_url)
+
+config :fedi, endpoint_url: instance_url <> "/"
 
 config :fedi_server,
   federated_protocol_enabled?: federated_protocol_enabled?

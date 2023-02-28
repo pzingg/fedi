@@ -16,11 +16,10 @@ defmodule FediServer.Activities.ChangesetValidators do
 
         case existing_id do
           nil ->
-            Logger.error("no id in local changeset, got #{id} from ap_id")
+            Logger.debug("no id in local changeset, getting #{id} from ap_id")
             put_change(changeset, :id, id)
 
           ^id ->
-            Logger.error("id in local changeset matches #{id} from ap_id")
             changeset
 
           _ ->
@@ -30,7 +29,7 @@ defmodule FediServer.Activities.ChangesetValidators do
 
       is_nil(existing_id) ->
         id = Ecto.ULID.generate()
-        Logger.error("changeset #{inspect(changeset)} is not local, generating id #{id}")
+        Logger.debug("changeset #{inspect(changeset)} is not local, generating id #{id}")
         put_change(changeset, :id, id)
 
       true ->

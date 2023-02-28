@@ -21,6 +21,7 @@ defmodule FediServer.Accounts.User do
     field(:password_confirmation, :string, virtual: true, redact: true)
     field(:hashed_password, :string, redact: true)
     field(:shared_inbox, :string)
+    field(:last_login_at, :utc_datetime)
 
     field(:on_follow, Ecto.Enum,
       values: [:do_nothing, :automatically_accept, :automatically_reject]
@@ -100,6 +101,14 @@ defmodule FediServer.Accounts.User do
     |> maybe_put_data()
   end
 
+  def login_changeset(%__MODULE__{} = user) do
+    attrs = %{last_login_at: DateTime.utc_now()}
+
+    user
+    |> cast(attrs, [:last_login_at])
+    |> validate_required(:last_login_at)
+  end
+
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
     user
     |> cast(attrs, [
@@ -112,6 +121,7 @@ defmodule FediServer.Accounts.User do
       :password,
       :keys,
       :shared_inbox,
+      :last_login_at,
       :on_follow,
       :data
     ])

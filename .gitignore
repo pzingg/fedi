@@ -27,3 +27,6 @@ activity_streams-*.tar
 
 # Dev docs
 /_docs/
+
+# VS Code stuff
+*.code-workspace

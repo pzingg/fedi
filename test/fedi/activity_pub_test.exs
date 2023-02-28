@@ -87,7 +87,7 @@ defmodule Fedi.ActivityPubTest do
     assert note.__struct__ == Fedi.ActivityStreams.Type.Note
     assert is_nil(APUtils.get_id(note))
 
-    assert {:ok, create} = Fedi.ActivityPub.SideEffectActor.add_new_ids(mock_actor, create)
+    assert {:ok, create} = Fedi.ActivityPub.SideEffectActor.add_new_ids(mock_actor, create, true)
     assert create.__struct__ == Fedi.ActivityStreams.Type.Create
     %URI{path: path} = APUtils.get_id(create)
     assert path == "/activities/#{ulid_1}"

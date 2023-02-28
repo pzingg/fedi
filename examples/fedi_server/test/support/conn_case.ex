@@ -19,6 +19,8 @@ defmodule FediServerWeb.ConnCase do
 
   require Phoenix.ConnTest
 
+  alias FediServer.Accounts
+
   @endpoint FediServerWeb.Endpoint
 
   using do
@@ -50,6 +52,7 @@ defmodule FediServerWeb.ConnCase do
   """
   def log_in_user(conn, user) do
     token = FediServer.Accounts.generate_user_session_token(user)
+    _ = Accounts.update_last_login(user)
 
     conn
     |> Phoenix.ConnTest.init_test_session(%{})

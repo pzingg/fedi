@@ -29,6 +29,8 @@ defmodule FediServerWeb.UserAuth do
   """
   def log_in_user(conn, user, params \\ %{}) do
     token = Accounts.generate_user_session_token(user)
+    _ = Accounts.update_last_login(user)
+
     user_return_to = get_session(conn, :user_return_to)
 
     conn
@@ -36,6 +38,7 @@ defmodule FediServerWeb.UserAuth do
     |> put_session(:user_token, token)
     |> maybe_write_remember_me_cookie(token, params)
     |> redirect(to: user_return_to || signed_in_path(conn))
+    |> halt()
   end
 
   defp maybe_write_remember_me_cookie(conn, token, %{"remember_me" => "true"}) do
@@ -120,7 +123,7 @@ defmodule FediServerWeb.UserAuth do
         ap_id == URI.to_string(actor_iri)
 
       _ ->
-        Logger.error("No current user")
+        Logger.debug("No current user")
         false
     end
   end

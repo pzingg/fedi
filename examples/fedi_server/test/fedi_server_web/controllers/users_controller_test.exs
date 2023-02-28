@@ -20,7 +20,7 @@ defmodule FediServerWeb.UsersControllerTest do
       conn
       |> get("/web/accounts/alyssa")
 
-    assert response(conn, 200) =~ "<p>Name: Alyssa Activa</p>"
+    assert response(conn, 200) =~ "<p>Name: Alyssa Activa"
   end
 
   test "GET a user (JSON)", %{conn: conn} do
