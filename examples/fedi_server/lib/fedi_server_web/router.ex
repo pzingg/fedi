@@ -70,6 +70,28 @@ defmodule FediServerWeb.Router do
     get("/:version", WellKnownController, :nodeinfo_version)
   end
 
+  scope "/oauth", FediServerWeb.Oauth do
+    pipe_through(:api)
+
+    post("/revoke", RevokeController, :revoke)
+    post("/token", TokenController, :token)
+    post("/introspect", IntrospectController, :introspect)
+  end
+
+  scope "/oauth", FediServerWeb.Oauth do
+    pipe_through([:browser, :fetch_current_user])
+
+    get("/authorize", AuthorizeController, :authorize)
+  end
+
+  scope "/openid", FediServerWeb.Openid do
+    pipe_through(:api)
+
+    get("/userinfo", UserinfoController, :userinfo)
+    post("/userinfo", UserinfoController, :userinfo)
+    get("/jwks", JwksController, :jwks_index)
+  end
+
   scope "/web", FediServerWeb do
     pipe_through([:accepts_html, :browser, :authenticated])
 

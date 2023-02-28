@@ -9,10 +9,12 @@ import Config
 
 config :fedi, user_agent: "(elixir-fedi-#{Mix.Project.config()[:version]})"
 
-endpoint_url =
+default_instance_url =
   case config_env() do
-    :dev -> "http://localhost:4000/"
-    _ -> "https://example.com/"
+    :dev -> "http://localhost:4000"
+    _ -> "https://example.com"
   end
 
-config :fedi, endpoint_url: endpoint_url
+instance_url = System.get_env("INSTANCE_URL", default_instance_url)
+
+config :fedi, endpoint_url: instance_url <> "/"

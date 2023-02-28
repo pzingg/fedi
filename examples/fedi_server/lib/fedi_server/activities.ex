@@ -335,11 +335,11 @@ defmodule FediServer.Activities do
 
           Object
           |> from(as: :primary)
-          |> select([object: o], %{id: o.id, iri: o.ap_id})
-          |> join(:inner, [object: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
+          |> select([primary: o], %{id: o.id, iri: o.ap_id})
+          |> join(:inner, [primary: o], c in UserObject, as: :uobj, on: c.object == o.ap_id)
           |> where([uobj: c], c.type == :custom and c.collection_id == ^coll_id)
           |> filter_visible(opts)
-          |> order_by([object: o], desc: o.id)
+          |> order_by([primary: o], desc: o.id)
 
         _ ->
           {nil, nil}
@@ -435,7 +435,7 @@ defmodule FediServer.Activities do
   end
 
   def filter_visible(query, nil, true) do
-    query |> where([object: o], o.public? == true and o.listed? == true)
+    query |> where([primary: o], o.public? == true and o.listed? == true)
   end
 
   def filter_visible(query, nil, _) do
@@ -444,14 +444,14 @@ defmodule FediServer.Activities do
 
   def filter_visible(query, ap_id, _hide_unlisted?) when is_binary(ap_id) do
     query
-    |> join(:left, [object: o], dr in assoc(o, :direct_recipients), as: :direct)
-    |> join(:left, [object: o], fr in assoc(o, :following_recipients), as: :follower)
+    |> join(:left, [primary: o], dr in assoc(o, :direct_recipients), as: :direct)
+    |> join(:left, [primary: o], fr in assoc(o, :following_recipients), as: :follower)
     |> join(:left, [follower: fr], fg in UserUser,
       on: fg.type == :follow and fg.relation == fr.address,
       as: :following
     )
     |> where(
-      [object: o, direct: dr, follower: fr, following: fg],
+      [primary: o, direct: dr, follower: fr, following: fg],
       o.public? == true or dr.address == ^ap_id or fr.address == ^ap_id or fg.actor == ^ap_id
     )
   end

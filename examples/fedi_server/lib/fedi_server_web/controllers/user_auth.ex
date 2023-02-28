@@ -4,6 +4,9 @@ defmodule FediServerWeb.UserAuth do
 
   require Logger
 
+  alias Boruta.Oauth.Authorization
+  alias Boruta.Oauth.Scope
+  alias Fedi.ActivityPub.Utils, as: APUtils
   alias FediServer.Accounts
   alias FediServer.Accounts.User
   alias FediServerWeb.Router.Helpers, as: Routes
@@ -29,6 +32,8 @@ defmodule FediServerWeb.UserAuth do
   """
   def log_in_user(conn, user, params \\ %{}) do
     token = Accounts.generate_user_session_token(user)
+    _ = Accounts.update_last_login(user)
+
     user_return_to = get_session(conn, :user_return_to)
 
     conn
@@ -36,6 +41,7 @@ defmodule FediServerWeb.UserAuth do
     |> put_session(:user_token, token)
     |> maybe_write_remember_me_cookie(token, params)
     |> redirect(to: user_return_to || signed_in_path(conn))
+    |> halt()
   end
 
   defp maybe_write_remember_me_cookie(conn, token, %{"remember_me" => "true"}) do
@@ -120,7 +126,7 @@ defmodule FediServerWeb.UserAuth do
         ap_id == URI.to_string(actor_iri)
 
       _ ->
-        Logger.error("No current user")
+        Logger.debug("No current user")
         false
     end
   end
@@ -144,17 +150,81 @@ defmodule FediServerWeb.UserAuth do
   If you want to enforce the user email is confirmed before
   they use the application at all, here would be a good place.
   """
-  def require_authenticated_user(conn, _opts) do
+  def require_authenticated_user(conn, opts) do
     if conn.assigns[:current_user] do
       conn
     else
-      Logger.error("Authentication required")
+      require_authenticated_oauth_token(conn, opts)
+    end
+  end
 
+  @doc """
+  Used for routes that require the user to be authenticated.
+
+  ```
+  import FediServerWeb.UserAuth, only: [require_authenticated_oauth_token: 2]
+
+  pipeline :protected_api do
+    plug(:accepts, ["json"])
+
+    plug(:require_authenticated)
+  end
+  ```
+  """
+  def require_authenticated_oauth_token(conn, _opts) do
+    with [authorization_header] <- get_req_header(conn, "authorization"),
+         [_authorization_header, bearer] <- Regex.run(~r/Bearer (.+)/, authorization_header),
+         {:ok, token} <- Authorization.AccessToken.authorize(value: bearer) do
       conn
-      |> put_flash(:error, "You must log in to access this page.")
-      |> maybe_store_return_to()
-      |> redirect(to: Routes.user_session_path(conn, :new))
-      |> halt()
+      |> assign(:current_token, token)
+      |> assign(:current_user, Accounts.get_user!(token.sub))
+    else
+      _ ->
+        Logger.error("Authentication required")
+
+        case get_format(conn) do
+          "html" ->
+            conn
+            |> put_flash(:error, "You must log in to access this page.")
+            |> maybe_store_return_to()
+            |> redirect(to: Routes.user_session_path(conn, :new))
+            |> halt()
+
+          _ ->
+            APUtils.send_json_resp(conn, :unauthorized)
+        end
+    end
+  end
+
+  @doc """
+  Used to limit access to controller actions based on the Oauth scopes of the client.
+
+  ```
+  import FediServerWeb.UserAuth, only: [authorize: 2]
+
+  plug(:authorize, ["read"]) when action in [:index, :show]
+  plug(:authorize, ["write"]) when action in [:create, :update, :delete]
+  ```
+  """
+  def authorize(conn, [_h | _t] = required_scopes) do
+    current_scopes = Scope.split(conn.assigns[:current_token].scope)
+    missing_scopes = required_scopes -- current_scopes
+
+    if Enum.empty?(missing_scopes) do
+      conn
+    else
+      Logger.error("Unauthorized, missing scopes #{inspect(missing_scopes)}")
+
+      case get_format(conn) do
+        "html" ->
+          conn
+          |> put_flash(:error, "You do not have proper permissions to access this page.")
+          |> redirect(to: Routes.user_session_path(conn, :new))
+          |> halt()
+
+        _ ->
+          APUtils.send_json_resp(conn, :forbidden)
+      end
     end
   end
 

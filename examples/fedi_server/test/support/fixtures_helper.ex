@@ -1,8 +1,6 @@
 defmodule FediServer.FixturesHelper do
   @moduledoc false
 
-  import Ecto.Query
-
   require Logger
 
   alias Fedi.Streams.Utils

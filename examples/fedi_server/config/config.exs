@@ -7,9 +7,11 @@
 # General application configuration
 import Config
 
+instance_url = "https://example.com"
+
 config :fedi,
   user_agent: "(elixir-fedi-server-#{Mix.Project.config()[:version]})",
-  endpoint_url: "https://example.com/"
+  endpoint_url: instance_url <> "/"
 
 config :fedi_server,
   federated_protocol_enabled?: true,
@@ -21,6 +23,12 @@ config :fedi_server, FediServerWeb.Endpoint,
   render_errors: [view: FediServerWeb.ErrorView, accepts: ~w(html json), layout: false],
   pubsub_server: FediServer.PubSub,
   live_view: [signing_salt: "dqsZVvH6"]
+
+# Boruta Oauth2 provider
+config :boruta, Boruta.Oauth,
+  repo: FediServer.Repo,
+  issuer: instance_url,
+  contexts: [resource_owners: FediServer.ResourceOwners]
 
 # Configure esbuild (the version is required)
 config :esbuild,

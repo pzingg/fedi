@@ -15,9 +15,13 @@ defmodule FediServerWeb.TimelinesController do
 
   def root(%Plug.Conn{} = conn, _params) do
     if conn.assigns[:current_user] do
-      redirect(conn, to: Routes.timelines_path(conn, :home))
+      conn
+      |> redirect(to: Routes.timelines_path(conn, :home))
+      |> halt()
     else
-      redirect(conn, to: Routes.timelines_path(conn, :local))
+      conn
+      |> redirect(to: Routes.timelines_path(conn, :local))
+      |> halt()
     end
   end
 
@@ -56,16 +60,19 @@ defmodule FediServerWeb.TimelinesController do
       conn
       |> put_flash(:info, "Posted #{object_id}")
       |> redirect(to: Routes.timelines_path(conn, :home))
+      |> halt()
     else
       {:error, reason} ->
         conn
         |> put_flash(:error, "Post failed: #{reason}")
         |> redirect(to: Routes.timelines_path(conn, :local))
+        |> halt()
 
       {:authenticated, _} ->
         conn
         |> put_flash(:error, "Not allowed to post")
         |> redirect(to: Routes.timelines_path(conn, :local))
+        |> halt()
     end
   end
 

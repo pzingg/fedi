@@ -27,6 +27,10 @@ config :fedi_server, FediServerWeb.Endpoint,
   secret_key_base: "6+nWwcs/eTsZkAhTLCV5FiFJOAf3zAZOKUIjFi/J2fPsgvYHO7Vp0kHgJRDeIfd8",
   server: false
 
+# Oauth testing
+config :fedi_server, :oauth_module, Boruta.OauthMock
+config :fedi_server, :openid_module, Boruta.OpenidMock
+
 # Print only warnings and errors during test
 config :logger, level: :warn
 
