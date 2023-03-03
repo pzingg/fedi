@@ -109,7 +109,7 @@ defmodule Mix.Tasks.Ontology.Gen do
 
     types =
       Enum.map(types, fn %Type{name: name} = type ->
-        new_props = Map.get(properties_by_type, name)
+        new_props = Map.get(properties_by_type, name, [])
         %Type{type | properties: new_props}
       end)
 
@@ -146,7 +146,8 @@ defmodule Mix.Tasks.Ontology.Gen do
   def parse_members(_, _, _, ontology), do: ontology
 
   def parse_member(member, namespace, section, ontology) when is_map(member) do
-    name = member["name"] |> String.replace_leading("as:", "")
+    # |> String.replace_leading("as:", "")
+    name = member["name"]
     types = member["type"] |> List.wrap()
 
     cond do
@@ -262,8 +263,7 @@ defmodule Mix.Tasks.Ontology.Gen do
       typedoc: ref(member, "notes", "The #{namespace} \"#{name}\" type."),
       typeless?: typeless?,
       extends: extends,
-      disjoint_with: disjoint_with,
-      extended_by: []
+      disjoint_with: disjoint_with
     }
 
     %Ontology{ontology | types: [type | ontology.types]}
@@ -286,8 +286,10 @@ defmodule Mix.Tasks.Ontology.Gen do
           rel
           |> List.wrap()
           |> Enum.map(fn
-            ref when is_map(ref) -> ref["name"] |> String.replace_leading("as:", "")
-            ref when is_binary(ref) -> ref |> String.replace_leading("as:", "")
+            # |> String.replace_leading("as:", "")
+            ref when is_map(ref) -> ref["name"]
+            # |> String.replace_leading("as:", "")
+            ref when is_binary(ref) -> ref
           end)
           |> Enum.sort()
 
@@ -409,7 +411,10 @@ defmodule Mix.Tasks.Ontology.Gen do
            except_domain: except_domain
          } = item ->
         domain =
-          Enum.reduce(types, base_domain, fn %{name: value_name, extended_by: value_extended_by},
+          Enum.reduce(types, base_domain, fn %Type{
+                                               name: value_name,
+                                               extended_by: value_extended_by
+                                             },
                                              acc ->
             if Enum.member?(base_domain, value_name) do
               acc ++ value_extended_by
@@ -558,12 +563,11 @@ defmodule Mix.Tasks.Ontology.Gen do
       |> Enum.map(fn atom -> ":#{Atom.to_string(atom)}" end)
       |> Enum.join(", ")
 
+    # TODO: "as:" namespace
     domain =
       prop.extended_domain
+      |> Enum.map(fn type_name -> quote_type_and_module(type_name, prop.namespace) end)
       |> Enum.sort(:desc)
-      |> Enum.map(fn type_name ->
-        "{\"#{type_name}\", Fedi.#{prop.namespace}.Type.#{type_name}}"
-      end)
       |> concat_members(nil)
 
     prop = Map.from_struct(prop) |> Enum.into([])
@@ -579,6 +583,15 @@ defmodule Mix.Tasks.Ontology.Gen do
       domain: indent_lines(domain, 4),
       names: prop_names
     )
+  end
+
+  def quote_type_and_module(type_name, namespace) do
+    if String.starts_with?(type_name, "as:") do
+      type_name = String.replace_leading(type_name, "as:", "")
+      "{\"#{type_name}\", Fedi.ActivityStreams.Type.#{type_name}}"
+    else
+      "{\"#{type_name}\", Fedi.#{namespace}.Type.#{type_name}}"
+    end
   end
 
   def add_members_if({d_mem, t_mem}, set, member, d_add, t_add) do
@@ -659,8 +672,8 @@ defmodule Mix.Tasks.Ontology.Gen do
   def prepare_type(type) do
     is_or_extends =
       type.extends
-      |> Enum.sort(:desc)
       |> Enum.map(&enquote(&1))
+      |> Enum.sort(:desc)
 
     is_or_extends =
       (is_or_extends ++ [enquote(type.name)])
@@ -668,20 +681,20 @@ defmodule Mix.Tasks.Ontology.Gen do
 
     disjoint_with =
       type.disjoint_with
-      |> Enum.sort(:desc)
       |> Enum.map(&enquote(&1))
+      |> Enum.sort(:desc)
       |> concat_members(nil)
 
     extended_by =
       type.extended_by
-      |> Enum.sort(:desc)
       |> Enum.map(&enquote(&1))
+      |> Enum.sort(:desc)
       |> concat_members(nil)
 
     properties =
       type.properties
-      |> Enum.sort(:desc)
       |> Enum.map(&enquote(&1))
+      |> Enum.sort(:desc)
       |> concat_members(nil)
 
     type = Map.from_struct(type) |> Enum.into([])
@@ -696,7 +709,10 @@ defmodule Mix.Tasks.Ontology.Gen do
     )
   end
 
-  def enquote(s), do: "\"#{s}\""
+  def enquote(s) do
+    s = String.replace_leading(s, "as:", "")
+    "\"#{s}\""
+  end
 
   def inverted_domains(properties) do
     Enum.reduce(properties, [], fn prop, acc ->

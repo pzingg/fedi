@@ -3,18 +3,9 @@ defmodule Fedi.Streams do
   Documentation for `Fedi.Streams`.
   """
 
-  def get_alias(alias_map, :json_ld) when is_map(alias_map), do: ""
-
-  def get_alias(alias_map, :activity_streams) when is_map(alias_map) do
-    Map.get(alias_map, "https://www.w3.org/ns/activitystreams", "")
-  end
-
-  def get_alias(alias_map, :toot) when is_map(alias_map) do
-    Map.get(alias_map, "http://joinmastodon.org/ns", "")
-  end
-
-  def get_alias(alias_map, :w3_id_security_v1) when is_map(alias_map) do
-    Map.get(alias_map, "https://w3id.org/security/v1", "")
+  def get_alias(context, namespace) do
+    {_vocab_module, alias_prefix} = Map.fetch!(context, namespace)
+    alias_prefix
   end
 
   def all_type_modules() do
