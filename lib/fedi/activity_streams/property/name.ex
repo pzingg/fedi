@@ -17,21 +17,19 @@ defmodule Fedi.ActivityStreams.Property.Name do
     {"Application", Fedi.ActivityStreams.Type.Application},
     {"Article", Fedi.ActivityStreams.Type.Article},
     {"Audio", Fedi.ActivityStreams.Type.Audio},
-    {"Branch", Fedi.ActivityStreams.Type.Branch},
     {"Collection", Fedi.ActivityStreams.Type.Collection},
     {"CollectionPage", Fedi.ActivityStreams.Type.CollectionPage},
-    {"Commit", Fedi.ActivityStreams.Type.Commit},
     {"Create", Fedi.ActivityStreams.Type.Create},
     {"Delete", Fedi.ActivityStreams.Type.Delete},
     {"Dislike", Fedi.ActivityStreams.Type.Dislike},
     {"Document", Fedi.ActivityStreams.Type.Document},
-    {"Emoji", Fedi.ActivityStreams.Type.Emoji},
+    {"Emoji", Fedi.Toot.Type.Emoji},
     {"Event", Fedi.ActivityStreams.Type.Event},
     {"Flag", Fedi.ActivityStreams.Type.Flag},
     {"Follow", Fedi.ActivityStreams.Type.Follow},
     {"Group", Fedi.ActivityStreams.Type.Group},
     {"Hashtag", Fedi.ActivityStreams.Type.Hashtag},
-    {"IdentityProof", Fedi.ActivityStreams.Type.IdentityProof},
+    {"IdentityProof", Fedi.Toot.Type.IdentityProof},
     {"Ignore", Fedi.ActivityStreams.Type.Ignore},
     {"Image", Fedi.ActivityStreams.Type.Image},
     {"IntransitiveActivity", Fedi.ActivityStreams.Type.IntransitiveActivity},
@@ -51,15 +49,11 @@ defmodule Fedi.ActivityStreams.Property.Name do
     {"Person", Fedi.ActivityStreams.Type.Person},
     {"Place", Fedi.ActivityStreams.Type.Place},
     {"Profile", Fedi.ActivityStreams.Type.Profile},
-    {"Push", Fedi.ActivityStreams.Type.Push},
     {"Read", Fedi.ActivityStreams.Type.Read},
     {"Reject", Fedi.ActivityStreams.Type.Reject},
     {"Relationship", Fedi.ActivityStreams.Type.Relationship},
     {"Remove", Fedi.ActivityStreams.Type.Remove},
-    {"Repository", Fedi.ActivityStreams.Type.Repository},
     {"Service", Fedi.ActivityStreams.Type.Service},
-    {"Ticket", Fedi.ActivityStreams.Type.Ticket},
-    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency},
     {"Tombstone", Fedi.ActivityStreams.Type.Tombstone},
     {"Undo", Fedi.ActivityStreams.Type.Undo},
     {"Update", Fedi.ActivityStreams.Type.Update},
@@ -92,13 +86,13 @@ defmodule Fedi.ActivityStreams.Property.Name do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize_values(
       @namespace,
       __MODULE__,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

@@ -30,7 +30,6 @@ defmodule Fedi.ActivityStreams.Property.Instrument do
     {"Listen", Fedi.ActivityStreams.Type.Listen},
     {"Move", Fedi.ActivityStreams.Type.Move},
     {"Offer", Fedi.ActivityStreams.Type.Offer},
-    {"Push", Fedi.ActivityStreams.Type.Push},
     {"Question", Fedi.ActivityStreams.Type.Question},
     {"Read", Fedi.ActivityStreams.Type.Read},
     {"Reject", Fedi.ActivityStreams.Type.Reject},
@@ -66,13 +65,13 @@ defmodule Fedi.ActivityStreams.Property.Instrument do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize_values(
       @namespace,
       __MODULE__,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

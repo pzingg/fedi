@@ -15,6 +15,15 @@ defmodule Mix.Tasks.Ontology.Gen do
 
   @output_dir "./_docs"
   @file_ext ".ex"
+  @alias_prefix ~r/(^[_a-z]+):(.+)$/
+  @builtins ~r/^(xsd|rfc|rdf):/
+  @aliases %{
+    "ActivityStreams" => "as",
+    "ForgeFed" => "ff",
+    "Toot" => "toot",
+    "W3IDSecurityV1" => "sec"
+  }
+  @namespaces Enum.map(@aliases, fn {k, v} -> {v, k} end) |> Enum.into(%{})
 
   defmodule Property do
     defstruct [
@@ -51,8 +60,7 @@ defmodule Mix.Tasks.Ontology.Gen do
   end
 
   defmodule Ontology do
-    defstruct namespaces: %{},
-              types: [],
+    defstruct types: [],
               properties: []
   end
 
@@ -165,11 +173,11 @@ defmodule Mix.Tasks.Ontology.Gen do
   end
 
   def parse_property(member, name, namespace, section, ontology) do
-    {types, _} = refs(member, "type")
-    {extends, _} = refs(member, "subPropertyOf")
-    {domain, _} = refs(member["domain"], "unionOf")
-    {except_domain, _} = refs(member, "@wtf_without_property")
-    {range_, _} = refs(member["range"], "unionOf")
+    {types, _} = refs(member, namespace, "type")
+    {extends, _} = refs(member, namespace, "subPropertyOf")
+    {domain, _} = refs(member["domain"], namespace, "unionOf")
+    {except_domain, _} = refs(member, namespace, "@wtf_without_property")
+    {range_, _} = refs(member["range"], namespace, "unionOf")
 
     object? = "owl:ObjectProperty" in types
     functional? = "owl:FunctionalProperty" in types
@@ -177,7 +185,7 @@ defmodule Mix.Tasks.Ontology.Gen do
     range_set =
       []
       |> add_range_flag_if(
-        Enum.any?(range_, fn r -> !String.contains?(r, ":") end),
+        Enum.any?(range_, fn r -> !Regex.match?(@builtins, r) end),
         [:object, :iri]
       )
       |> add_range_flag_if(
@@ -231,7 +239,7 @@ defmodule Mix.Tasks.Ontology.Gen do
       namespace: namespace,
       section: section,
       name: name,
-      typedoc: ref(member, "notes", "The #{namespace} \"#{name}\" property."),
+      typedoc: ref(member, nil, "notes", "The #{namespace} \"#{name}\" property."),
       nonfunctional?: !functional?,
       functional?: functional?,
       object?: object?,
@@ -252,15 +260,15 @@ defmodule Mix.Tasks.Ontology.Gen do
   def add_range_flag_if(range_set, _, _), do: range_set
 
   def parse_type(member, name, namespace, section, ontology) do
-    {extends, _} = refs(member, "subClassOf")
-    {disjoint_with, _} = refs(member, "disjointWith")
+    {extends, _} = refs(member, namespace, "subClassOf")
+    {disjoint_with, _} = refs(member, namespace, "disjointWith")
     typeless? = Map.get(member, "@wtf_typeless")
 
     type = %Type{
       namespace: namespace,
       section: section,
-      name: name,
-      typedoc: ref(member, "notes", "The #{namespace} \"#{name}\" type."),
+      name: qualify_type_name(name, namespace),
+      typedoc: ref(member, nil, "notes", "The #{namespace} \"#{name}\" type."),
       typeless?: typeless?,
       extends: extends,
       disjoint_with: disjoint_with
@@ -269,14 +277,14 @@ defmodule Mix.Tasks.Ontology.Gen do
     %Ontology{ontology | types: [type | ontology.types]}
   end
 
-  def ref(item, relation, default \\ nil) do
-    case refs(item, relation) do
+  def ref(item, namespace, relation, default \\ nil) do
+    case refs(item, namespace, relation) do
       {[single], _} -> single
       _ -> default
     end
   end
 
-  def refs(item, relation) do
+  def refs(item, namespace, relation) do
     case item[relation] do
       nil ->
         {[], ""}
@@ -286,10 +294,8 @@ defmodule Mix.Tasks.Ontology.Gen do
           rel
           |> List.wrap()
           |> Enum.map(fn
-            # |> String.replace_leading("as:", "")
-            ref when is_map(ref) -> ref["name"]
-            # |> String.replace_leading("as:", "")
-            ref when is_binary(ref) -> ref
+            ref when is_map(ref) -> ref["name"] |> qualify_type_name(namespace)
+            ref when is_binary(ref) -> ref |> qualify_type_name(namespace)
           end)
           |> Enum.sort()
 
@@ -407,6 +413,8 @@ defmodule Mix.Tasks.Ontology.Gen do
     Enum.map(
       properties,
       fn %Property{
+           namespace: _namespace,
+           name: _name,
            base_domain: base_domain,
            except_domain: except_domain
          } = item ->
@@ -585,13 +593,41 @@ defmodule Mix.Tasks.Ontology.Gen do
     )
   end
 
-  def quote_type_and_module(type_name, namespace) do
-    if String.starts_with?(type_name, "as:") do
-      type_name = String.replace_leading(type_name, "as:", "")
-      "{\"#{type_name}\", Fedi.ActivityStreams.Type.#{type_name}}"
+  def qualify_type_name(type_name, nil), do: type_name
+
+  def qualify_type_name(type_name, namespace) do
+    if Regex.match?(@alias_prefix, type_name) do
+      type_name
     else
-      "{\"#{type_name}\", Fedi.#{namespace}.Type.#{type_name}}"
+      alias_ = Map.get(@aliases, namespace, Macro.underscore(namespace))
+      alias_ <> ":" <> type_name
     end
+  end
+
+  def get_namespace(type_name, default) do
+    case Regex.run(@alias_prefix, type_name) do
+      [_, alias_, unqualified_type_name] ->
+        {Map.get(@namespaces, alias_, default), unqualified_type_name}
+
+      _ ->
+        {default, type_name}
+    end
+  end
+
+  def unqualified_type_name(type_name) do
+    case Regex.run(@alias_prefix, type_name) do
+      [_, _alias_, unqualified_type_name] -> unqualified_type_name
+      _ -> type_name
+    end
+  end
+
+  def enquote(s) do
+    "\"#{unqualified_type_name(s)}\""
+  end
+
+  def quote_type_and_module(type_name, namespace) do
+    {namespace, type_name} = get_namespace(type_name, namespace)
+    "{\"#{type_name}\", Fedi.#{namespace}.Type.#{type_name}}"
   end
 
   def add_members_if({d_mem, t_mem}, set, member, d_add, t_add) do
@@ -699,19 +735,21 @@ defmodule Mix.Tasks.Ontology.Gen do
 
     type = Map.from_struct(type) |> Enum.into([])
 
+    uq = unqualified_type_name(type[:name])
+
+    if uq == "" do
+      raise "Bam! #{type[:name]}"
+    end
+
     Keyword.merge(type,
-      typedoc: wrap_text(type[:typedoc], 2, 78),
       ns_atom: Macro.underscore(type[:namespace]),
+      name: uq,
+      typedoc: wrap_text(type[:typedoc], 2, 78),
       disjoint_with: indent_lines(disjoint_with, 4),
       extended_by: indent_lines(extended_by, 4),
       is_or_extends: indent_lines(is_or_extends, 4),
       properties: indent_lines(properties, 4)
     )
-  end
-
-  def enquote(s) do
-    s = String.replace_leading(s, "as:", "")
-    "\"#{s}\""
   end
 
   def inverted_domains(properties) do
@@ -796,8 +834,8 @@ defmodule Mix.Tasks.Ontology.Gen do
         |> Fedi.Streams.Utils.set_context(context)
       end
 
-      def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-        Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)
+      def deserialize(m, context) when is_map(m) and is_map(context) do
+        Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, context)
       end
 
       def serialize(%__MODULE__{} = object) do
@@ -853,14 +891,14 @@ defmodule Mix.Tasks.Ontology.Gen do
         %__MODULE__{alias: alias_}
       end
 
-      def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+      def deserialize(m, context) when is_map(m) and is_map(context) do
         Fedi.Streams.BaseProperty.deserialize(
           @namespace,
           __MODULE__,
           @range,
           @prop_name,
           m,
-          alias_map
+          context
         )
       end
 
@@ -917,13 +955,13 @@ defmodule Mix.Tasks.Ontology.Gen do
         %__MODULE__{alias: alias_}
       end
 
-      def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+      def deserialize(m, context) when is_map(m) and is_map(context) do
         Fedi.Streams.BaseProperty.deserialize_values(
           @namespace,
           __MODULE__,
           @prop_name,
           m,
-          alias_map
+          context
         )
       end
 
@@ -981,7 +1019,7 @@ defmodule Mix.Tasks.Ontology.Gen do
         %__MODULE__{alias: alias_}
       end
 
-      def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
+      def deserialize(prop_name, mapped_property?, i, context) when is_map(context) do
         Fedi.Streams.PropertyIterator.deserialize(
           @namespace,
           __MODULE__,
@@ -989,7 +1027,7 @@ defmodule Mix.Tasks.Ontology.Gen do
           prop_name,
           mapped_property?,
           i,
-          alias_map
+          context
         )
       end
 

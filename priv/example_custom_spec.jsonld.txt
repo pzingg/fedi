@@ -96,7 +96,7 @@
           {
             "type": "owl:Class",
             "url": "https://www.w3.org/TR/activitystreams-vocabulary/#dfn-link",
-            "name": "asFedi.ActivityStreams.Type.Link"
+            "name": "as:Link"
           },
           {
             "type": "owl:Class",

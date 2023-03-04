@@ -41,7 +41,7 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
+  def deserialize(prop_name, mapped_property?, i, context) when is_map(context) do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
@@ -49,7 +49,7 @@ defmodule Fedi.ActivityStreams.Property.RelIterator do
       prop_name,
       mapped_property?,
       i,
-      alias_map
+      context
     )
   end
 
