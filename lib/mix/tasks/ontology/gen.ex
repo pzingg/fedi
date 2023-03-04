@@ -154,7 +154,6 @@ defmodule Mix.Tasks.Ontology.Gen do
   def parse_members(_, _, _, ontology), do: ontology
 
   def parse_member(member, namespace, section, ontology) when is_map(member) do
-    # |> String.replace_leading("as:", "")
     name = member["name"]
     types = member["type"] |> List.wrap()
 
