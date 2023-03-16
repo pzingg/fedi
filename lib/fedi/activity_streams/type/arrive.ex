@@ -56,8 +56,8 @@ defmodule Fedi.ActivityStreams.Type.Arrive do
     |> Fedi.Streams.Utils.set_context(context)
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
-    Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, alias_map)
+  def deserialize(m, context) when is_map(m) and is_map(context) do
+    Fedi.Streams.BaseType.deserialize(:activity_streams, __MODULE__, m, context)
   end
 
   def serialize(%__MODULE__{} = object) do

@@ -10,8 +10,7 @@ defmodule Fedi.ActivityStreams.Property.Relationship do
   @namespace :activity_streams
   @range [:iri, :object]
   @domain [
-    {"Relationship", Fedi.ActivityStreams.Type.Relationship},
-    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency}
+    {"Relationship", Fedi.ActivityStreams.Type.Relationship}
   ]
   @prop_name "relationship"
 
@@ -37,13 +36,13 @@ defmodule Fedi.ActivityStreams.Property.Relationship do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize_values(
       @namespace,
       __MODULE__,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

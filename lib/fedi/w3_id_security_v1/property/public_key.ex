@@ -9,11 +9,11 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKey do
   @namespace :w3_id_security_v1
   @range [:iri, :object]
   @domain [
-    {"Application", Fedi.W3IDSecurityV1.Type.Application},
-    {"Group", Fedi.W3IDSecurityV1.Type.Group},
-    {"Organization", Fedi.W3IDSecurityV1.Type.Organization},
-    {"Person", Fedi.W3IDSecurityV1.Type.Person},
-    {"Service", Fedi.W3IDSecurityV1.Type.Service}
+    {"Application", Fedi.ActivityStreams.Type.Application},
+    {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Organization", Fedi.ActivityStreams.Type.Organization},
+    {"Person", Fedi.ActivityStreams.Type.Person},
+    {"Service", Fedi.ActivityStreams.Type.Service}
   ]
   @prop_name "publicKey"
 
@@ -39,13 +39,13 @@ defmodule Fedi.W3IDSecurityV1.Property.PublicKey do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize_values(
       @namespace,
       __MODULE__,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

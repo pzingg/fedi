@@ -9,8 +9,7 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
   @namespace :activity_streams
   @range [:iri, :object]
   @domain [
-    {"Relationship", Fedi.ActivityStreams.Type.Relationship},
-    {"TicketDependency", Fedi.ActivityStreams.Type.TicketDependency}
+    {"Relationship", Fedi.ActivityStreams.Type.Relationship}
   ]
   @prop_name "relationship"
 
@@ -40,7 +39,7 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
+  def deserialize(prop_name, mapped_property?, i, context) when is_map(context) do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
@@ -48,7 +47,7 @@ defmodule Fedi.ActivityStreams.Property.RelationshipIterator do
       prop_name,
       mapped_property?,
       i,
-      alias_map
+      context
     )
   end
 

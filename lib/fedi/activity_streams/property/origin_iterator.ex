@@ -29,7 +29,6 @@ defmodule Fedi.ActivityStreams.Property.OriginIterator do
     {"Listen", Fedi.ActivityStreams.Type.Listen},
     {"Move", Fedi.ActivityStreams.Type.Move},
     {"Offer", Fedi.ActivityStreams.Type.Offer},
-    {"Push", Fedi.ActivityStreams.Type.Push},
     {"Question", Fedi.ActivityStreams.Type.Question},
     {"Read", Fedi.ActivityStreams.Type.Read},
     {"Reject", Fedi.ActivityStreams.Type.Reject},
@@ -69,7 +68,7 @@ defmodule Fedi.ActivityStreams.Property.OriginIterator do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(prop_name, mapped_property?, i, alias_map) when is_map(alias_map) do
+  def deserialize(prop_name, mapped_property?, i, context) when is_map(context) do
     Fedi.Streams.PropertyIterator.deserialize(
       @namespace,
       __MODULE__,
@@ -77,7 +76,7 @@ defmodule Fedi.ActivityStreams.Property.OriginIterator do
       prop_name,
       mapped_property?,
       i,
-      alias_map
+      context
     )
   end
 

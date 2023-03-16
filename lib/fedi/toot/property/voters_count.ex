@@ -9,7 +9,7 @@ defmodule Fedi.Toot.Property.VotersCount do
   @namespace :toot
   @range [:non_neg_integer]
   @domain [
-    {"Question", Fedi.Toot.Type.Question}
+    {"Question", Fedi.ActivityStreams.Type.Question}
   ]
   @prop_name "votersCount"
 
@@ -39,14 +39,14 @@ defmodule Fedi.Toot.Property.VotersCount do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
       @range,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

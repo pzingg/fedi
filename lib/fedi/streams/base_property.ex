@@ -30,26 +30,26 @@ defmodule Fedi.Streams.BaseProperty do
       :allowed_types,
       :prop_name,
       :input,
-      :alias_map,
+      :context,
       :resolved_by,
       :result
     ]
   end
 
-  def deserialize(namespace, module, member_types, prop_name, m, alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize(namespace, module, member_types, prop_name, m, context) do
+    alias_ = Fedi.Streams.get_alias(context, namespace)
 
-    case Fedi.Streams.BaseProperty.get_prop(m, prop_name, alias_) do
+    case get_prop(m, prop_name, alias_) do
       nil ->
         {:ok, nil}
 
       {i, _prop_name, _is_map} ->
-        deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map)
+        deserialize_with_alias(alias_, module, member_types, prop_name, i, context)
     end
   end
 
   # TODO ONTOLOGY Limit to allowed_types (domain and range)?
-  def deserialize_with_alias(alias_, module, member_types, prop_name, i, alias_map) do
+  def deserialize_with_alias(alias_, module, member_types, prop_name, i, context) do
     pipeline = %Pipeline{
       allowed_types: nil,
       alias: alias_,
@@ -57,7 +57,7 @@ defmodule Fedi.Streams.BaseProperty do
       member_types: member_types,
       prop_name: prop_name,
       input: i,
-      alias_map: alias_map
+      context: context
     }
 
     pipeline =
@@ -118,24 +118,45 @@ defmodule Fedi.Streams.BaseProperty do
     end
   end
 
-  def deserialize_type(%Pipeline{input: i, alias_map: alias_map} = pipeline, :object)
+  def deserialize_type(%Pipeline{input: i, context: context} = pipeline, :object)
       when is_map(i) do
-    (pipeline.allowed_types || Fedi.Streams.all_type_modules())
-    |> Enum.reduce_while({:error, "No type found for object"}, fn type_mod, acc ->
-      with {:ok, v} when is_struct(v) <- apply(type_mod, :deserialize, [i, alias_map]) do
-        {:halt, {:ok, struct(pipeline.module, alias: pipeline.alias, member: v)}}
-      else
-        _ ->
-          {:cont, acc}
-      end
-    end)
-    |> case do
-      {:ok, value} ->
-        %Pipeline{pipeline | resolved_by: :object, result: {:ok, value}}
+    case Map.get(i, "type") do
+      nil ->
+        Logger.debug(
+          "Cannot determine ActivityStreams type for #{inspect(i)}: 'type' property is missing"
+        )
 
-      {:error, reason} ->
-        Logger.debug(":object deserializer ERROR #{reason}")
-        pipeline
+        %Pipeline{
+          pipeline
+          | resolved_by: :object,
+            result:
+              {:error,
+               Utils.err_unhandled_type(
+                 "Cannot determine ActivityStreams type: 'type' property is missing",
+                 json: i
+               )}
+        }
+
+      type_value ->
+        types = List.wrap(type_value)
+
+        case Fedi.Streams.BaseType.resolve(i, types, context) do
+          {:ok, v} ->
+            %Pipeline{
+              pipeline
+              | resolved_by: :object,
+                result:
+                  {:ok,
+                   struct(pipeline.module,
+                     alias: pipeline.alias,
+                     member: v
+                   )}
+            }
+
+          {:error, reason} ->
+            Logger.debug(":object deserializer ERROR #{reason}")
+            pipeline
+        end
     end
   end
 
@@ -365,9 +386,9 @@ defmodule Fedi.Streams.BaseProperty do
     pipeline
   end
 
-  def deserialize_values(namespace, module, prop_name, m, alias_map)
-      when is_map(m) and is_map(alias_map) do
-    alias_ = Fedi.Streams.get_alias(alias_map, namespace)
+  def deserialize_values(namespace, module, prop_name, m, context)
+      when is_map(m) and is_map(context) do
+    alias_ = Fedi.Streams.get_alias(context, namespace)
 
     case get_values(m, prop_name, alias_) do
       [] ->
@@ -382,7 +403,7 @@ defmodule Fedi.Streams.BaseProperty do
         {mapped_values, unmapped_values} =
           values
           |> Enum.map(fn {i, prop_name, mapped_property?} ->
-            case apply(iterator_module, :deserialize, [prop_name, mapped_property?, i, alias_map]) do
+            case apply(iterator_module, :deserialize, [prop_name, mapped_property?, i, context]) do
               {:ok, value} ->
                 {value, mapped_property?}
 

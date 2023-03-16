@@ -62,6 +62,8 @@ defmodule Fedi.ActivityStreams do
     Fedi.ActivityStreams.Type.View
   ]
 
+  @all_type_names Enum.map(@all_types, fn mod -> Module.split(mod) |> List.last() end)
+
   @all_properties [
     "accuracy",
     "actor",
@@ -149,6 +151,14 @@ defmodule Fedi.ActivityStreams do
 
   def type_modules() do
     @all_types
+  end
+
+  def get_type_module(type_name) do
+    if Enum.member?(@all_type_names, type_name) do
+      Module.concat(["Fedi", "ActivityStreams", "Type", type_name])
+    else
+      nil
+    end
   end
 
   def has_map_property?(prop_name), do: Enum.member?(@has_map, prop_name)
