@@ -39,14 +39,14 @@ defmodule Fedi.ActivityStreams.Property.Latitude do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
       @range,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

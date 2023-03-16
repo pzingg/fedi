@@ -10,6 +10,8 @@ defmodule Fedi.Toot do
     Fedi.Toot.Type.IdentityProof
   ]
 
+  @all_type_names Enum.map(@all_types, fn mod -> Module.split(mod) |> List.last() end)
+
   @all_properties [
     "blurhash",
     "discoverable",
@@ -29,6 +31,14 @@ defmodule Fedi.Toot do
 
   def type_modules() do
     @all_types
+  end
+
+  def get_type_module(type_name) do
+    if Enum.member?(@all_type_names, type_name) do
+      Module.concat(["Fedi", "Toot", "Type", type_name])
+    else
+      nil
+    end
   end
 
   def has_map_property?(_prop_name), do: false

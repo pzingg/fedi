@@ -9,11 +9,11 @@ defmodule Fedi.Toot.Property.Featured do
   @namespace :toot
   @range [:iri, :object]
   @domain [
-    {"Application", Fedi.Toot.Type.Application},
-    {"Group", Fedi.Toot.Type.Group},
-    {"Organization", Fedi.Toot.Type.Organization},
-    {"Person", Fedi.Toot.Type.Person},
-    {"Service", Fedi.Toot.Type.Service}
+    {"Application", Fedi.ActivityStreams.Type.Application},
+    {"Group", Fedi.ActivityStreams.Type.Group},
+    {"Organization", Fedi.ActivityStreams.Type.Organization},
+    {"Person", Fedi.ActivityStreams.Type.Person},
+    {"Service", Fedi.ActivityStreams.Type.Service}
   ]
   @prop_name "featured"
 
@@ -43,14 +43,14 @@ defmodule Fedi.Toot.Property.Featured do
     %__MODULE__{alias: alias_}
   end
 
-  def deserialize(m, alias_map) when is_map(m) and is_map(alias_map) do
+  def deserialize(m, context) when is_map(m) and is_map(context) do
     Fedi.Streams.BaseProperty.deserialize(
       @namespace,
       __MODULE__,
       @range,
       @prop_name,
       m,
-      alias_map
+      context
     )
   end
 

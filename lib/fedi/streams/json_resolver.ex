@@ -7,13 +7,14 @@ defmodule Fedi.Streams.JSONResolver do
 
   @doc """
   Determines the ActivityStreams type of the payload, then applies the
-  first callback function whose signature accepts the ActivityStreams value's
-  type. This strictly assures that the callback function will only be passed
-  ActivityStream objects whose type matches its interface. Returns an error
-  if the ActivityStreams type does not match callbackers or is not a type
-  handled by the generated code. If multiple types are present, it will check
-  each one in order and apply only the first one. It returns an unhandled
-  error for a multi-typed object if none of the types were able to be handled.
+  first `:deserialize` function for a matching type. This strictly assures that `:deserialize` will only be passed
+  ActivityStream objects whose type matches its interface.
+
+  Returns an error if the ActivityStreams type does not match any type
+  or is not a type handled by the generated code. If multiple types are
+  present, it will check each one in order and apply only the first one.
+  It returns an unhandled error for a multi-typed object if none of the
+  types were able to be handled.
   """
   def resolve(msg) when is_binary(msg) do
     with {:ok, m} <- Jason.decode(msg) do
@@ -22,25 +23,12 @@ defmodule Fedi.Streams.JSONResolver do
   end
 
   def resolve(m) when is_map(m) do
-    case get_type_and_context(m) do
+    case get_types_and_context(m) do
       {:error, reason} ->
         {:error, reason}
 
-      {:ok,
-       %{
-         alias_map: alias_map,
-         type: _type_value,
-         activity_streams: _activity_streams_prefix,
-         security_v1: _security_v1_prefix,
-         mastodon: _mastodon_prefix
-       }} ->
-        Fedi.Streams.type_modules(:activity_streams)
-        |> Enum.reduce_while({m, alias_map}, fn type_module, {acc_m, acc_alias_map} ->
-          case apply(type_module, :deserialize, [acc_m, acc_alias_map]) do
-            {:ok, val} -> {:halt, {:ok, val}}
-            {:error, _} -> {:cont, {acc_m, acc_alias_map}}
-          end
-        end)
+      {:ok, types, context} ->
+        Fedi.Streams.BaseType.resolve(m, types, context)
     end
   end
 
@@ -49,18 +37,20 @@ defmodule Fedi.Streams.JSONResolver do
     |> resolve()
   end
 
-  def get_type_and_context(m) do
-    with {:type, type_value} when is_binary(type_value) <- {:type, m["type"]},
-         {:context, raw_context} when not is_nil(raw_context) <- {:context, m["@context"]} do
+  def get_types_and_context(m) do
+    with {:type, type_value} when not is_nil(type_value) <- {:type, Map.get(m, "type")},
+         {:context, raw_context} when not is_nil(raw_context) <-
+           {:context, Map.get(m, "@context")} do
       alias_map = List.wrap(raw_context) |> to_alias_map()
 
-      {:ok,
+      {:ok, List.wrap(type_value),
        %{
          alias_map: alias_map,
-         type: type_value,
-         activity_streams: alias_prefix(alias_map, "www.w3.org/ns/activitystreams"),
-         security_v1: alias_prefix(alias_map, "w3id.org/security/v1"),
-         mastodon: alias_prefix(alias_map, "joinmastodon.org/ns")
+         json_ld: {Fedi.JSONLD, ""},
+         activity_streams:
+           {Fedi.ActivityStreams, find_alias(alias_map, "www.w3.org/ns/activitystreams")},
+         w3_id_security_v1: {Fedi.W3IDSecurityV1, find_alias(alias_map, "w3id.org/security/v1")},
+         toot: {Fedi.Toot, find_alias(alias_map, "joinmastodon.org/ns")}
        }}
     else
       {:type, _} ->
@@ -78,7 +68,7 @@ defmodule Fedi.Streams.JSONResolver do
     end
   end
 
-  def alias_prefix(alias_map, host_and_path)
+  def find_alias(alias_map, host_and_path)
       when is_map(alias_map) and is_binary(host_and_path) do
     case Map.get(alias_map, "http://" <> host_and_path, "") do
       "" ->
@@ -93,7 +83,7 @@ defmodule Fedi.Streams.JSONResolver do
   end
 
   @doc """
-  to_alias_map converts a JSONLD context into a map of vocabulary name to alias.
+  Converts a JSONLD context into a map of vocabulary name to alias.
   """
   def to_alias_map(i) when is_list(i) do
     # Recursively apply.

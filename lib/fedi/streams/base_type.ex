@@ -45,62 +45,105 @@ defmodule Fedi.Streams.BaseType do
     apply(module, :is_or_extends?, [other_type_name])
   end
 
-  def deserialize(namespace, module, m, alias_map) when is_map(m) and is_map(alias_map) do
-    {alias_, alias_prefix} =
-      case Fedi.Streams.get_alias(alias_map, namespace) do
-        "" -> {"", ""}
-        a -> {a, a <> ":"}
+  def resolve(m, types, context) do
+    types
+    |> Enum.reduce_while(m, fn type, acc ->
+      case reduce_type(context, type, acc) do
+        {:ok, val} -> {:halt, {:ok, val}}
+        _ -> {:cont, acc}
       end
+    end)
+    |> case do
+      {:ok, val} ->
+        {:ok, val}
 
-    type_name = apply(module, :type_name, [])
+      _ ->
+        {:error, "Unhandled #{inspect(types)}"}
+    end
+  end
 
-    case find_type(m, alias_prefix, type_name) do
+  def reduce_type(_context, "", m) do
+    {:cont, m}
+  end
+
+  def reduce_type(%{alias_map: _alias_map} = context, type, m) when is_binary(type) do
+    [:activity_streams, :w3_id_security_v1, :toot]
+    |> Enum.reduce_while(m, fn namespace, acc ->
+      {vocab_module, alias_prefix} = Map.fetch!(context, namespace)
+
+      with raw_type when not is_nil(raw_type) <-
+             get_raw_type(type, alias_prefix),
+           type_module when not is_nil(type_module) <-
+             vocab_module.get_type_module(raw_type),
+           {:ok, val} <-
+             deserialize(namespace, type_module, m, context) do
+        {:halt, {:ok, val}}
+      else
+        _ -> {:cont, acc}
+      end
+    end)
+  end
+
+  def reduce_type(_context, _type, m) do
+    {:cont, m}
+  end
+
+  def get_raw_type("", _), do: nil
+
+  def get_raw_type(type, ""), do: type
+
+  def get_raw_type(type, alias_prefix) do
+    if String.starts_with?(type, alias_prefix) do
+      String.replace_leading(type, alias_prefix, "")
+    else
+      nil
+    end
+  end
+
+  def deserialize(namespace, module, m, context) when is_map(m) do
+    # Begin: Known property deserialization
+    known_properties = Fedi.Streams.properties(namespace)
+
+    known_prop_map =
+      known_properties
+      |> Enum.reduce_while(%{}, fn {prop_name, prop_mod}, acc ->
+        case apply(prop_mod, :deserialize, [m, context]) do
+          {:error, reason} ->
+            Logger.error("Error adding known #{prop_name}: #{reason}")
+            {:halt, {:error, reason}}
+
+          {:ok, nil} ->
+            {:cont, acc}
+
+          {:ok, v} ->
+            {:cont, Map.put(acc, prop_name, v)}
+        end
+      end)
+
+    # End: Known property deserialization
+    case known_prop_map do
       {:error, reason} ->
         {:error, reason}
 
-      :ok ->
-        # Begin: Known property deserialization
-        known_properties = Fedi.Streams.properties(namespace)
-
-        known_prop_map =
-          known_properties
-          |> Enum.reduce_while(%{}, fn {prop_name, prop_mod}, acc ->
-            case apply(prop_mod, :deserialize, [m, alias_map]) do
-              {:error, reason} ->
-                Logger.error("Error adding known #{prop_name}: #{reason}")
-                {:halt, {:error, reason}}
-
-              {:ok, nil} ->
-                {:cont, acc}
-
-              {:ok, v} ->
-                {:cont, Map.put(acc, prop_name, v)}
+      _ ->
+        known_property_names = Enum.map(known_properties, fn {prop_name, _} -> prop_name end)
+        # Begin: Unknown deserialization
+        # Begin: Code that ensures a property name is unknown
+        unknown =
+          Enum.reduce(m, %{}, fn {prop_name, v}, acc ->
+            if Enum.member?(known_property_names, prop_name) do
+              acc
+            else
+              Map.put(acc, prop_name, v)
             end
           end)
 
-        # End: Known property deserialization
-        case known_prop_map do
-          {:error, reason} ->
-            {:error, reason}
+        # End: Code that ensures a property name is unknown
+        # End: Unknown deserialization
 
-          _ ->
-            known_property_names = Enum.map(known_properties, fn {prop_name, _} -> prop_name end)
-            # Begin: Unknown deserialization
-            # Begin: Code that ensures a property name is unknown
-            unknown =
-              Enum.reduce(m, %{}, fn {prop_name, v}, acc ->
-                if Enum.member?(known_property_names, prop_name) do
-                  acc
-                else
-                  Map.put(acc, prop_name, v)
-                end
-              end)
-
-            # End: Code that ensures a property name is unknown
-            # End: Unknown deserialization
-            value = struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)
-            {:ok, value}
-        end
+        {_vocab_module, alias_} = Map.fetch!(context, namespace)
+        value = struct(module, alias: alias_, properties: known_prop_map, unknown: unknown)
+        {:ok, value}
     end
   end
 
