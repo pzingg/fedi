@@ -13,7 +13,7 @@ defmodule FediServerWeb.UsersController do
   def index(conn, _params) do
     users =
       FediServer.Activities.get_local_users()
-      |> Enum.map(fn %{data: user_data} -> TimelineHelpers.get_actor_info(user_data) end)
+      |> Enum.map(&TimelineHelpers.get_actor_info/1)
 
     count = Enum.count(users)
     render(conn, "directory.html", users: users, count: count)
@@ -31,10 +31,9 @@ defmodule FediServerWeb.UsersController do
 
   def render_profile_and_timeline_html(
         conn,
-        %User{ap_id: actor_id, data: user_data} = user,
+        %User{ap_id: actor_id} = user,
         params
-      )
-      when is_map(user_data) do
+      ) do
     opts =
       params
       |> Map.put("page", "true")
@@ -47,7 +46,7 @@ defmodule FediServerWeb.UsersController do
           |> Enum.reject(&is_nil(&1))
 
         render(conn, "show.html",
-          user: TimelineHelpers.get_actor_info(user_data),
+          user: TimelineHelpers.get_actor_info(user),
           title: "Timeline",
           timeline: statuses,
           count: Enum.count(statuses),

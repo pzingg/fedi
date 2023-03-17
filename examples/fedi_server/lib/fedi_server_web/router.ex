@@ -84,6 +84,12 @@ defmodule FediServerWeb.Router do
     get("/authorize", AuthorizeController, :authorize)
   end
 
+  scope "/oauth", FediServerWeb.Oauth do
+    pipe_through(:browser)
+
+    get("/callbacks/:provider", RedirectionController, :new)
+  end
+
   scope "/openid", FediServerWeb.Openid do
     pipe_through(:api)
 
@@ -118,11 +124,13 @@ defmodule FediServerWeb.Router do
     post("/users/register", UserRegistrationController, :create)
     get("/users/log_in", UserSessionController, :new)
     post("/users/log_in", UserSessionController, :create)
+    get("/users/log_out", UserSessionController, :delete)
     delete("/users/log_out", UserSessionController, :delete)
   end
 
   scope "/", FediServerWeb do
     pipe_through([:accepts_any, :browser])
+
     get("/users/:nickname", UsersController, :show)
     get("/users/:nickname/objects/:ulid", ObjectsController, :show)
     # get("/users/:nickname/objects/:ulid/reblogs", ObjectsController, :reblogs)

@@ -1,13 +1,40 @@
 defmodule FediServer.Accounts do
   @moduledoc """
-  The Accounts context.
+  A context that defines domain and business logic
+  around users and identities.
+
+  Contexts are also responsible for managing your data, regardless
+  if it comes from the database, an external API or others.
   """
 
   import Ecto.Query, warn: false
-  alias FediServer.Repo
 
+  require Logger
+
+  alias FediServer.Repo
+  alias FediServer.Accounts.Identity
   alias FediServer.Accounts.User
   alias FediServer.Accounts.UserToken
+
+  ## PubSub
+
+  @pubsub FediServer.PubSub
+
+  def subscribe(user_id) do
+    Phoenix.PubSub.subscribe(@pubsub, topic(user_id))
+  end
+
+  def unsubscribe(user_id) do
+    Phoenix.PubSub.unsubscribe(@pubsub, topic(user_id))
+  end
+
+  def broadcast!(%User{} = user, msg) do
+    Phoenix.PubSub.broadcast!(@pubsub, topic(user.id), {__MODULE__, msg})
+  end
+
+  defp topic(user_id), do: "user:#{user_id}"
+
+  ## Users
 
   @doc """
   Gets a user by email.
@@ -22,7 +49,7 @@ defmodule FediServer.Accounts do
 
   """
   def get_user_by_email(email) when is_binary(email) do
-    Repo.get_by(User, email: email)
+    Repo.get_by(User, email: email) |> Repo.preload(:identities)
   end
 
   @doc """
@@ -109,6 +136,74 @@ defmodule FediServer.Accounts do
     %User{}
     |> User.registration_changeset(attrs, set_roles: "admin")
     |> Repo.insert()
+  end
+
+  @doc """
+  Registers a user from their GitHub information.
+  """
+  def register_github_user(primary_email, info, emails, token) do
+    if user = get_user_by_provider(:github, primary_email) do
+      update_github_token(user, token)
+    else
+      insert_or_update_github_user(info, primary_email, emails, token)
+    end
+  end
+
+  def update_github_token(%User{} = user, new_token) do
+    identity =
+      Repo.one!(from(i in Identity, where: i.user_id == ^user.id and i.provider == "github"))
+
+    {:ok, _} =
+      identity
+      |> Ecto.Changeset.change()
+      |> Ecto.Changeset.put_change(:provider_token, new_token)
+      |> Repo.update()
+
+    {:ok, Repo.preload(user, :identities, force: true)}
+  end
+
+  def insert_or_update_github_user(info, primary_email, emails, token) do
+    result =
+      User.github_registration_changeset(info, primary_email, emails, token)
+      |> Repo.insert()
+
+    case result do
+      {:ok, user} ->
+        {:ok, user}
+
+      {:error, changeset} ->
+        if Repo.unique_constraint_error(changeset, :email) do
+          link_github_to_local_user(changeset, info, primary_email, emails, token)
+        else
+          {:error, changeset}
+        end
+    end
+  end
+
+  def link_github_to_local_user(changeset, info, primary_email, emails, token) do
+    user = get_user_by_email(primary_email)
+
+    if user do
+      Logger.error("link_github_to_local_user #{primary_email}")
+
+      user
+      |> User.github_link_changeset(info, primary_email, emails, token)
+      |> Repo.update()
+    else
+      {:error, changeset}
+    end
+  end
+
+  def get_user_by_provider(provider, email) when provider in [:github, :fedi_server] do
+    query =
+      from(u in User,
+        join: i in assoc(u, :identities),
+        where:
+          i.provider == ^to_string(provider) and
+            fragment("lower(?)", u.email) == ^String.downcase(email)
+      )
+
+    Repo.one(query)
   end
 
   @doc """

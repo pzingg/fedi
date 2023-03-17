@@ -16,6 +16,7 @@ defmodule FediServer.Accounts.UserToken do
   schema "users_tokens" do
     field(:token, :binary)
     field(:context, :string)
+
     belongs_to(:user, User)
 
     timestamps(updated_at: false)

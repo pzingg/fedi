@@ -1,7 +1,10 @@
 defmodule FediServer.Activities do
   @moduledoc """
-  Main context. Handles all ActivityPub actions that interact with
-  the database.
+  A "backend" context that handles all ActivityPub actions that
+  interact with the PostgreSQL database and other ActivityPub servers.
+
+  Contexts are also responsible for managing your data, regardless
+  if it comes from the database, an external API or others.
   """
 
   @behaviour Fedi.ActivityPub.DatabaseApi
@@ -1117,12 +1120,6 @@ defmodule FediServer.Activities do
     }
   end
 
-  def unique_constraint_error(changeset) do
-    Enum.find(changeset.errors, fn {_field, {_msg, opts}} ->
-      opts[:constraint] == :unique
-    end)
-  end
-
   @doc """
   Removes the entry with the given id.
 
@@ -1916,7 +1913,7 @@ defmodule FediServer.Activities do
   def handle_insert_result({:ok, data}, _), do: {:ok, data}
 
   def handle_insert_result({:error, %Ecto.Changeset{} = changeset}, type) do
-    if unique_constraint_error(changeset) do
+    if Repo.unique_constraint_error(changeset) do
       Logger.debug("Conflict on insert #{type}: #{inspect(changeset)}")
       {:ok, :already_inserted}
     else

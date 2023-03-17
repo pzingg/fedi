@@ -5,6 +5,7 @@ defmodule FediServer.Accounts.User do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias FediServer.Accounts.Identity
   alias FediServerWeb.Router.Helpers, as: Routes
 
   @derive {Phoenix.Param, key: :nickname}
@@ -27,8 +28,12 @@ defmodule FediServer.Accounts.User do
       values: [:do_nothing, :automatically_accept, :automatically_reject]
     )
 
+    field(:avatar_url, :string)
+    field(:external_homepage_url, :string)
     field(:keys, :string)
     field(:data, :map)
+
+    has_many(:identities, Identity)
 
     timestamps()
   end
@@ -107,6 +112,66 @@ defmodule FediServer.Accounts.User do
     user
     |> cast(attrs, [:last_login_at])
     |> validate_required(:last_login_at)
+  end
+
+  @doc """
+  A user changeset for github registration.
+  """
+  def github_registration_changeset(info, primary_email, emails, token) do
+    %{"login" => username, "avatar_url" => avatar_url, "html_url" => external_homepage_url} = info
+
+    identity_changeset =
+      Identity.github_registration_changeset(info, primary_email, emails, token)
+
+    if identity_changeset.valid? do
+      params = %{
+        "nickname" => username,
+        "email" => primary_email,
+        "name" => get_change(identity_changeset, :provider_name),
+        "avatar_url" => avatar_url,
+        "external_homepage_url" => external_homepage_url
+      }
+
+      %__MODULE__{local?: true}
+      |> cast(params, [:name, :nickname, :email, :avatar_url, :external_homepage_url])
+      |> validate_required([:name])
+      |> validate_nickname()
+      |> put_ap_id_and_inbox()
+      |> validate_email()
+      |> maybe_put_shared_inbox()
+      |> maybe_put_keys()
+      |> maybe_put_data()
+      |> put_assoc(:identities, [identity_changeset])
+    else
+      %__MODULE__{local?: true}
+      |> change()
+      |> Map.put(:valid?, false)
+      |> put_assoc(:identities, [identity_changeset])
+    end
+  end
+
+  def github_link_changeset(%__MODULE__{} = user, info, primary_email, emails, token) do
+    %{"avatar_url" => avatar_url, "html_url" => external_homepage_url} = info
+
+    identity_changeset =
+      Identity.github_registration_changeset(info, primary_email, emails, token)
+
+    if identity_changeset.valid? do
+      params = %{
+        "avatar_url" => avatar_url,
+        "external_homepage_url" => external_homepage_url
+      }
+
+      user
+      |> cast(params, [:avatar_url, :external_homepage_url])
+      |> maybe_put_data()
+      |> put_assoc(:identities, [identity_changeset])
+    else
+      user
+      |> change()
+      |> Map.put(:valid?, false)
+      |> put_assoc(:identities, [identity_changeset])
+    end
   end
 
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
@@ -248,10 +313,16 @@ defmodule FediServer.Accounts.User do
                   nil
               end
 
+            opts =
+              case get_field(changeset, :avatar_url) do
+                nil -> []
+                url -> [avatar_url: url]
+              end
+
             put_change(
               changeset,
               :data,
-              fediverse_data(ap_id, name, nickname, email, public_key_pem)
+              fediverse_data(ap_id, name, nickname, email, public_key_pem, opts)
             )
           else
             changeset
@@ -268,7 +339,7 @@ defmodule FediServer.Accounts.User do
   def fediverse_data(ap_id, name, nickname, email, public_key, opts \\ []) do
     user_suffix = "/users/#{nickname}"
     user_url = String.replace_trailing(ap_id, user_suffix, "/@#{nickname}")
-    email_hash = :crypto.hash(:md5, email) |> Base.encode16() |> String.downcase()
+    avatar_url = Keyword.get(opts, :avatar_url) || make_gravatar_url(email)
 
     %{
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -295,12 +366,17 @@ defmodule FediServer.Accounts.User do
       "icon" => %{
         "type" => "Image",
         "mediaType" => "image/jpeg",
-        "url" => "https://www.gravatar.com/avatar/#{email_hash}.jpg?s=144&d=mp"
+        "url" => avatar_url
       }
       # "attachment" => fields,
       # "tag" => emoji_tags,
       # "capabilities" => capabilities,
       # "alsoKnownAs" => Keyword.get(opts, :also_known_as)
     }
+  end
+
+  def make_gravatar_url(email) do
+    email_hash = :crypto.hash(:md5, email) |> Base.encode16() |> String.downcase()
+    "https://www.gravatar.com/avatar/#{email_hash}.jpg?s=144&d=mp"
   end
 end

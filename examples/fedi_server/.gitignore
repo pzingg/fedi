@@ -24,3 +24,6 @@ fedi_server-*.tar
 
 /priv/static/
 /assets/vendor/fontawesome*
+
+# Oauth client ids and secrets
+.env

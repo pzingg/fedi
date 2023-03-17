@@ -22,5 +22,9 @@
 <% end %>
 
 <p>
+  <%= link "Log in with GitHub", to: FediServer.Oauth.Github.authorize_url() %>
+</p>
+
+<p>
   <%= link "Register", to: Routes.user_registration_path(@conn, :new) %>
 </p>

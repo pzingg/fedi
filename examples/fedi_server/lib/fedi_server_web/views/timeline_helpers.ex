@@ -4,11 +4,14 @@ defmodule FediServerWeb.TimelineHelpers do
   require Logger
 
   alias Fedi.Streams.Utils
+  alias FediServer.Accounts.User
   alias FediServer.Activities
 
-  def transform(%{activity: %{"type" => "Announce", "id" => boost_id}, actor: actor} = activity) do
+  def transform(
+        %{activity: %{"type" => "Announce", "id" => boost_id}, actor: actor_data} = activity
+      ) do
     booster_info =
-      get_actor_info(actor)
+      get_actor_info(%{data: actor_data})
       |> Map.put(:activity_id, boost_id)
 
     activity
@@ -82,7 +85,7 @@ defmodule FediServerWeb.TimelineHelpers do
   def transform(nil, _domain, _ulid, _object, _booster_info), do: nil
 
   def transform(actor, domain, ulid, %{"id" => object_id} = object, booster_info) do
-    actor_info = get_actor_info(actor)
+    actor_info = get_actor_info(%{data: actor})
 
     reply_count =
       case Activities.reply_count(object_id) do
@@ -160,21 +163,18 @@ defmodule FediServerWeb.TimelineHelpers do
   end
 
   def get_actor_info(
-        %{"id" => id, "preferredUsername" => nickname, "name" => name, "url" => url} = actor_data
+        %{
+          data:
+            %{"id" => id, "preferredUsername" => nickname, "name" => name, "url" => url} =
+              actor_data
+        } = actor
       ) do
     %URI{host: domain} = Utils.to_uri(id)
 
     avatar_url =
-      case get_in(actor_data, ["icon", "url"]) do
-        url when is_binary(url) ->
-          url
-
-        _ ->
-          email_hash =
-            :crypto.hash(:md5, "#{nickname}@#{domain}") |> Base.encode16() |> String.downcase()
-
-          "https://www.gravatar.com/avatar/#{email_hash}.jpg?s=144&d=mp"
-      end
+      actor[:avatar_url] ||
+        get_in(actor_data, ["icon", "url"]) ||
+        User.make_gravatar_url("#{nickname}@#{domain}")
 
     %{
       id: id,

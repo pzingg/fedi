@@ -1,4 +1,26 @@
 import Config
+import Dotenvy
+
+[
+  ".env",
+  "#{config_env()}.env",
+  "#{config_env()}.local.env",
+  System.get_env()
+]
+|> Dotenvy.source!()
+
+# :client_id and :client_secret must be obtained from GitHub
+# Create a [Github OAuth app](https://docs.github.com/en/developers/apps/building-oauth-apps/creating-an-oauth-app)
+# from [this page](https://github.com/settings/applications/new)
+# Set the app homepage to `http://localhost:4000` and
+# `Authorization callback URL` to `http://localhost:4000/oauth/callbacks/github`
+# After completing the form, click "Generate a new client secret"
+# to obtain your API secret.
+# In production add the client id and secret in the file `.env`
+# in the project root directory with the keys "GITHUB_CLIENT_ID" and "GITHUB_CLIENT_SECRET"
+config :fedi_server, :github,
+  client_id: Dotenvy.env!("GITHUB_CLIENT_ID"),
+  client_secret: Dotenvy.env!("GITHUB_CLIENT_SECRET")
 
 # config/runtime.exs is executed for all environments, including
 # during releases. It is executed after compilation and before the
@@ -77,4 +99,8 @@ if config_env() == :prod do
       port: port
     ],
     secret_key_base: secret_key_base
+
+  config :fedi_server, :github,
+    client_id: System.fetch_env!("GITHUB_CLIENT_ID"),
+    client_secret: System.fetch_env!("GITHUB_CLIENT_SECRET")
 end
