@@ -1,12 +1,22 @@
 defmodule FediServer.Oauth.Github do
-  @moduledoc false
+  @moduledoc """
+  Client for an established GitHub application.
+
+  Setup:
+
+  ```
+  config :fedi_server, :github,
+    client_id: "some client id",
+    client_secret: "some client secret"
+  ```
+  """
 
   require Logger
 
   alias FediServer.HTTPClient
 
   def authorize_url() do
-    state = random_string()
+    state = FediServer.Oauth.random_string()
     query = URI.encode_query([{:client_id, client_id()}, {:state, state}, {:scope, "user:email"}])
 
     %URI{
@@ -19,10 +29,7 @@ defmodule FediServer.Oauth.Github do
     |> URI.to_string()
   end
 
-  def exchange_access_token(opts) do
-    code = Keyword.fetch!(opts, :code)
-    state = Keyword.fetch!(opts, :state)
-
+  def exchange_access_token(state, code) do
     state
     |> fetch_exchange_response(code)
     |> fetch_user_info()
@@ -43,7 +50,7 @@ defmodule FediServer.Oauth.Github do
          %{"access_token" => token} <- Jason.decode!(resp) do
       {:ok, token}
     else
-      {:error, _reason} = err -> err
+      {:error, _reason} = error -> error
       %{} = resp -> {:error, {:bad_response, resp}}
     end
   end
@@ -100,8 +107,8 @@ defmodule FediServer.Oauth.Github do
 
         {:ok, %{info: info, token: token}}
 
-      {:error, _reason} = err ->
-        err
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -140,24 +147,11 @@ defmodule FediServer.Oauth.Github do
     case resp do
       {:ok, info} ->
         emails = Jason.decode!(info)
-
         {:ok, Map.merge(user, %{primary_email: primary_email(emails), emails: emails})}
 
-      {:error, _reason} = err ->
-        err
+      {:error, _reason} = error ->
+        error
     end
-  end
-
-  def random_string do
-    binary = <<
-      System.system_time(:nanosecond)::64,
-      :erlang.phash2({node(), self()})::16,
-      :erlang.unique_integer()::16
-    >>
-
-    binary
-    |> Base.url_encode64()
-    |> String.replace(["/", "+"], "-")
   end
 
   defp client_id, do: FediServer.config([:github, :client_id])
@@ -196,9 +190,8 @@ defmodule FediServer.Oauth.Github do
         if HTTPClient.success?(env.status) do
           {:ok, body}
         else
-          reason = "#{method} #{url} returned status #{env.status}"
-
-          {:error, reason}
+          Logger.error("#{method} #{url} #{env.status} body #{body}")
+          {:error, "#{method} #{url} returned status #{env.status}"}
         end
     end
   end

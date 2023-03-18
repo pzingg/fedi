@@ -15,9 +15,10 @@ defmodule FediServer.Application do
       # Start the PubSub system
       {Phoenix.PubSub, name: FediServer.PubSub},
       # Start the Endpoint (http/https)
-      FediServerWeb.Endpoint
+      FediServerWeb.Endpoint,
       # Start a worker by calling: FediServer.Worker.start_link(arg)
       # {FediServer.Worker, arg}
+      {FediServer.Oauth.LoginCache, name: :mastodon_login_cache}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

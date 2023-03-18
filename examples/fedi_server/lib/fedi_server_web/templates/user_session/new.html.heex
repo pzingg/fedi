@@ -26,5 +26,9 @@
 </p>
 
 <p>
+  <%= link "Log in with Mastodon", to: Routes.user_session_path(@conn, :mastodon) %>
+</p>
+
+<p>
   <%= link "Register", to: Routes.user_registration_path(@conn, :new) %>
 </p>

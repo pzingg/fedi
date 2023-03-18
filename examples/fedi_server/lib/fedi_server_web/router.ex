@@ -124,6 +124,8 @@ defmodule FediServerWeb.Router do
     post("/users/register", UserRegistrationController, :create)
     get("/users/log_in", UserSessionController, :new)
     post("/users/log_in", UserSessionController, :create)
+    get("/users/mastodon", UserSessionController, :mastodon)
+    post("/users/mastodon", UserSessionController, :create_mastodon)
     get("/users/log_out", UserSessionController, :delete)
     delete("/users/log_out", UserSessionController, :delete)
   end

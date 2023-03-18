@@ -83,11 +83,11 @@ defmodule FediServer do
     try do
       target.handle_execute({src_mod, event_struct})
     catch
-      kind, err ->
+      kind, error ->
         Logger.error("""
         executing {#{inspect(src_mod)}, #{inspect(event_mod)}} failed with #{inspect(kind)}
 
-            #{inspect(err)}
+            #{inspect(error)}
         """)
     end
   end

@@ -115,17 +115,31 @@ defmodule FediServer.Accounts.User do
   end
 
   @doc """
-  A user changeset for github registration.
+  A user changeset for GitHub registration.
   """
   def github_registration_changeset(info, primary_email, emails, token) do
-    %{"login" => username, "avatar_url" => avatar_url, "html_url" => external_homepage_url} = info
+    %{
+      "id" => provider_id,
+      "login" => nickname,
+      "avatar_url" => avatar_url,
+      "html_url" => external_homepage_url
+    } = info
 
-    identity_changeset =
-      Identity.github_registration_changeset(info, primary_email, emails, token)
+    identity_params = %{
+      "provider_token" => token,
+      "provider_id" => to_string(provider_id),
+      "provider_login" => nickname,
+      "provider_name" => info["name"] || nickname,
+      "provider_email" => primary_email
+    }
+
+    meta = %{"user" => info, "emails" => emails}
+
+    identity_changeset = Identity.changeset("github", meta, identity_params)
 
     if identity_changeset.valid? do
       params = %{
-        "nickname" => username,
+        "nickname" => nickname,
         "email" => primary_email,
         "name" => get_change(identity_changeset, :provider_name),
         "avatar_url" => avatar_url,
@@ -150,7 +164,52 @@ defmodule FediServer.Accounts.User do
     end
   end
 
-  def github_link_changeset(%__MODULE__{} = user, params) do
+  @doc """
+  A user changeset for Mastodon registration.
+  """
+  def mastodon_registration_changeset(info, email, nickname, token) do
+    %{"id" => provider_id, "avatar" => avatar_url, "url" => external_homepage_url} = info
+
+    identity_params = %{
+      "provider_token" => token,
+      "provider_id" => to_string(provider_id),
+      "provider_login" => nickname,
+      "provider_name" => info["name"] || nickname,
+      "provider_email" => email
+    }
+
+    meta = %{"user" => info, "emails" => [email]}
+
+    identity_changeset = Identity.changeset("mastodon", meta, identity_params)
+
+    if identity_changeset.valid? do
+      params = %{
+        "nickname" => nickname,
+        "email" => email,
+        "name" => get_change(identity_changeset, :provider_name),
+        "avatar_url" => avatar_url,
+        "external_homepage_url" => external_homepage_url
+      }
+
+      %__MODULE__{local?: true}
+      |> cast(params, [:name, :nickname, :email, :avatar_url, :external_homepage_url])
+      |> put_assoc(:identities, [identity_changeset])
+      |> validate_required([:name])
+      |> validate_nickname()
+      |> put_ap_id_and_inbox()
+      |> validate_email()
+      |> maybe_put_shared_inbox()
+      |> maybe_put_keys()
+      |> maybe_put_data()
+    else
+      %__MODULE__{local?: true}
+      |> change()
+      |> Map.put(:valid?, false)
+      |> put_assoc(:identities, [identity_changeset])
+    end
+  end
+
+  def oauth_link_changeset(%__MODULE__{} = user, params) do
     {identities, params} = Map.pop(params, :identities, [])
 
     user
@@ -277,8 +336,6 @@ defmodule FediServer.Accounts.User do
   end
 
   def maybe_put_data(changeset) do
-    changes = Map.keys(changeset.changes)
-
     case get_field(changeset, :data) do
       %{"id" => ap_id} = data when is_binary(ap_id) ->
         case get_change(changeset, :avatar_url) do

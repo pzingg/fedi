@@ -458,7 +458,7 @@ defmodule FediServer.HTTPClient do
 
   defp remove_suffix(uri, []), do: uri
 
-  def is_http_uri?(%URI{scheme: scheme, host: host, path: path} = _uri) do
+  def http_uri?(%URI{scheme: scheme, host: host, path: path} = _uri) do
     Enum.member?(["http", "https"], scheme) && !is_nil(host) && host != "" &&
       !is_nil(path) && String.length(path) > 1
   end

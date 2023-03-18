@@ -141,17 +141,34 @@ defmodule FediServer.Accounts do
   @doc """
   Registers a user from their GitHub information.
   """
-  def register_github_user(primary_email, info, emails, token) do
-    if user = get_user_by_provider(:github, primary_email) do
-      update_github_token(user, token)
+  def register_github_user(info, primary_email, emails, token) do
+    if user = get_user_by_provider(:github, :email, primary_email) do
+      update_provider_token(:github, user, token)
     else
-      insert_or_update_github_user(info, primary_email, emails, token)
+      registration_changeset =
+        User.github_registration_changeset(info, primary_email, emails, token)
+
+      insert_or_update_oauth_user(registration_changeset)
     end
   end
 
-  def update_github_token(%User{} = user, new_token) do
+  @doc """
+  Registers a user from their Mastodon information.
+  """
+  def register_mastodon_user(info, email, nickname, token) do
+    if user = get_user_by_provider(:mastodon, :nickname, nickname) do
+      update_provider_token(:mastodon, user, token)
+    else
+      registration_changeset = User.mastodon_registration_changeset(info, email, nickname, token)
+      insert_or_update_oauth_user(registration_changeset)
+    end
+  end
+
+  def update_provider_token(provider, %User{} = user, new_token) do
     identity =
-      Repo.one!(from(i in Identity, where: i.user_id == ^user.id and i.provider == "github"))
+      Repo.one!(
+        from(i in Identity, where: i.user_id == ^user.id and i.provider == ^to_string(provider))
+      )
 
     {:ok, _} =
       identity
@@ -162,49 +179,65 @@ defmodule FediServer.Accounts do
     {:ok, Repo.preload(user, :identities, force: true)}
   end
 
-  def insert_or_update_github_user(info, primary_email, emails, token) do
-    registration_changeset =
-      User.github_registration_changeset(info, primary_email, emails, token)
-
+  def insert_or_update_oauth_user(registration_changeset) do
     case Repo.insert(registration_changeset) do
       {:ok, user} ->
         {:ok, user}
 
       {:error, changeset} ->
-        if Repo.unique_constraint_error(changeset, :email) do
-          attrs = %{
-            identities: Ecto.Changeset.get_field(registration_changeset, :identities),
-            avatar_url: Ecto.Changeset.get_field(registration_changeset, :avatar_url),
-            external_homepage_url: Ecto.Changeset.get_field(registration_changeset, :external_homepage_url)
-          }
-          link_github_to_local_user(primary_email, attrs, changeset)
-        else
-          {:error, changeset}
+        case Repo.unique_constraint_error(changeset) do
+          nil ->
+            {:error, changeset}
+
+          field ->
+            attrs = %{
+              identities: Ecto.Changeset.get_field(registration_changeset, :identities),
+              avatar_url: Ecto.Changeset.get_field(registration_changeset, :avatar_url),
+              external_homepage_url:
+                Ecto.Changeset.get_field(registration_changeset, :external_homepage_url)
+            }
+
+            link_oauth_to_local_user(changeset, field, attrs)
         end
     end
   end
 
-  def link_github_to_local_user(primary_email, attrs, changeset) do
-    user = get_user_by_email(primary_email)
+  def link_oauth_to_local_user(changeset, key_field, attrs) do
+    value = Ecto.Changeset.get_field(changeset, key_field)
+    query = from(u in User, where: field(u, ^key_field) == ^value, preload: [:identities])
+    user = Repo.one(query)
 
     if user do
-      Logger.error("link_github_to_local_user #{primary_email}")
+      Logger.error("link_oauth_to_local_user #{key_field} #{value}")
 
       user
-      |> User.github_link_changeset(attrs)
+      |> User.oauth_link_changeset(attrs)
       |> Repo.update()
     else
       {:error, changeset}
     end
   end
 
-  def get_user_by_provider(provider, email) when provider in [:github, :fedi_server] do
+  def get_user_by_provider(provider, :email, email) when provider in [:github, :fedi_server] do
     query =
       from(u in User,
         join: i in assoc(u, :identities),
         where:
           i.provider == ^to_string(provider) and
             fragment("lower(?)", u.email) == ^String.downcase(email)
+      )
+
+    Repo.one(query)
+  end
+
+  def get_user_by_provider(provider, :nickname, nickname)
+      when provider in [:mastodon, :fedi_server] do
+    query =
+      from(u in User,
+        join: i in assoc(u, :identities),
+        where:
+          i.provider == ^to_string(provider) and
+            fragment("lower(?)", u.nickname) == ^String.downcase(nickname)
       )
 
     Repo.one(query)

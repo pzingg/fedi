@@ -193,7 +193,7 @@ defmodule FediServerWeb.WebFinger do
   defp get_address_from_domain(_, _), do: {:error, :webfinger_no_domain}
 
   def finger(%URI{host: domain} = account) do
-    if HTTPClient.is_http_uri?(account) do
+    if HTTPClient.http_uri?(account) do
       finger(URI.to_string(account), domain)
     else
       {:error, "WebFinger: account is not an HTTP URL"}

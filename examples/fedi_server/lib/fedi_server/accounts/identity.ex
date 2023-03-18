@@ -4,10 +4,6 @@ defmodule FediServer.Accounts.Identity do
 
   alias FediServer.Accounts.User
 
-  # providers
-  @github "github"
-  @fedi_server "fedi_server"
-
   @derive {Inspect, except: [:provider_token, :provider_meta]}
   @timestamps_opts [type: :utc_datetime]
   @primary_key {:id, Ecto.ULID, autogenerate: true}
@@ -26,19 +22,8 @@ defmodule FediServer.Accounts.Identity do
     timestamps()
   end
 
-  @doc """
-  A user changeset for github registration.
-  """
-  def github_registration_changeset(info, primary_email, emails, token) do
-    params = %{
-      "provider_token" => token,
-      "provider_id" => to_string(info["id"]),
-      "provider_login" => info["login"],
-      "provider_name" => info["name"] || info["login"],
-      "provider_email" => primary_email
-    }
-
-    %__MODULE__{provider: @github, provider_meta: %{"user" => info, "emails" => emails}}
+  def changeset(provider, meta, params) do
+    %__MODULE__{provider: provider, provider_meta: meta}
     |> cast(params, [
       :provider_token,
       :provider_email,

@@ -1,0 +1,22 @@
+<h1>Log in</h1>
+
+<%= form_for @conn, Routes.user_session_path(@conn, :create_mastodon), [as: :user], fn f -> %>
+  <%= if @error_message do %>
+    <div class="alert alert-danger">
+      <p><%= @error_message %></p>
+    </div>
+  <% end %>
+
+  <%= label f, :mastodon_server_url %>
+  <%= text_input f, :mastodon_server_url, required: true %>
+
+  <%= label f, :email %>
+  <%= text_input f, :email, required: true %>
+
+  <%= label f, :password %>
+  <%= password_input f, :password, required: true %>
+
+  <div>
+    <%= submit "Log in with Mastodon" %>
+  </div>
+<% end %>
