@@ -41,7 +41,6 @@ defmodule FediServer.Oauth.Github do
 
     with {:ok, resp} <- resp,
          %{"access_token" => token} <- Jason.decode!(resp) do
-      Logger.error("Got GitHub access token #{token}")
       {:ok, token}
     else
       {:error, _reason} = err -> err
@@ -98,7 +97,7 @@ defmodule FediServer.Oauth.Github do
     case resp do
       {:ok, info} ->
         info = Jason.decode!(info)
-        Logger.error("Got GitHub user info #{inspect(info)}")
+
         {:ok, %{info: info, token: token}}
 
       {:error, _reason} = err ->
@@ -141,7 +140,7 @@ defmodule FediServer.Oauth.Github do
     case resp do
       {:ok, info} ->
         emails = Jason.decode!(info)
-        Logger.error("Got GitHub user emails #{inspect(emails)}")
+
         {:ok, Map.merge(user, %{primary_email: primary_email(emails), emails: emails})}
 
       {:error, _reason} = err ->
@@ -198,9 +197,7 @@ defmodule FediServer.Oauth.Github do
           {:ok, body}
         else
           reason = "#{method} #{url} returned status #{env.status}"
-          Logger.error(reason)
-          Logger.error("  req headers were #{inspect(headers)}")
-          Logger.error("  #{body}")
+
           {:error, reason}
         end
     end

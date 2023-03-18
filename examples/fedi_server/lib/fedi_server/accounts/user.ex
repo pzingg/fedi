@@ -134,6 +134,7 @@ defmodule FediServer.Accounts.User do
 
       %__MODULE__{local?: true}
       |> cast(params, [:name, :nickname, :email, :avatar_url, :external_homepage_url])
+      |> put_assoc(:identities, [identity_changeset])
       |> validate_required([:name])
       |> validate_nickname()
       |> put_ap_id_and_inbox()
@@ -141,7 +142,6 @@ defmodule FediServer.Accounts.User do
       |> maybe_put_shared_inbox()
       |> maybe_put_keys()
       |> maybe_put_data()
-      |> put_assoc(:identities, [identity_changeset])
     else
       %__MODULE__{local?: true}
       |> change()
@@ -150,28 +150,13 @@ defmodule FediServer.Accounts.User do
     end
   end
 
-  def github_link_changeset(%__MODULE__{} = user, info, primary_email, emails, token) do
-    %{"avatar_url" => avatar_url, "html_url" => external_homepage_url} = info
+  def github_link_changeset(%__MODULE__{} = user, params) do
+    {identities, params} = Map.pop(params, :identities, [])
 
-    identity_changeset =
-      Identity.github_registration_changeset(info, primary_email, emails, token)
-
-    if identity_changeset.valid? do
-      params = %{
-        "avatar_url" => avatar_url,
-        "external_homepage_url" => external_homepage_url
-      }
-
-      user
-      |> cast(params, [:avatar_url, :external_homepage_url])
-      |> maybe_put_data()
-      |> put_assoc(:identities, [identity_changeset])
-    else
-      user
-      |> change()
-      |> Map.put(:valid?, false)
-      |> put_assoc(:identities, [identity_changeset])
-    end
+    user
+    |> cast(params, [:avatar_url, :external_homepage_url])
+    |> put_assoc(:identities, identities)
+    |> maybe_put_data()
   end
 
   def changeset(%__MODULE__{} = user, attrs \\ %{}) do
@@ -186,6 +171,8 @@ defmodule FediServer.Accounts.User do
       :password,
       :keys,
       :shared_inbox,
+      :avatar_url,
+      :external_homepage_url,
       :last_login_at,
       :on_follow,
       :data
@@ -290,9 +277,18 @@ defmodule FediServer.Accounts.User do
   end
 
   def maybe_put_data(changeset) do
+    changes = Map.keys(changeset.changes)
+
     case get_field(changeset, :data) do
-      %{"id" => ap_id} when is_binary(ap_id) ->
-        changeset
+      %{"id" => ap_id} = data when is_binary(ap_id) ->
+        case get_change(changeset, :avatar_url) do
+          nil ->
+            changeset
+
+          url ->
+            data = put_in(data, ["icon"], avatar_data(url))
+            put_change(changeset, :data, data)
+        end
 
       _ ->
         if get_field(changeset, :local?) do
@@ -313,16 +309,12 @@ defmodule FediServer.Accounts.User do
                   nil
               end
 
-            opts =
-              case get_field(changeset, :avatar_url) do
-                nil -> []
-                url -> [avatar_url: url]
-              end
+            avatar_url = get_field(changeset, :avatar_url) || make_gravatar_url(email)
 
             put_change(
               changeset,
               :data,
-              fediverse_data(ap_id, name, nickname, email, public_key_pem, opts)
+              fediverse_data(ap_id, name, nickname, public_key_pem, avatar_url)
             )
           else
             changeset
@@ -336,10 +328,9 @@ defmodule FediServer.Accounts.User do
   @doc """
   Ref: [AP Section 4.1](https://www.w3.org/TR/activitypub/#actor-objects)
   """
-  def fediverse_data(ap_id, name, nickname, email, public_key, opts \\ []) do
+  def fediverse_data(ap_id, name, nickname, public_key, avatar_url, opts \\ []) do
     user_suffix = "/users/#{nickname}"
     user_url = String.replace_trailing(ap_id, user_suffix, "/@#{nickname}")
-    avatar_url = Keyword.get(opts, :avatar_url) || make_gravatar_url(email)
 
     %{
       "type" => Keyword.get(opts, :actor_type, "Person"),
@@ -363,15 +354,19 @@ defmodule FediServer.Accounts.User do
         "owner" => ap_id,
         "publicKeyPem" => public_key
       },
-      "icon" => %{
-        "type" => "Image",
-        "mediaType" => "image/jpeg",
-        "url" => avatar_url
-      }
+      "icon" => avatar_data(avatar_url)
       # "attachment" => fields,
       # "tag" => emoji_tags,
       # "capabilities" => capabilities,
       # "alsoKnownAs" => Keyword.get(opts, :also_known_as)
+    }
+  end
+
+  def avatar_data(avatar_url) do
+    %{
+      "type" => "Image",
+      "mediaType" => "image/jpeg",
+      "url" => avatar_url
     }
   end
 

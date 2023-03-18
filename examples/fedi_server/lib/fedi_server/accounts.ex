@@ -163,31 +163,35 @@ defmodule FediServer.Accounts do
   end
 
   def insert_or_update_github_user(info, primary_email, emails, token) do
-    result =
+    registration_changeset =
       User.github_registration_changeset(info, primary_email, emails, token)
-      |> Repo.insert()
 
-    case result do
+    case Repo.insert(registration_changeset) do
       {:ok, user} ->
         {:ok, user}
 
       {:error, changeset} ->
         if Repo.unique_constraint_error(changeset, :email) do
-          link_github_to_local_user(changeset, info, primary_email, emails, token)
+          attrs = %{
+            identities: Ecto.Changeset.get_field(registration_changeset, :identities),
+            avatar_url: Ecto.Changeset.get_field(registration_changeset, :avatar_url),
+            external_homepage_url: Ecto.Changeset.get_field(registration_changeset, :external_homepage_url)
+          }
+          link_github_to_local_user(primary_email, attrs, changeset)
         else
           {:error, changeset}
         end
     end
   end
 
-  def link_github_to_local_user(changeset, info, primary_email, emails, token) do
+  def link_github_to_local_user(primary_email, attrs, changeset) do
     user = get_user_by_email(primary_email)
 
     if user do
       Logger.error("link_github_to_local_user #{primary_email}")
 
       user
-      |> User.github_link_changeset(info, primary_email, emails, token)
+      |> User.github_link_changeset(attrs)
       |> Repo.update()
     else
       {:error, changeset}
