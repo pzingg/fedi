@@ -26,7 +26,11 @@
 </p>
 
 <p>
-  <%= link "Log in with Mastodon", to: Routes.user_session_path(@conn, :mastodon) %>
+  <%= link "Log in to Mastodon server", to: Routes.user_session_path(@conn, :mastodon) %>
+</p>
+
+<p>
+  <%= link "Log in with Mastodon email and password", to: Routes.user_session_path(@conn, :mastodon_login) %>
 </p>
 
 <p>

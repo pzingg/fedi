@@ -5,6 +5,7 @@ defmodule FediServerWeb.UserSessionController do
 
   alias FediServer.Accounts
   alias FediServerWeb.UserAuth
+  alias FediServerWeb.Oauth.RedirectionController
 
   def new(conn, _params) do
     render(conn, "new.html", error_message: nil)
@@ -26,8 +27,12 @@ defmodule FediServerWeb.UserSessionController do
     render(conn, "mastodon.html", error_message: nil)
   end
 
+  def mastodon_login(conn, _params) do
+    render(conn, "mastodon_login.html", error_message: nil)
+  end
+
   def create_mastodon(conn, %{"user" => user_params}) do
-    %{"email" => email, "password" => password, "mastodon_server_url" => server_url} = user_params
+    %{"mastodon_server_url" => server_url} = user_params
 
     uri = URI.parse(server_url)
 
@@ -39,14 +44,26 @@ defmodule FediServerWeb.UserSessionController do
       end
 
     redirect_uri = Routes.redirection_url(conn, :new, "mastodon")
+    client = RedirectionController.mastodon_client(conn)
 
-    case FediServer.Oauth.Mastodon.create_app("FediServer", server_url, redirect_uri) do
+    case client.create_app("FediServer", server_url, redirect_uri) do
       {:ok, app} ->
-        opts = [email: email, password: password]
+        email = Map.get(user_params, "email")
+        password = Map.get(user_params, "password")
 
-        conn
-        |> redirect(external: FediServer.Oauth.Mastodon.authorize_url(app, opts))
-        |> halt()
+        if email && password do
+          result =
+            with {:ok, info} <- client.login(app, email, password),
+                 %{info: info, email: email, nickname: nickname, token: token} <- info do
+              Accounts.register_mastodon_user(info, email, nickname, token)
+            end
+
+          RedirectionController.oauth_authentication_response(conn, "Mastodon", result)
+        else
+          conn
+          |> redirect(external: client.authorize_url(app))
+          |> halt()
+        end
 
       {:error, reason} ->
         Logger.error("create_app error #{inspect(reason)}")

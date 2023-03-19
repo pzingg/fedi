@@ -10,6 +10,12 @@
   <%= label f, :mastodon_server_url, "Mastodon server" %>
   <%= text_input f, :mastodon_server_url, required: true %>
 
+  <%= label f, :email %>
+  <%= text_input f, :email, required: true %>
+
+  <%= label f, :password %>
+  <%= password_input f, :password, required: true %>
+
   <div>
     <%= submit "Log in with Mastodon" %>
   </div>

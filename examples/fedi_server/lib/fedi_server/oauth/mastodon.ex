@@ -71,7 +71,7 @@ defmodule FediServer.Oauth.Mastodon do
     case request(:post, server_url, "/api/v1/apps", [], headers, body) do
       {:ok, data} ->
         params =
-          Jason.decode!(data)
+          data
           |> Map.merge(request_data)
           |> Map.put("server_url", server_url)
 
@@ -82,6 +82,11 @@ defmodule FediServer.Oauth.Mastodon do
     end
   end
 
+  @doc """
+  Options are:
+
+  `:force_login` - true to request Mastodon to login for authorization.
+  """
   def authorize_url(%MastodonApp{} = app, opts \\ []) do
     state = FediServer.Oauth.random_string()
     client_id = app.client_id
@@ -94,9 +99,7 @@ defmodule FediServer.Oauth.Mastodon do
       client_id: client_id,
       client_secret: app.client_secret,
       scope: scope,
-      redirect_uri: redirect_uri,
-      email: Keyword.get(opts, :email),
-      password: Keyword.get(opts, :password)
+      redirect_uri: redirect_uri
     }
 
     LoginCache.cache(:mastodon_login_cache, state, login_data)
@@ -116,12 +119,43 @@ defmodule FediServer.Oauth.Mastodon do
     |> URI.to_string()
   end
 
+  def login(%MastodonApp{} = app, email, password) do
+    redirect_uri = String.split(app.redirect_uris, " ") |> hd()
+
+    params = %{
+      grant_type: "password",
+      client_id: app.client_id,
+      client_secret: app.client_secret,
+      scope: app.scopes,
+      redirect_uri: redirect_uri,
+      username: email,
+      password: password
+    }
+
+    server_url = app.server_url
+
+    params
+    |> fetch_exchange_response(server_url)
+    |> fetch_user_info(server_url)
+  end
+
   def exchange_access_token(state, code) do
     case LoginCache.lookup(:mastodon_login_cache, state) do
-      {:ok, %__MODULE__{} = login_data} ->
-        code
-        |> fetch_exchange_response(login_data)
-        |> fetch_user_info(login_data)
+      {:ok, login_data} ->
+        params = %{
+          grant_type: "authorization_code",
+          code: code,
+          client_id: login_data.client_id,
+          client_secret: login_data.client_secret,
+          scope: login_data.scope,
+          redirect_uri: login_data.redirect_uri
+        }
+
+        server_url = login_data.server_url
+
+        params
+        |> fetch_exchange_response(server_url)
+        |> fetch_user_info(server_url)
 
       {:error, reason} = error ->
         Logger.error("Cache failure on #{state}: #{reason}")
@@ -129,22 +163,7 @@ defmodule FediServer.Oauth.Mastodon do
     end
   end
 
-  defp fetch_exchange_response(code, %{
-         server_url: server_url,
-         client_id: client_id,
-         client_secret: client_secret,
-         scope: scope,
-         redirect_uri: redirect_uri
-       }) do
-    data = %{
-      grant_type: "authorization_code",
-      code: code,
-      client_id: client_id,
-      client_secret: client_secret,
-      scope: scope,
-      redirect_uri: redirect_uri
-    }
-
+  defp fetch_exchange_response(params, server_url) do
     resp =
       request(
         :post,
@@ -152,15 +171,13 @@ defmodule FediServer.Oauth.Mastodon do
         "/oauth/token",
         [],
         [{"accept", "application/json"}, {"content-type", "application/x-www-form-urlencoded"}],
-        URI.encode_query(data)
+        URI.encode_query(params)
       )
 
-    with {:ok, resp} <- resp,
-         %{"access_token" => token} <- Jason.decode!(resp) do
-      {:ok, token}
-    else
+    case resp do
+      {:ok, %{"access_token" => token}} -> {:ok, token}
+      {:ok, _} -> {:error, "No access token in response"}
       {:error, _reason} = error -> error
-      %{} = resp -> {:error, {:bad_response, resp}}
     end
   end
 
@@ -194,7 +211,7 @@ defmodule FediServer.Oauth.Mastodon do
   #  "fields": [...],
   #  "role": {...}
   # }
-  defp fetch_user_info({:ok, token}, %{server_url: server_url}) do
+  defp fetch_user_info({:ok, token}, server_url) do
     resp =
       request(
         :get,
@@ -205,14 +222,15 @@ defmodule FediServer.Oauth.Mastodon do
       )
 
     case resp do
-      {:ok, resp} ->
-        %{"username" => nickname, "url" => url} = info = Jason.decode!(resp)
-
+      {:ok, %{"username" => nickname, "url" => url} = info} ->
         # Kludge
         domain = URI.parse(url).host
         email = "#{nickname}@#{domain}"
 
         {:ok, %{info: info, token: token, email: email, nickname: nickname}}
+
+      {:ok, _} ->
+        {:error, "No user data in response"}
 
       {:error, _reason} = error ->
         error
@@ -252,10 +270,14 @@ defmodule FediServer.Oauth.Mastodon do
 
       {:ok, %Tesla.Env{body: body} = env} ->
         if HTTPClient.success?(env.status) do
-          {:ok, body}
+          {:ok, Jason.decode!(body)}
         else
           Logger.error("#{method} #{url} #{env.status} body #{body}")
-          {:error, "#{method} #{url} returned status #{env.status}"}
+
+          case Jason.decode(body) do
+            {:ok, %{"error" => error}} -> {:error, error}
+            _ -> {:error, "Status #{env.status}"}
+          end
         end
     end
   end

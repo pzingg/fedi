@@ -46,12 +46,10 @@ defmodule FediServer.Oauth.Github do
         [{"accept", "application/json"}]
       )
 
-    with {:ok, resp} <- resp,
-         %{"access_token" => token} <- Jason.decode!(resp) do
-      {:ok, token}
-    else
+    case resp do
+      {:ok, %{"access_token" => token}} -> {:ok, token}
+      {:ok, _} -> {:error, "No access token in response"}
       {:error, _reason} = error -> error
-      %{} = resp -> {:error, {:bad_response, resp}}
     end
   end
 
@@ -102,13 +100,8 @@ defmodule FediServer.Oauth.Github do
       )
 
     case resp do
-      {:ok, info} ->
-        info = Jason.decode!(info)
-
-        {:ok, %{info: info, token: token}}
-
-      {:error, _reason} = error ->
-        error
+      {:ok, info} -> {:ok, %{info: info, token: token}}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -145,8 +138,7 @@ defmodule FediServer.Oauth.Github do
       )
 
     case resp do
-      {:ok, info} ->
-        emails = Jason.decode!(info)
+      {:ok, emails} ->
         {:ok, Map.merge(user, %{primary_email: primary_email(emails), emails: emails})}
 
       {:error, _reason} = error ->
@@ -188,10 +180,14 @@ defmodule FediServer.Oauth.Github do
 
       {:ok, %Tesla.Env{body: body} = env} ->
         if HTTPClient.success?(env.status) do
-          {:ok, body}
+          {:ok, Jason.decode!(body)}
         else
           Logger.error("#{method} #{url} #{env.status} body #{body}")
-          {:error, "#{method} #{url} returned status #{env.status}"}
+
+          case Jason.decode(body) do
+            {:ok, %{"error" => error}} -> {:error, error}
+            _ -> {:error, "Status #{env.status}"}
+          end
         end
     end
   end
