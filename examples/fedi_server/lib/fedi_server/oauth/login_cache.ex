@@ -1,33 +1,46 @@
 defmodule FediServer.Oauth.LoginCache do
+  @moduledoc """
+  Simple ETS cache to hold Oauth data during authorization flow.
+  """
+
   use GenServer
+
+  require Logger
 
   ## Client API
 
   @doc """
   Starts the registry with the given options.
 
-  `:name` is always required.
-  `:ttl` is cache timeout in seconds, defaults to 600.
+  `:name` - unique atom defining the name for an ETS named table, required.
+  `:ttl` - cache timeout in milliseconds, optional, defaults to 600_000.
+
+  After initialization, the value of `:name` can be used for
+  as the `table` argument in `lookup/2` and `cache/3`.
   """
   def start_link(opts) do
-    _server = Keyword.fetch!(opts, :name)
-    GenServer.start_link(__MODULE__, opts, opts)
+    if Keyword.get(opts, :name) do
+      GenServer.start_link(__MODULE__, opts, Keyword.take(opts, [:name, :timeout]))
+    else
+      {:error, :name_required}
+    end
   end
 
   @doc """
-  Looks up the data for `key` stored in `server`.
+  Looks up the data for `key` stored in `table`.
 
-  Returns `{:ok, value}` if it exists, `:error` otherwise.
+  Returns `{:ok, value}` if it exists, `{:error, :not_found}`
+  or `{:error, expired}` otherwise.
   """
-  def lookup(server, key) do
-    GenServer.call(server, {:lookup, key})
+  def lookup(table, key) do
+    GenServer.call(table, {:lookup, key})
   end
 
   @doc """
-  Ensures there is value associated with the given `key` in `server`.
+  Caches data at the given `key` in `table`.
   """
-  def cache(server, key, value) do
-    GenServer.cast(server, {:cache, key, value})
+  def cache(table, key, value) do
+    GenServer.cast(table, {:cache, key, value})
   end
 
   ## Server callbacks
@@ -35,26 +48,26 @@ defmodule FediServer.Oauth.LoginCache do
   @impl true
   def init(opts) do
     table = Keyword.fetch!(opts, :name)
-    ttl = Keyword.get(opts, :ttl, 600)
+    ttl = Keyword.get(opts, :ttl, 600_000)
     table = :ets.new(table, [:named_table, read_concurrency: true])
     {:ok, {table, ttl}}
   end
 
   @impl true
-  def handle_call({:lookup, key}, _from, state) do
-    result = lookup_with_ttl(key, state)
+  def handle_call({:lookup, key}, _from, {table, _ttl} = state) do
+    result = lookup_and_purge(table, key)
     {:reply, result, state}
   end
 
   @impl true
-  def handle_cast({:cache, key, value}, {table, _ttl} = state) do
-    case lookup_with_ttl(key, state) do
+  def handle_cast({:cache, key, value}, {table, ttl} = state) do
+    case lookup_and_purge(table, key) do
       {:ok, _data} ->
         {:noreply, state}
 
       {:error, _} ->
-        value = Map.put(value, :inserted_at, unix_now())
-        :ets.insert(table, {key, value})
+        expires = unix_now() + ttl
+        :ets.insert(table, {key, expires, value})
         {:noreply, state}
     end
   end
@@ -65,24 +78,44 @@ defmodule FediServer.Oauth.LoginCache do
     {:noreply, state}
   end
 
-  def handle_info(_msg, state) do
+  def handle_info(msg, {table, _ttl} = state) do
+    Logger.error(":{table}: unhandled msg #{inspect(msg)}")
     {:noreply, state}
   end
 
-  defp lookup_with_ttl(key, {table, ttl}) do
-    case :ets.lookup(table, key) do
-      [{^key, value}] ->
-        if unix_now() < value.inserted_at + ttl do
-          {:ok, value}
-        else
-          :ets.delete(table, key)
-          {:error, :expired}
-        end
+  defp lookup_and_purge(table, key) do
+    ts = unix_now()
 
-      [] ->
-        {:error, :not_found}
+    result =
+      case :ets.lookup(table, key) do
+        [{^key, expires, value}] ->
+          if expires < ts do
+            :ets.delete(table, key)
+            {:error, :expired}
+          else
+            {:ok, value}
+          end
+
+        [] ->
+          {:error, :not_found}
+      end
+
+    _ = purge_expired(table, ts)
+    result
+  end
+
+  defp purge_expired(table, ts) do
+    ms = [{{:_, :"$1", :_}, [{:<, :"$1", ts}], [true]}]
+
+    case :ets.select_delete(table, ms) do
+      0 ->
+        0
+
+      num_deleted ->
+        Logger.debug(":#{table}: #{num_deleted} exprired cache entries were deleted")
+        num_deleted
     end
   end
 
-  defp unix_now, do: DateTime.utc_now() |> DateTime.to_unix()
+  defp unix_now, do: DateTime.utc_now() |> DateTime.to_unix(:millisecond)
 end
