@@ -1,0 +1,24 @@
+<h1>Authoriztion succeeded</h1>
+
+<p>To obtain an access token, send a POST request to:
+<br/><%= Routes.token_url(@conn, :token) %>
+<br/>With this data in the body:</p>
+
+<p>grant_type=authorization_code
+<br/>state=<%= @state %>
+<br/>redirect_uri=<%= Routes.redirection_url(@conn, :new, "fedi_server") %>
+<br/>code=<%= @code %>
+<br/>client_id=YOUR_CLIENT_ID
+<br/>client_secret=YOUR_CLIENT_SECRET</p>
+
+<p>Example:</p>
+
+<p>curl -X POST \
+<br/>-H "Accept: application/json" \
+<br/>-d "grant_type=authorization_code" \
+<br/>-d "state=<%= @state %>" \
+<br/>-d "redirect_uri=<%= Routes.redirection_url(@conn, :new, "fedi_server") %>" \
+<br/>-d "code=<%= @code %>" \
+<br/>-d "client_id=YOUR_CLIENT_ID" \
+<br/>-d "client_secret=YOUR_CLIENT_SECRET" \
+<br/>http://localhost:4000/oauth/token</p>

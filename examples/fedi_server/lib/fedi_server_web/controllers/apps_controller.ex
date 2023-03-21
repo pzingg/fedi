@@ -18,7 +18,7 @@ defmodule FediServerWeb.AppsController do
   def new(conn, _params) do
     default_app = %{
       user_id: current_user_id(conn),
-      redirect_uris: Routes.redirection_url(conn, :new, "my_oauth"),
+      redirect_uris: Routes.redirection_url(conn, :new, "fedi_server"),
       scopes: "read write follow push"
     }
 

@@ -29,6 +29,11 @@ defmodule FediServerWeb.Oauth.RedirectionController do
     oauth_authentication_response(conn, "Mastodon", result)
   end
 
+  def new(conn, %{"provider" => "fedi_server", "state" => state, "code" => code}) do
+    conn
+    |> render("oob_code.html", state: state, code: code)
+  end
+
   def new(conn, %{"error" => error, "provider" => provider}) do
     Logger.error("Oauth2 #{provider} redirect error #{error}")
     redirect(conn, to: "/")

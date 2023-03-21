@@ -46,11 +46,14 @@ defmodule FediServerWeb.Oauth.AuthorizeController do
 
   defp valid_client_id_for_current_user?(_conn, nil), do: true
 
-  defp valid_client_id_for_current_user?(%{"client_id" => client_id}, current_user) do
-    case Oauth.get_client(client_id) do
+  defp valid_client_id_for_current_user?(conn, current_user) do
+    conn = fetch_query_params(conn)
+    client_id = conn.query_params["client_id"]
+
+    case client_id && Oauth.get_client(client_id) do
+      %{user_id: user_id} -> user_id == current_user.id
       # This will be handled elsewhere
-      nil -> true
-      client -> client.user_id == current_user.id
+      _ -> true
     end
   end
 

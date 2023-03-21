@@ -121,6 +121,39 @@ The routes for these "web" urls are:
 - `/web/timelines/direct` (TODO. Direct messages only)
 - `/web/timelines/federated` (TODO)
 
+## OAuth 2.0 client
+
+Added support for logging in via GitHub (courtesy of the "LiveBeats" example
+application) and via Mastodon instances.
+
+## OAuth 2.0 provider
+
+Testing the Boruta OAuth library. A user can log in and create an "app" (OAuth client)
+by visiting the "/apps" endpoint in a browser and submitting the form there.
+
+The `redirect_uris` field on the form must include the address of the running
+server, e.g. "http://localhost:4000" and the path "/oauth/callbacks/fedi_server".
+
+After the app is created you can copy the `client_id` and `client_secret` somewhere.
+
+Then if you visit "/oauth/authorize" with the required query string parameters:
+
+- `state`
+- `response_type` (must equal "code")
+- `client_id`
+- `scope` ("read")
+- `redirect_uri` (must be to same url as in the created app)
+
+you will get a page displaying the authorization code and instructions for using
+it to obtain an access token.
+
+TODO items include:
+
+- Implementing access controls for different scopes per Mastodon
+- Replacing the `Boruta.TokenGenerator` access token generator module,
+  which builds a 512-bit "PUID", with a module that expands on and integrates with
+  the `UserToken`s produced by the phx.gen.auth code.
+
 ## Mastodon-equivalent activities
 
 Add more Mastodon-ish features that are not in the AP spec if they are
