@@ -6,6 +6,7 @@ defmodule FediServerWeb.Oauth.AuthorizeController do
   alias Boruta.Oauth.AuthorizeResponse
   alias Boruta.Oauth.Error
   alias Boruta.Oauth.ResourceOwner
+  alias FediServer.Oauth
   alias FediServerWeb.OauthView
 
   def oauth_module, do: Application.get_env(:fedi_server, :oauth_module, Boruta.Oauth)
@@ -21,15 +22,36 @@ defmodule FediServerWeb.Oauth.AuthorizeController do
   end
 
   defp authorize_response(conn, %_{} = current_user) do
-    conn
-    |> oauth_module().authorize(
-      %ResourceOwner{sub: to_string(current_user.id), username: current_user.email},
-      __MODULE__
-    )
+    # Modified Boruta logic. The client must be owned by the current_user.
+    if valid_client_id_for_current_user?(conn, current_user) do
+      conn
+      |> oauth_module().authorize(
+        %ResourceOwner{sub: to_string(current_user.id), username: current_user.email},
+        __MODULE__
+      )
+    else
+      error = %Error{
+        status: :unauthorized,
+        error: :invalid_client,
+        error_description: "Invalid client_id."
+      }
+
+      authorize_error(conn, error)
+    end
   end
 
-  defp authorize_response(conn, _params) do
+  defp authorize_response(conn, _nil) do
     redirect_to_login(conn)
+  end
+
+  defp valid_client_id_for_current_user?(_conn, nil), do: true
+
+  defp valid_client_id_for_current_user?(%{"client_id" => client_id}, current_user) do
+    case Oauth.get_client(client_id) do
+      # This will be handled elsewhere
+      nil -> true
+      client -> client.user_id == current_user.id
+    end
   end
 
   @impl Boruta.Oauth.AuthorizeApplication

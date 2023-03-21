@@ -54,7 +54,7 @@ defmodule FediServer.MixProject do
       {:tesla, "~> 1.5"},
       {:sweet_xml, "~> 0.7"},
       {:timex, "~> 3.7"},
-      {:boruta, "~> 2.2"},
+      {:boruta, git: "https://github.com/pzingg/boruta_auth.git", ref: "user-field-in-client"},
       {:dotenvy, "~> 0.7"},
       {:http_signatures, "~> 0.1.1"},
       {:dialyxir, "~> 1.0", only: [:dev], runtime: false},

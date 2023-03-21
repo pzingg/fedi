@@ -1,0 +1,29 @@
+<h1>Create an App</h1>
+
+<%= form_for @changeset, Routes.apps_path(@conn, :create), [as: :app], fn f -> %>
+  <%= if @changeset.action do %>
+    <div class="alert alert-danger">
+      <p>Oops, something went wrong! Please check the errors below.</p>
+    </div>
+  <% end %>
+
+  <%= label f, :name %>
+  <%= text_input f, :name, required: true %>
+  <%= error_tag f, :name %>
+
+  <%= label f, :redirect_uris %>
+  <%= text_input f, :redirect_uris, required: true %>
+  <%= error_tag f, :redirect_uris %>
+
+  <%= label f, :scopes %>
+  <%= text_input f, :scopes, required: true %>
+  <%= error_tag f, :scopes %>
+
+  <%= label f, :website %>
+  <%= text_input f, :website %>
+  <%= error_tag f, :website %>
+
+  <div>
+    <%= submit "Create App" %>
+  </div>
+<% end %>

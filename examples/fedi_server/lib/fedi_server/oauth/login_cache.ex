@@ -79,7 +79,7 @@ defmodule FediServer.Oauth.LoginCache do
   end
 
   def handle_info(msg, {table, _ttl} = state) do
-    Logger.error(":{table}: unhandled msg #{inspect(msg)}")
+    Logger.error(":#{table}: unhandled msg #{inspect(msg)}")
     {:noreply, state}
   end
 

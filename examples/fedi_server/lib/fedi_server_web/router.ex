@@ -98,11 +98,15 @@ defmodule FediServerWeb.Router do
     get("/jwks", JwksController, :jwks_index)
   end
 
-  scope "/web", FediServerWeb do
+  scope "/", FediServerWeb do
     pipe_through([:accepts_html, :browser, :authenticated])
 
-    get("/timelines/home", TimelinesController, :home)
-    post("/timelines/home", TimelinesController, :create)
+    get("/apps", AppsController, :new)
+    post("/apps", AppsController, :create)
+    get("/apps/verify_credentials/", AppsController, :show)
+
+    get("/web/timelines/home", TimelinesController, :home)
+    post("/web/timelines/home", TimelinesController, :create)
   end
 
   scope "/web", FediServerWeb do

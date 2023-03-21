@@ -1,0 +1,25 @@
+<h1><%= @app.name %></h1>
+
+
+<dl>
+  <dt>Client id</dt>
+  <dd><%= @app.id %></dd>
+
+  <%= if @show_secret do %>
+  <dt>Client secret</dt>
+  <dd><%= @app.secret %></dd>
+  <% end %>
+
+  <dt>Name</dt>
+  <dd><%= @app.name %></dd>
+
+  <%= for uri <- @app.redirect_uris do %>
+  <dt>Redirect URI</dt>
+  <dd><%= uri %></dd>
+  <% end %>
+
+  <%= for scope <- @app.authorized_scopes do %>
+  <dt>Scope</dt>
+  <dd><%= scope.name %></dd>
+  <% end %>
+</dl>

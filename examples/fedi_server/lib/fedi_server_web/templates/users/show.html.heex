@@ -1,23 +1,25 @@
+<h1><%= @user.nickname %></h1>
+
 <img src={@user.avatar_url} />
-<p>Name: <%= @user.name %><br/>
-Nickname: <%= @user.nickname %></p>
+<p>Name: <%= @user.name %></p>
+
 <%= if @count == 0 do %>
-<%= if @max_id do %>
-<p>No more activities</p>
+
+  <%= if @max_id do %>
+  <p>No more activities</p>
+  <% else %>
+  <p>No activities</p>
+  <% end %>
+
 <% else %>
-<p>No activities</p>
+
+  <h1><%= @user.nickname %>'s Timeline</h1>
+  <%= for activity <- @timeline do %>
+    <StatusComponent.status act={activity} />
+  <% end %>
+
 <% end %>
-<% else %>
-<h1><%= @user.nickname %>'s Timeline</h1>
-<%= if @count == 1 do %>
-<!-- 1 activity -->
-<% else %>
-<!-- <%= @count %> activities -->
-<% end %>
-<%= for activity <- @timeline do %>
-  <StatusComponent.status act={activity} />
-<% end %>
-<% end %>
+
 <%= if @next do %>
-<p><a href={@next}>Next 30</a></p>
+  <p><a href={@next}>Next 30</a></p>
 <% end %>
